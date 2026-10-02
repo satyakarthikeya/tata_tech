@@ -111,6 +111,7 @@ _PER_SESSION_TEMPLATES = frozenset(
         "read_did_wrong_session_or_unknown",
         "unsupported_subfunction",
         "suppress_positive_response",
+        "negative_response_with_suppress_bit",
     }
 )
 _MAX_OPTIONS_PER_TEMPLATE = 6
@@ -279,6 +280,19 @@ def _plan(ctx: dict[str, Any]) -> TestPlan:
             r_services & {"0x19", "0x14"} or "dtc" in intents or _hits(opt, "dtcs", r_dtcs)
         ):
             return "Requirement concerns DTC reading/clearing."
+        # ---- template set v2: generic follow-up checks keyed on the same identifiers ----
+        elif tid == "read_multiple_dids":
+            if _hits(opt, "dids", r_dids) and ("read" in intents or "0x22" in r_services):
+                return "Referenced DID is read; also read it together with another DID."
+        elif tid == "write_readonly_did":
+            if _hits(opt, "dids", r_dids):
+                return "Referenced DID is read-only in the spec; verify writes are rejected."
+        elif tid == "dtc_clear_specific_keeps_others" and (
+            r_services & {"0x19", "0x14"} or "dtc" in intents or _hits(opt, "dtcs", r_dtcs)
+        ):
+            return "Requirement concerns DTCs; clearing one DTC must not clear the others."
+        elif tid == "routine_start_results" and _hits(opt, "routines", r_routines):
+            return "Requirement references this routine; run it and read its results."
         return None
 
     chosen: list[PlannedTest] = []
@@ -327,11 +341,22 @@ def _plan(ctx: dict[str, Any]) -> TestPlan:
         picks = []
         for opt in tpl.get("options", []):
             why: str | None = None
-            if tid == "security_invalid_key_lockout":
+            if tid in (
+                "security_invalid_key_lockout",
+                "session_change_relocks_security",
+                "seed_replay_rejected",
+            ):
                 if _hits(opt, "security_levels", implied["security_levels"]) and (
                     intents & {"security", "lockout", "write"}
                 ):
-                    why = "Security level involved; verify invalid-key lockout and delay."
+                    why = {
+                        "security_invalid_key_lockout":
+                            "Security level involved; verify invalid-key lockout and delay.",
+                        "session_change_relocks_security":
+                            "Security level involved; verify a session change re-locks it.",
+                        "seed_replay_rejected":
+                            "Security level involved; verify a replayed key is rejected.",
+                    }[tid]
             elif tid == "s3_timeout_reverts_session":
                 if _hits(opt, "sessions", implied["sessions"]) and (
                     intents & {"session", "timing", "security", "write"}
@@ -339,9 +364,19 @@ def _plan(ctx: dict[str, Any]) -> TestPlan:
                     why = "Non-default session involved; verify S3 timeout reverts it."
                 elif not implied["sessions"] and {"session", "timing"} <= intents:
                     why = "Requirement concerns the session timer; verify S3 timeout."
+            elif tid == "s3_keepalive_boundary":
+                if _hits(opt, "sessions", implied["sessions"]) and (
+                    intents & {"session", "timing", "security", "write"}
+                ):
+                    why = "Non-default session involved; verify S3 boundary and keep-alive."
+                elif "0x3E" in r_services and "timing" in intents:
+                    why = "TesterPresent keep-alive named; verify the S3 boundary per session."
             elif tid == "service_not_in_session":
                 if _hits(opt, "services", implied["services"]):
                     why = "Service involved; verify it is rejected where the session forbids it."
+            elif tid == "nrc_priority_session_over_identifier":
+                if _hits(opt, "services", implied["services"]):
+                    why = "Service involved; verify NRC priority (session before identifier)."
             elif tid == "unsupported_subfunction":
                 if _hits(opt, "services", r_services) and (
                     intents & {"subfunction", "negative", "session", "security"}
@@ -349,6 +384,10 @@ def _plan(ctx: dict[str, Any]) -> TestPlan:
                     why = "Service named by the requirement; probe an unsupported sub-function."
             elif tid == "suppress_positive_response" and _hits(opt, "services", r_services):
                 why = "Service supports suppressPosRspMsgIndicationBit; check it."
+            elif tid == "negative_response_with_suppress_bit" and _hits(
+                opt, "services", r_services
+            ):
+                why = "Suppress bit must never hide a negative response; check it."
             if why:
                 picks.append((opt, why))
         take(tid, picks)

@@ -1,0 +1,1278 @@
+{
+  "report_version": 1,
+  "timestamp": "2026-10-02T21:21:46.279995+00:00",
+  "git": {
+    "commit": "1a9a02f57b11dd0b2b633ff9de627109c2afe9be",
+    "dirty": true,
+    "note": "commit = HEAD when the evaluation ran; dirty=true means uncommitted changes were present (e.g. the phase being evaluated before its commit)."
+  },
+  "requested_mode": "mock",
+  "actual_mode": "mock",
+  "mode_fallback": false,
+  "setup_warnings": [],
+  "engine": "langgraph",
+  "retriever": "Bm25Retriever",
+  "template_set_version": "v1",
+  "templates_registered": 14,
+  "spec": {
+    "name": "Synthetic BCM (Body Control Module) \u2014 demo ECU",
+    "synthetic": true
+  },
+  "requirements": 15,
+  "gold_tests": 60,
+  "gold_clean_pass_rate": 1.0,
+  "bug_catalog_size": 26,
+  "metric_definitions": {
+    "request_validity": "Over every send step of every generated test: the request is replayed through the rules-engine oracle in sequence (same set-up and time steps). A request counts as well-formed if (a) protocol.codec.decode_request decodes it and (b) the oracle does not reject it with a format NRC (0x11 serviceNotSupported, 0x12 subFunctionNotSupported, 0x13 incorrectMessageLengthOrInvalidFormat), unless that NRC is listed in the template's declared intended_nrcs (a deliberate malformed-request probe such as write_did_invalid_length -> 0x13). rate = well-formed / send steps. The unadjusted rate (no intent exemption) is reported alongside.",
+    "expected_response_accuracy": "oracle: share of generated send steps whose expected response frames equal a fresh rules-engine re-run of the test (and share of whole tests with zero mismatches). simulator: share of generated tests passing on the bug-free independent simulator. gold: (1) exact overlap = generated tests whose full step sequence (requests and set-up/time steps, ignoring expected responses) is identical to a gold test; agreement = identical expected responses on every step. (2) shared-prefix overlap = every distinct send step reached by an identical step prefix from power-on in both a generated and a gold test (deduplicated by prefix); agreement = identical expected frames for that step.",
+    "coverage": "Number of generated tests per category (positive/negative/session/security/timing) per requirement. rate = requirements with >= 1 generated test / requirements; category_presence = categories with >= 1 test across the suite / 5.",
+    "template_reuse_rate": "Share of generated tests whose template_id is a registered template AND whose steps are byte-identical to a fresh instantiation of that template with the test's stored parameters (independent re-check of byte provenance).",
+    "citation_validity": "Share of all citations attached to generated tests for which rag.citations.citation_is_valid is true against the evaluation corpus (source+ref exists; a quote must appear verbatim and its hex identifiers must belong to the chunk).",
+    "bug_detection_rate": "Each catalog bug is enabled alone in a fresh simulator per test. A bug is detected if >= 1 test that passes on the clean simulator fails with the bug enabled. Tests failing on the clean simulator are reported as invalid and get no credit. rate = detected bugs / catalog bugs. Reported for the generated suite (headline), the hand-written gold suite (baseline) and their union.",
+    "pipeline_stats": "Per requirement: kept tests, dropped tests (failed validation), rejected planner choices, plan attempts (retries = attempts - 1), run status.",
+    "runtime": "Wall-clock seconds per evaluation phase and in total (machine dependent)."
+  },
+  "modes": {
+    "mock": {
+      "status": "completed",
+      "llm": "mock",
+      "generated_tests": {
+        "count": 101,
+        "unique_template_instantiations": 61,
+        "clean_simulator_passed": 101,
+        "clean_simulator_pass_rate": 1.0,
+        "p2_timing_warnings": 0
+      },
+      "request_validity": {
+        "send_steps": 268,
+        "decodable": 268,
+        "not_format_rejected": 237,
+        "intentional_format_probes": 28,
+        "well_formed": 265,
+        "rate": 0.9888,
+        "unadjusted_rate": 0.8843,
+        "invalid_examples": [
+          {
+            "test_id": "req_012__tpl_routine_sequence_0202",
+            "step": 5,
+            "request_hex": "31010202",
+            "nrc": "0x13",
+            "decodable": true
+          },
+          {
+            "test_id": "req_012__tpl_routine_sequence_0202",
+            "step": 6,
+            "request_hex": "31010202",
+            "nrc": "0x13",
+            "decodable": true
+          },
+          {
+            "test_id": "req_012__tpl_condition_not_met_routine_0202",
+            "step": 4,
+            "request_hex": "31010202",
+            "nrc": "0x13",
+            "decodable": true
+          }
+        ]
+      },
+      "expected_response_accuracy": {
+        "oracle": {
+          "send_steps": 268,
+          "agreeing_steps": 268,
+          "step_rate": 1.0,
+          "tests": 101,
+          "tests_fully_agreeing": 101,
+          "test_rate": 1.0
+        },
+        "simulator": {
+          "clean_pass_rate": 1.0
+        },
+        "gold_exact_overlap": {
+          "overlapping_pairs": 22,
+          "agreeing_pairs": 22,
+          "rate": 1.0,
+          "examples": [
+            {
+              "generated": "req_001__tpl_read_did_positive_f190_01",
+              "gold": "gold_read_vin_default",
+              "agree": "true"
+            },
+            {
+              "generated": "req_001__tpl_read_did_positive_f190_03",
+              "gold": "gold_read_vin_extended",
+              "agree": "true"
+            },
+            {
+              "generated": "req_001__tpl_s3_timeout_03",
+              "gold": "gold_s3_timeout_reverts",
+              "agree": "true"
+            },
+            {
+              "generated": "req_002__tpl_s3_timeout_03",
+              "gold": "gold_s3_timeout_reverts",
+              "agree": "true"
+            },
+            {
+              "generated": "req_003__tpl_s3_timeout_03",
+              "gold": "gold_s3_timeout_reverts",
+              "agree": "true"
+            },
+            {
+              "generated": "req_005__tpl_write_oor_0100",
+              "gold": "gold_write_out_of_range_brightness",
+              "agree": "true"
+            },
+            {
+              "generated": "req_005__tpl_service_not_in_session_27_01",
+              "gold": "gold_security_not_allowed_default_session",
+              "agree": "true"
+            },
+            {
+              "generated": "req_005__tpl_s3_timeout_03",
+              "gold": "gold_s3_timeout_reverts",
+              "agree": "true"
+            },
+            {
+              "generated": "req_006__tpl_service_not_in_session_27_01",
+              "gold": "gold_security_not_allowed_default_session",
+              "agree": "true"
+            },
+            {
+              "generated": "req_006__tpl_s3_timeout_03",
+              "gold": "gold_s3_timeout_reverts",
+              "agree": "true"
+            }
+          ]
+        },
+        "gold_shared_prefix": {
+          "distinct_shared_send_steps": 15,
+          "agreeing": 15,
+          "rate": 1.0
+        }
+      },
+      "coverage": {
+        "per_requirement": {
+          "REQ-001": {
+            "positive": 3,
+            "negative": 1,
+            "session": 0,
+            "security": 0,
+            "timing": 2
+          },
+          "REQ-002": {
+            "positive": 6,
+            "negative": 1,
+            "session": 0,
+            "security": 0,
+            "timing": 2
+          },
+          "REQ-003": {
+            "positive": 2,
+            "negative": 2,
+            "session": 0,
+            "security": 0,
+            "timing": 1
+          },
+          "REQ-004": {
+            "positive": 1,
+            "negative": 1,
+            "session": 0,
+            "security": 0,
+            "timing": 1
+          },
+          "REQ-005": {
+            "positive": 1,
+            "negative": 5,
+            "session": 2,
+            "security": 1,
+            "timing": 1
+          },
+          "REQ-006": {
+            "positive": 1,
+            "negative": 5,
+            "session": 2,
+            "security": 1,
+            "timing": 1
+          },
+          "REQ-007": {
+            "positive": 1,
+            "negative": 3,
+            "session": 2,
+            "security": 1,
+            "timing": 1
+          },
+          "REQ-008": {
+            "positive": 1,
+            "negative": 3,
+            "session": 2,
+            "security": 1,
+            "timing": 1
+          },
+          "REQ-009": {
+            "positive": 0,
+            "negative": 5,
+            "session": 3,
+            "security": 1,
+            "timing": 1
+          },
+          "REQ-010": {
+            "positive": 0,
+            "negative": 2,
+            "session": 1,
+            "security": 1,
+            "timing": 0
+          },
+          "REQ-011": {
+            "positive": 0,
+            "negative": 3,
+            "session": 1,
+            "security": 0,
+            "timing": 0
+          },
+          "REQ-012": {
+            "positive": 0,
+            "negative": 4,
+            "session": 2,
+            "security": 0,
+            "timing": 0
+          },
+          "REQ-013": {
+            "positive": 0,
+            "negative": 3,
+            "session": 0,
+            "security": 0,
+            "timing": 0
+          },
+          "REQ-014": {
+            "positive": 3,
+            "negative": 2,
+            "session": 2,
+            "security": 0,
+            "timing": 0
+          },
+          "REQ-015": {
+            "positive": 3,
+            "negative": 3,
+            "session": 0,
+            "security": 0,
+            "timing": 2
+          }
+        },
+        "category_totals": {
+          "positive": 22,
+          "negative": 43,
+          "session": 17,
+          "security": 6,
+          "timing": 13
+        },
+        "requirements": 15,
+        "requirements_with_tests": 15,
+        "rate": 1.0,
+        "category_presence": 1.0,
+        "requirements_with_2plus_categories": 14,
+        "multi_category_rate": 0.9333
+      },
+      "template_reuse": {
+        "tests": 101,
+        "template_instantiations": 101,
+        "rate": 1.0,
+        "templates_registered": 14,
+        "templates_used": 14,
+        "per_template": {
+          "condition_not_met": 2,
+          "dtc_read_clear": 3,
+          "read_did_positive": 9,
+          "read_did_wrong_session_or_unknown": 2,
+          "routine_sequence": 2,
+          "s3_timeout_reverts_session": 13,
+          "security_invalid_key_lockout": 6,
+          "service_not_in_session": 17,
+          "suppress_positive_response": 6,
+          "unsupported_subfunction": 23,
+          "write_did_invalid_length": 5,
+          "write_did_out_of_range": 5,
+          "write_did_secured_positive": 4,
+          "write_did_without_security": 4
+        },
+        "not_reproducible": []
+      },
+      "citation_validity": {
+        "citations": 460,
+        "valid": 460,
+        "rate": 1.0,
+        "tests_with_valid_citation": 101,
+        "tests_with_valid_citation_rate": 1.0,
+        "invalid_examples": []
+      },
+      "bug_detection": {
+        "generated": {
+          "bugs": 26,
+          "detected": 17,
+          "rate": 0.6538,
+          "tests": 101,
+          "valid_tests": 101,
+          "invalid_tests": [],
+          "undetected": [
+            "nrc_order_did_before_session",
+            "security_not_reset_on_session_change",
+            "s3_timeout_off_by_one",
+            "seed_not_consumed",
+            "readonly_did_writable",
+            "negative_response_suppressed",
+            "dtc_clear_ignores_group",
+            "multi_did_read_first_only",
+            "missing_response_pending"
+          ],
+          "per_bug": [
+            {
+              "bug_id": "nrc_order_did_before_session",
+              "title": "Wrong NRC priority: 0x31 before 0x7F",
+              "category": "nrc_order",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "nrc_order_security_before_length",
+              "title": "Wrong NRC priority: 0x33 before 0x13 on WriteDataByIdentifier",
+              "category": "nrc_order",
+              "detected": true,
+              "detecting_tests": [
+                "req_005__tpl_write_badlen_0100",
+                "req_006__tpl_write_badlen_0101",
+                "req_007__tpl_write_badlen_0130",
+                "req_008__tpl_write_badlen_0100",
+                "req_009__tpl_write_badlen_0150"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "general_reject_instead_of_0x12",
+              "title": "generalReject (0x10) instead of subFunctionNotSupported (0x12)",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "req_003__tpl_unsupported_subfunction_10_01",
+                "req_003__tpl_unsupported_subfunction_10_03",
+                "req_004__tpl_unsupported_subfunction_10_02",
+                "req_005__tpl_unsupported_subfunction_27_02",
+                "req_005__tpl_unsupported_subfunction_27_03",
+                "req_006__tpl_unsupported_subfunction_27_02",
+                "req_006__tpl_unsupported_subfunction_27_03",
+                "req_009__tpl_unsupported_subfunction_27_02",
+                "req_009__tpl_unsupported_subfunction_27_03",
+                "req_010__tpl_unsupported_subfunction_27_02",
+                "req_010__tpl_unsupported_subfunction_27_03",
+                "req_011__tpl_unsupported_subfunction_31_02",
+                "req_011__tpl_unsupported_subfunction_31_03",
+                "req_012__tpl_unsupported_subfunction_31_02",
+                "req_012__tpl_unsupported_subfunction_31_03",
+                "req_013__tpl_unsupported_subfunction_11_01",
+                "req_013__tpl_unsupported_subfunction_11_02",
+                "req_013__tpl_unsupported_subfunction_11_03",
+                "req_014__tpl_unsupported_subfunction_19_01",
+                "req_014__tpl_unsupported_subfunction_19_03",
+                "req_015__tpl_unsupported_subfunction_3e_01",
+                "req_015__tpl_unsupported_subfunction_3e_02",
+                "req_015__tpl_unsupported_subfunction_3e_03"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "security_not_reset_on_session_change",
+              "title": "Security not re-locked on session change",
+              "category": "session",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "s3_timeout_never_fires",
+              "title": "S3 session timeout never fires",
+              "category": "timing",
+              "detected": true,
+              "detecting_tests": [
+                "req_001__tpl_s3_timeout_02",
+                "req_001__tpl_s3_timeout_03",
+                "req_002__tpl_s3_timeout_02",
+                "req_002__tpl_s3_timeout_03",
+                "req_003__tpl_s3_timeout_03",
+                "req_004__tpl_s3_timeout_02",
+                "req_005__tpl_s3_timeout_03",
+                "req_006__tpl_s3_timeout_03",
+                "req_007__tpl_s3_timeout_03",
+                "req_008__tpl_s3_timeout_03",
+                "req_009__tpl_s3_timeout_02",
+                "req_015__tpl_s3_timeout_02",
+                "req_015__tpl_s3_timeout_03"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "s3_timeout_off_by_one",
+              "title": "S3 timeout fires at exactly s3_ms",
+              "category": "timing",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "lockout_after_extra_attempt",
+              "title": "Lockout counter off by one (locks after 4)",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "req_005__tpl_security_lockout_01",
+                "req_006__tpl_security_lockout_01",
+                "req_007__tpl_security_lockout_01",
+                "req_008__tpl_security_lockout_01",
+                "req_009__tpl_security_lockout_03",
+                "req_010__tpl_security_lockout_01"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "lockout_delay_ignored",
+              "title": "Lockout delay ignored (no 0x37)",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "req_005__tpl_security_lockout_01",
+                "req_006__tpl_security_lockout_01",
+                "req_007__tpl_security_lockout_01",
+                "req_008__tpl_security_lockout_01",
+                "req_009__tpl_security_lockout_03",
+                "req_010__tpl_security_lockout_01"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "lockout_delay_never_expires",
+              "title": "Lockout delay never expires",
+              "category": "timing",
+              "detected": true,
+              "detecting_tests": [
+                "req_005__tpl_security_lockout_01",
+                "req_006__tpl_security_lockout_01",
+                "req_007__tpl_security_lockout_01",
+                "req_008__tpl_security_lockout_01",
+                "req_009__tpl_security_lockout_03",
+                "req_010__tpl_security_lockout_01"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "accepts_any_key",
+              "title": "Any key accepted",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "req_005__tpl_security_lockout_01",
+                "req_006__tpl_security_lockout_01",
+                "req_007__tpl_security_lockout_01",
+                "req_008__tpl_security_lockout_01",
+                "req_009__tpl_security_lockout_03",
+                "req_010__tpl_security_lockout_01"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "seed_not_consumed",
+              "title": "Seed not consumed by a valid key",
+              "category": "sequence",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "static_seed",
+              "title": "Static seed",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "req_005__tpl_security_lockout_01",
+                "req_006__tpl_security_lockout_01",
+                "req_007__tpl_security_lockout_01",
+                "req_008__tpl_security_lockout_01",
+                "req_009__tpl_security_lockout_03",
+                "req_010__tpl_security_lockout_01"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "write_ignores_value_range",
+              "title": "Write ignores value range",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "req_005__tpl_write_oor_0100",
+                "req_006__tpl_write_oor_0101",
+                "req_007__tpl_write_oor_0130",
+                "req_008__tpl_write_oor_0100",
+                "req_009__tpl_write_oor_0150"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "readonly_did_writable",
+              "title": "Read-only DID writable",
+              "category": "data",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "write_length_off_by_one",
+              "title": "0x2E length check off by one",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "req_005__tpl_write_badlen_0100",
+                "req_006__tpl_write_badlen_0101",
+                "req_007__tpl_write_badlen_0130",
+                "req_008__tpl_write_badlen_0100",
+                "req_009__tpl_write_badlen_0150"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "write_positive_sid_wrong",
+              "title": "Wrong positive SID for WriteDataByIdentifier",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "req_005__tpl_write_secured_0100",
+                "req_006__tpl_write_secured_0101",
+                "req_007__tpl_write_secured_0130",
+                "req_008__tpl_write_secured_0100"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "session_response_missing_timing",
+              "title": "Session response missing timing bytes",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "req_001__tpl_read_did_positive_f190_02",
+                "req_001__tpl_read_did_positive_f190_03",
+                "req_001__tpl_s3_timeout_02",
+                "req_001__tpl_s3_timeout_03",
+                "req_002__tpl_read_did_positive_f187_02",
+                "req_002__tpl_read_did_positive_f187_03",
+                "req_002__tpl_read_did_positive_f18c_02",
+                "req_002__tpl_read_did_positive_f18c_03",
+                "req_002__tpl_s3_timeout_02",
+                "req_002__tpl_s3_timeout_03",
+                "req_003__tpl_unsupported_subfunction_10_03",
+                "req_003__tpl_s3_timeout_03",
+                "req_003__tpl_suppress_positive_10_03",
+                "req_004__tpl_unsupported_subfunction_10_02",
+                "req_004__tpl_s3_timeout_02",
+                "req_004__tpl_suppress_positive_10_02",
+                "req_005__tpl_write_secured_0100",
+                "req_005__tpl_write_nosec_0100",
+                "req_005__tpl_write_oor_0100",
+                "req_005__tpl_write_badlen_0100",
+                "req_005__tpl_unsupported_subfunction_27_02",
+                "req_005__tpl_unsupported_subfunction_27_03",
+                "req_005__tpl_security_lockout_01",
+                "req_005__tpl_s3_timeout_03",
+                "req_006__tpl_write_secured_0101",
+                "req_006__tpl_write_nosec_0101",
+                "req_006__tpl_write_oor_0101",
+                "req_006__tpl_write_badlen_0101",
+                "req_006__tpl_unsupported_subfunction_27_02",
+                "req_006__tpl_unsupported_subfunction_27_03",
+                "req_006__tpl_security_lockout_01",
+                "req_006__tpl_s3_timeout_03",
+                "req_007__tpl_write_secured_0130",
+                "req_007__tpl_write_nosec_0130",
+                "req_007__tpl_write_oor_0130",
+                "req_007__tpl_write_badlen_0130",
+                "req_007__tpl_security_lockout_01",
+                "req_007__tpl_s3_timeout_03",
+                "req_008__tpl_write_secured_0100",
+                "req_008__tpl_write_nosec_0100",
+                "req_008__tpl_write_oor_0100",
+                "req_008__tpl_write_badlen_0100",
+                "req_008__tpl_security_lockout_01",
+                "req_008__tpl_s3_timeout_03",
+                "req_009__tpl_write_oor_0150",
+                "req_009__tpl_write_badlen_0150",
+                "req_009__tpl_condition_not_met_did_0150",
+                "req_009__tpl_unsupported_subfunction_27_02",
+                "req_009__tpl_unsupported_subfunction_27_03",
+                "req_009__tpl_security_lockout_03",
+                "req_009__tpl_s3_timeout_02",
+                "req_010__tpl_unsupported_subfunction_27_02",
+                "req_010__tpl_unsupported_subfunction_27_03",
+                "req_010__tpl_security_lockout_01",
+                "req_011__tpl_routine_sequence_0201",
+                "req_011__tpl_unsupported_subfunction_31_02",
+                "req_011__tpl_unsupported_subfunction_31_03",
+                "req_012__tpl_routine_sequence_0202",
+                "req_012__tpl_condition_not_met_routine_0202",
+                "req_012__tpl_unsupported_subfunction_31_02",
+                "req_012__tpl_unsupported_subfunction_31_03",
+                "req_013__tpl_unsupported_subfunction_11_02",
+                "req_013__tpl_unsupported_subfunction_11_03",
+                "req_014__tpl_service_not_in_session_14_02",
+                "req_014__tpl_service_not_in_session_19_02",
+                "req_014__tpl_unsupported_subfunction_19_03",
+                "req_015__tpl_unsupported_subfunction_3e_02",
+                "req_015__tpl_unsupported_subfunction_3e_03",
+                "req_015__tpl_s3_timeout_02",
+                "req_015__tpl_s3_timeout_03",
+                "req_015__tpl_suppress_positive_3e_02",
+                "req_015__tpl_suppress_positive_3e_03"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "suppress_bit_ignored",
+              "title": "Suppress-positive-response bit ignored",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "req_003__tpl_suppress_positive_10_01",
+                "req_003__tpl_suppress_positive_10_03",
+                "req_004__tpl_suppress_positive_10_02",
+                "req_015__tpl_suppress_positive_3e_01",
+                "req_015__tpl_suppress_positive_3e_02",
+                "req_015__tpl_suppress_positive_3e_03"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "negative_response_suppressed",
+              "title": "Negative responses suppressed when bit set",
+              "category": "format",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "routine_stop_without_start",
+              "title": "Routine stop accepted without start",
+              "category": "sequence",
+              "detected": true,
+              "detecting_tests": [
+                "req_011__tpl_routine_sequence_0201",
+                "req_012__tpl_routine_sequence_0202"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "condition_ignored",
+              "title": "vehicle_stationary condition ignored",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "req_009__tpl_condition_not_met_did_0150"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "dtc_clear_ignores_group",
+              "title": "DTC clear ignores group",
+              "category": "data",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "dtc_clear_noop",
+              "title": "DTC clear does not clear",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "req_014__tpl_dtc_read_clear_B10101",
+                "req_014__tpl_dtc_read_clear_B10205",
+                "req_014__tpl_dtc_read_clear_B10310"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "multi_did_read_first_only",
+              "title": "Multi-DID read returns only the first DID",
+              "category": "data",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "missing_response_pending",
+              "title": "Missing 0x78 response pending",
+              "category": "timing",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "dtc_read_ignores_mask",
+              "title": "DTC read ignores status mask",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "req_014__tpl_dtc_read_clear_B10101",
+                "req_014__tpl_dtc_read_clear_B10205",
+                "req_014__tpl_dtc_read_clear_B10310"
+              ],
+              "failing_invalid_tests": []
+            }
+          ]
+        },
+        "gold": {
+          "bugs": 26,
+          "detected": 24,
+          "rate": 0.9231,
+          "tests": 60,
+          "valid_tests": 60,
+          "invalid_tests": [],
+          "undetected": [
+            "lockout_delay_never_expires",
+            "seed_not_consumed"
+          ],
+          "per_bug": [
+            {
+              "bug_id": "nrc_order_did_before_session",
+              "title": "Wrong NRC priority: 0x31 before 0x7F",
+              "category": "nrc_order",
+              "detected": true,
+              "detecting_tests": [
+                "gold_write_unknown_did_default_session"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "nrc_order_security_before_length",
+              "title": "Wrong NRC priority: 0x33 before 0x13 on WriteDataByIdentifier",
+              "category": "nrc_order",
+              "detected": true,
+              "detecting_tests": [
+                "gold_write_wrong_length"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "general_reject_instead_of_0x12",
+              "title": "generalReject (0x10) instead of subFunctionNotSupported (0x12)",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "gold_session_unsupported_sub",
+                "gold_ecu_reset_bad_sub",
+                "gold_dtc_read_bad_sub",
+                "gold_tester_present_bad_sub_not_suppressed"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "security_not_reset_on_session_change",
+              "title": "Security not re-locked on session change",
+              "category": "session",
+              "detected": true,
+              "detecting_tests": [
+                "gold_security_relocked_on_session_reentry"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "s3_timeout_never_fires",
+              "title": "S3 session timeout never fires",
+              "category": "timing",
+              "detected": true,
+              "detecting_tests": [
+                "gold_s3_timeout_reverts"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "s3_timeout_off_by_one",
+              "title": "S3 timeout fires at exactly s3_ms",
+              "category": "timing",
+              "detected": true,
+              "detecting_tests": [
+                "gold_s3_no_timeout_at_exactly_s3ms"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "lockout_after_extra_attempt",
+              "title": "Lockout counter off by one (locks after 4)",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "gold_security_lockout_after_3"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "lockout_delay_ignored",
+              "title": "Lockout delay ignored (no 0x37)",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "gold_security_lockout_after_3"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "lockout_delay_never_expires",
+              "title": "Lockout delay never expires",
+              "category": "timing",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "accepts_any_key",
+              "title": "Any key accepted",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "gold_security_wrong_key_once",
+                "gold_security_lockout_after_3",
+                "gold_security_wrong_level_unlock"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "seed_not_consumed",
+              "title": "Seed not consumed by a valid key",
+              "category": "sequence",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "static_seed",
+              "title": "Static seed",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "gold_security_lockout_after_3"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "write_ignores_value_range",
+              "title": "Write ignores value range",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "gold_write_out_of_range_wiper",
+                "gold_write_out_of_range_brightness"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "readonly_did_writable",
+              "title": "Read-only DID writable",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "gold_write_readonly_did"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "write_length_off_by_one",
+              "title": "0x2E length check off by one",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "gold_write_wrong_length"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "write_positive_sid_wrong",
+              "title": "Wrong positive SID for WriteDataByIdentifier",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "gold_write_secured_positive_lighting",
+                "gold_write_secured_positive_ambient_color",
+                "gold_write_coding_variant",
+                "gold_write_factory_reset_flag_positive",
+                "gold_security_relocked_on_session_reentry"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "session_response_missing_timing",
+              "title": "Session response missing timing bytes",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "gold_read_vin_extended",
+                "gold_session_to_extended",
+                "gold_session_back_default",
+                "gold_session_programming",
+                "gold_write_without_unlock",
+                "gold_write_secured_positive_lighting",
+                "gold_write_secured_positive_ambient_color",
+                "gold_write_out_of_range_wiper",
+                "gold_write_out_of_range_brightness",
+                "gold_write_wrong_length",
+                "gold_write_readonly_did",
+                "gold_write_unknown_did",
+                "gold_security_seed_level1",
+                "gold_security_wrong_key_once",
+                "gold_security_lockout_after_3",
+                "gold_security_key_without_seed",
+                "gold_security_level3_subfunction_wrong_session",
+                "gold_routine_start_without_security",
+                "gold_routine_lighting_full_sequence",
+                "gold_routine_stop_before_start",
+                "gold_routine_results_before_start",
+                "gold_routine_door_cal_condition_fail",
+                "gold_routine_door_cal_positive",
+                "gold_routine_nvm_restore_long_running",
+                "gold_write_nvm_fault",
+                "gold_s3_timeout_reverts",
+                "gold_s3_no_timeout_at_exactly_s3ms",
+                "gold_ecu_reset_suppressed",
+                "gold_security_already_unlocked_seed",
+                "gold_read_active_session_live",
+                "gold_write_coding_variant",
+                "gold_write_factory_reset_flag_positive",
+                "gold_write_factory_reset_flag_moving",
+                "gold_security_wrong_level_unlock",
+                "gold_security_relocked_on_session_reentry"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "suppress_bit_ignored",
+              "title": "Suppress-positive-response bit ignored",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "gold_tester_present_suppressed",
+                "gold_ecu_reset_suppressed"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "negative_response_suppressed",
+              "title": "Negative responses suppressed when bit set",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "gold_tester_present_bad_sub_not_suppressed"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "routine_stop_without_start",
+              "title": "Routine stop accepted without start",
+              "category": "sequence",
+              "detected": true,
+              "detecting_tests": [
+                "gold_routine_stop_before_start"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "condition_ignored",
+              "title": "vehicle_stationary condition ignored",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "gold_routine_door_cal_condition_fail",
+                "gold_write_factory_reset_flag_moving"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "dtc_clear_ignores_group",
+              "title": "DTC clear ignores group",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "gold_dtc_clear_specific",
+                "gold_dtc_clear_unknown_group"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "dtc_clear_noop",
+              "title": "DTC clear does not clear",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "gold_dtc_clear_all",
+                "gold_dtc_clear_specific"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "multi_did_read_first_only",
+              "title": "Multi-DID read returns only the first DID",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "gold_read_partnum_serial_multi",
+                "gold_duplicate_did_read"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "missing_response_pending",
+              "title": "Missing 0x78 response pending",
+              "category": "timing",
+              "detected": true,
+              "detecting_tests": [
+                "gold_routine_nvm_restore_long_running"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "dtc_read_ignores_mask",
+              "title": "DTC read ignores status mask",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "gold_dtc_read_default",
+                "gold_dtc_set_and_read",
+                "gold_dtc_clear_all",
+                "gold_dtc_clear_specific"
+              ],
+              "failing_invalid_tests": []
+            }
+          ]
+        },
+        "union": {
+          "bugs": 26,
+          "detected": 25,
+          "rate": 0.9615,
+          "undetected": [
+            "seed_not_consumed"
+          ],
+          "only_generated": [
+            "lockout_delay_never_expires"
+          ],
+          "only_gold": [
+            "nrc_order_did_before_session",
+            "security_not_reset_on_session_change",
+            "s3_timeout_off_by_one",
+            "readonly_did_writable",
+            "negative_response_suppressed",
+            "dtc_clear_ignores_group",
+            "multi_did_read_first_only",
+            "missing_response_pending"
+          ]
+        }
+      },
+      "pipeline": {
+        "per_requirement": [
+          {
+            "requirement_id": "REQ-001",
+            "tests": 6,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 1
+          },
+          {
+            "requirement_id": "REQ-002",
+            "tests": 9,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 2
+          },
+          {
+            "requirement_id": "REQ-003",
+            "tests": 5,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 3
+          },
+          {
+            "requirement_id": "REQ-004",
+            "tests": 3,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 4
+          },
+          {
+            "requirement_id": "REQ-005",
+            "tests": 10,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 5
+          },
+          {
+            "requirement_id": "REQ-006",
+            "tests": 10,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 6
+          },
+          {
+            "requirement_id": "REQ-007",
+            "tests": 8,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 7
+          },
+          {
+            "requirement_id": "REQ-008",
+            "tests": 8,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 8
+          },
+          {
+            "requirement_id": "REQ-009",
+            "tests": 10,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 9
+          },
+          {
+            "requirement_id": "REQ-010",
+            "tests": 4,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 10
+          },
+          {
+            "requirement_id": "REQ-011",
+            "tests": 4,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 11
+          },
+          {
+            "requirement_id": "REQ-012",
+            "tests": 6,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 12
+          },
+          {
+            "requirement_id": "REQ-013",
+            "tests": 3,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 13
+          },
+          {
+            "requirement_id": "REQ-014",
+            "tests": 7,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 14
+          },
+          {
+            "requirement_id": "REQ-015",
+            "tests": 8,
+            "dropped": 0,
+            "rejected": 0,
+            "plan_attempts": 1,
+            "retries": 0,
+            "status": "completed",
+            "engine": "langgraph",
+            "run_id": 15
+          }
+        ],
+        "requirements": 15,
+        "tests_kept": 101,
+        "dropped": 0,
+        "rejected": 0,
+        "retries": 0,
+        "failed_runs": 0,
+        "dropped_reasons": []
+      }
+    },
+    "ollama": {
+      "status": "not run",
+      "reason": "deferred: requires a local Ollama model (see MODEL_SETUP.md)"
+    }
+  },
+  "exports": {
+    "written": [
+      "exports/generated_tests_test.py",
+      "exports/gold_tests_test.py",
+      "exports/generated_tests.can",
+      "exports/gold_tests.can"
+    ],
+    "run": {
+      "file": "generated_tests_test.py",
+      "transport": "inprocess",
+      "returncode": 0,
+      "passed": true,
+      "summary": "101 passed in 0.87s",
+      "seconds": 3.35
+    }
+  },
+  "runtime_seconds": {
+    "setup": 1.668,
+    "generation": 2.317,
+    "execution_and_bug_matrix": 11.218,
+    "metrics": 0.128,
+    "exports": 3.825,
+    "total": 19.157
+  },
+  "audit_db": "audit.sqlite",
+  "baseline_comparison": null
+}

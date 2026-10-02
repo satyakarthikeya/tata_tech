@@ -6,3 +6,7 @@ __pycache__/
 outputs/*.db
 *.sqlite
 .venv/
+outputs/audit.sqlite
+outputs/chroma/
+chroma/
+outputs/**/__pycache__/

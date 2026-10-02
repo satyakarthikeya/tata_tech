@@ -113,6 +113,8 @@ Origin = Literal["gold", "generated"]
 class TestCase(BaseModel):
     """One multi-step UDS test case."""
 
+    __test__ = False  # not a pytest test class despite the name
+
     id: str
     title: str
     requirement_ids: list[str] = Field(default_factory=list)

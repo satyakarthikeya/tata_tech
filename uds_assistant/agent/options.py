@@ -118,6 +118,11 @@ def describe_option(spec: EcuSpec, template_id: str, index: int, params: BaseMod
                     _add(refs.sessions, hex2(s))
                 if did.write_security_level is not None:
                     _add(refs.security_levels, hex2(did.write_security_level))
+    for extra_did in p.get("dids") or []:
+        if isinstance(extra_did, int):
+            _add(refs.dids, hex4(extra_did))
+            extra = spec.get_did(extra_did)
+            bits.append(f"DID {hex4(extra_did)} {extra.name if extra else '(not in spec)'}")
     routine_id = p.get("routine")
     if p.get("kind") == "routine":
         routine_id = p.get("target")
@@ -193,6 +198,13 @@ _PRIMARY_SERVICE: dict[str, int] = {
     "s3_timeout_reverts_session": 0x10,
     "routine_sequence": 0x31,
     "dtc_read_clear": 0x19,
+    "read_multiple_dids": 0x22,
+    "write_readonly_did": 0x2E,
+    "session_change_relocks_security": 0x27,
+    "seed_replay_rejected": 0x27,
+    "dtc_clear_specific_keeps_others": 0x14,
+    "s3_keepalive_boundary": 0x3E,
+    "routine_start_results": 0x31,
 }
 
 

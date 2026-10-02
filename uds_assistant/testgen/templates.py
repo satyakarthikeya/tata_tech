@@ -31,6 +31,7 @@ from uds_assistant.protocol.security import compute_key
 from uds_assistant.rules.engine import RuleResult, RulesSession
 from uds_assistant.rules.state import dtc_code_to_int, with_dtc_status
 from uds_assistant.spec.schema import DidDef, EcuSpec
+from uds_assistant.testgen import templates_v2 as v2
 from uds_assistant.testgen.model import (
     AdvanceTimeStep,
     Citation,
@@ -554,10 +555,16 @@ def _routine_sequence_instantiate(spec: EcuSpec, p: RoutineSequenceParams) -> Te
         b.set_environment(vehicle_speed_kph=0, description="Ensure routine preconditions hold.")
     if routine.security_level is not None:
         b.unlock(routine.security_level)
+    # Start requests carry the spec'd option record (v1 omitted it, so routines with
+    # option_record_length > 0 only ever saw NRC 0x13 — found by the eval's request validity).
+    option = bytes(routine.option_record_length)
     b.send(routine_control(0x02, p.routine), "Stop before start -> expect NRC 0x24.")
-    b.send(routine_control(0x01, p.routine), "Start the routine.")
+    b.send(routine_control(0x01, p.routine, option), "Start the routine.")
     if not routine.long_running:
-        b.send(routine_control(0x01, p.routine), "Start again while running -> expect NRC 0x24.")
+        b.send(
+            routine_control(0x01, p.routine, option),
+            "Start again while running -> expect NRC 0x24.",
+        )
         b.send(routine_control(0x02, p.routine), "Stop the routine.")
         b.send(routine_control(0x03, p.routine), "Request results after stop.")
     return TestCase(
@@ -610,7 +617,7 @@ def _condition_not_met_instantiate(spec: EcuSpec, p: ConditionNotMetParams) -> T
         if routine.security_level is not None:
             b.unlock(routine.security_level)
         b.send(
-            routine_control(0x01, p.target),
+            routine_control(0x01, p.target, bytes(routine.option_record_length)),
             "Start routine while vehicle is moving -> expect NRC 0x22.",
         )
         title = f"Start routine {routine.name} while vehicle is moving"
@@ -718,12 +725,30 @@ class Template:
     params_model: type[BaseModel]
     instantiate_fn: Callable[[EcuSpec, BaseModel], TestCase]
     applicable_params_fn: Callable[[EcuSpec], list[BaseModel]]
+    intended_nrcs: frozenset[int] = frozenset()
+    """NRCs this template deliberately provokes (used by the eval's request-validity metric
+    to tell an intentional malformed-request probe from an accidental one)."""
 
     def instantiate(self, spec: EcuSpec, params: BaseModel | dict) -> TestCase:
         """Build a concrete :class:`TestCase` for ``params`` against ``spec``."""
         model = params if isinstance(params, self.params_model) else self.params_model.model_validate(params)
         return self.instantiate_fn(spec, model)
 
+
+TEMPLATE_SET_VERSION = "v2"
+"""Bumped whenever templates are added/changed; recorded in the evaluation report."""
+
+TEMPLATE_SET_NOTES: dict[str, str] = {
+    "v1": "14 templates (Phase 4/6).",
+    "v2": (
+        "v1 + 9 generic templates (multi-DID read, write to read-only DID, session change "
+        "re-locks security, key replay, DTC clear specific/unknown group, negative response "
+        "with suppress bit, S3 keep-alive boundary, NRC priority session-before-identifier, "
+        "routine start+results incl. 0x78) and a fix so routine starts carry the spec'd option "
+        "record. Added in Phase 7 AFTER inspecting which catalog bugs v1 missed; the same "
+        "author wrote the bug catalog, so v2 detection is an optimistic, non-independent number."
+    ),
+}
 
 TEMPLATES: dict[str, Template] = {
     "read_did_positive": Template(
@@ -733,6 +758,7 @@ TEMPLATES: dict[str, Template] = {
     "read_did_wrong_session_or_unknown": Template(
         "read_did_wrong_session_or_unknown", "Read an unknown DID or a DID not readable in the session.",
         "negative", [0x22], ReadDidWrongParams, _read_did_wrong_instantiate, _read_did_wrong_applicable,
+        intended_nrcs=frozenset({0x31}),
     ),
     "write_did_secured_positive": Template(
         "write_did_secured_positive", "Session -> unlock -> write -> read back.", "positive",
@@ -741,28 +767,34 @@ TEMPLATES: dict[str, Template] = {
     "write_did_without_security": Template(
         "write_did_without_security", "Write a security-gated DID without unlocking.", "negative",
         [0x2E], WriteNoSecParams, _write_nosec_instantiate, _write_nosec_applicable,
+        intended_nrcs=frozenset({0x33}),
     ),
     "write_did_out_of_range": Template(
         "write_did_out_of_range", "Write a value outside the DID's value_range.", "negative",
         [0x2E, 0x27], WriteOutOfRangeParams, _write_oor_instantiate, _write_oor_applicable,
+        intended_nrcs=frozenset({0x31}),
     ),
     "write_did_invalid_length": Template(
         "write_did_invalid_length", "Write the wrong number of data bytes.", "negative",
         [0x2E], WriteInvalidLengthParams, _write_badlen_instantiate, _write_badlen_applicable,
+        intended_nrcs=frozenset({0x13}),
     ),
     "service_not_in_session": Template(
         "service_not_in_session", "Send a globally-supported service not allowed in this session.",
         "session", list(_SID_BUILDERS), ServiceNotInSessionParams,
         _service_not_in_session_instantiate, _service_not_in_session_applicable,
+        intended_nrcs=frozenset({0x7F}),
     ),
     "unsupported_subfunction": Template(
         "unsupported_subfunction", "Send a subfunction value the service does not support.", "negative",
         list(_BAD_SUBFUNCTION), UnsupportedSubfunctionParams,
         _unsupported_subfunction_instantiate, _unsupported_subfunction_applicable,
+        intended_nrcs=frozenset({0x12}),
     ),
     "security_invalid_key_lockout": Template(
         "security_invalid_key_lockout", "Exhaust max_attempts, see 0x37, then delay expiry.", "security",
         [0x27], SecurityLockoutParams, _security_lockout_instantiate, _security_lockout_applicable,
+        intended_nrcs=frozenset({0x35, 0x36, 0x37}),
     ),
     "s3_timeout_reverts_session": Template(
         "s3_timeout_reverts_session", "Idle past s3_ms and confirm the session reverted.", "timing",
@@ -771,11 +803,13 @@ TEMPLATES: dict[str, Template] = {
     "routine_sequence": Template(
         "routine_sequence", "Stop/results before start, start while running.", "negative",
         [0x31], RoutineSequenceParams, _routine_sequence_instantiate, _routine_sequence_applicable,
+        intended_nrcs=frozenset({0x24}),
     ),
     "condition_not_met": Template(
         "condition_not_met", "Attempt a condition-gated write/routine while the condition fails.",
         "negative", [0x2E, 0x31], ConditionNotMetParams,
         _condition_not_met_instantiate, _condition_not_met_applicable,
+        intended_nrcs=frozenset({0x22}),
     ),
     "suppress_positive_response": Template(
         "suppress_positive_response", "Set the suppress bit on a positive-only exchange.", "positive",
@@ -784,6 +818,56 @@ TEMPLATES: dict[str, Template] = {
     "dtc_read_clear": Template(
         "dtc_read_clear", "Inject a DTC status, read with a mask, clear it, confirm.", "positive",
         [0x19, 0x14], DtcReadClearParams, _dtc_read_clear_instantiate, _dtc_read_clear_applicable,
+    ),
+    # ---- template set v2 (Phase 7; see templates_v2.py and DECISIONS.md [EVAL-TPL-V2]) ----
+    "read_multiple_dids": Template(
+        "read_multiple_dids", "Read two DIDs in one ReadDataByIdentifier request.", "positive",
+        [0x22], v2.ReadMultiDidParams, v2.read_multi_instantiate, v2.read_multi_applicable,
+    ),
+    "write_readonly_did": Template(
+        "write_readonly_did", "Attempt to write a read-only DID, then read it back.", "negative",
+        [0x2E, 0x22], v2.WriteReadOnlyParams, v2.write_readonly_instantiate,
+        v2.write_readonly_applicable, intended_nrcs=frozenset({0x31}),
+    ),
+    "session_change_relocks_security": Template(
+        "session_change_relocks_security",
+        "Unlock, re-enter the session, confirm security is locked again.", "security",
+        [0x10, 0x27, 0x2E], v2.SecurityLevelParams, v2.relock_instantiate,
+        v2.security_level_applicable, intended_nrcs=frozenset({0x33}),
+    ),
+    "seed_replay_rejected": Template(
+        "seed_replay_rejected", "Unlock, then replay the same key without a new seed.", "security",
+        [0x27], v2.SecurityLevelParams, v2.seed_replay_instantiate, v2.security_level_applicable,
+        intended_nrcs=frozenset({0x24}),
+    ),
+    "dtc_clear_specific_keeps_others": Template(
+        "dtc_clear_specific_keeps_others",
+        "Inject all DTCs, clear one, confirm the others remain; clear an undefined group.",
+        "positive", [0x19, 0x14], v2.DtcCodeParams, v2.dtc_clear_specific_instantiate,
+        v2.dtc_clear_specific_applicable, intended_nrcs=frozenset({0x31}),
+    ),
+    "negative_response_with_suppress_bit": Template(
+        "negative_response_with_suppress_bit",
+        "Unsupported subfunction with the suppress bit set: the NRC must still be sent.",
+        "negative", list(v2.SUPPRESS_BIT_SERVICES), v2.SidSessionParams,
+        v2.negative_suppress_instantiate, v2.negative_suppress_applicable,
+        intended_nrcs=frozenset({0x12}),
+    ),
+    "s3_keepalive_boundary": Template(
+        "s3_keepalive_boundary", "TesterPresent exactly at S3 keeps the session alive.", "timing",
+        [0x3E, 0x10, 0x22], v2.SessionParams, v2.s3_keepalive_instantiate,
+        v2.s3_keepalive_applicable,
+    ),
+    "nrc_priority_session_over_identifier": Template(
+        "nrc_priority_session_over_identifier",
+        "Unknown identifier with a service not allowed in the session: 0x7F before 0x31.",
+        "negative", [0x22, 0x2E, 0x31], v2.SidSessionParams, v2.nrc_priority_instantiate,
+        v2.nrc_priority_applicable, intended_nrcs=frozenset({0x7F}),
+    ),
+    "routine_start_results": Template(
+        "routine_start_results", "Start a routine (incl. 0x78 response pending), read results.",
+        "positive", [0x31, 0x27], v2.RoutineParams, v2.routine_start_results_instantiate,
+        v2.routine_applicable,
     ),
 }
 

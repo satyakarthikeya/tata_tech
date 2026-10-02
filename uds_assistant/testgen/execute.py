@@ -32,6 +32,8 @@ class StepOutcome(BaseModel):
 class TestOutcome(BaseModel):
     """Result of executing an entire :class:`TestCase`."""
 
+    __test__ = False  # not a pytest test class despite the name
+
     test_id: str
     passed: bool
     step_outcomes: list[StepOutcome] = Field(default_factory=list)
