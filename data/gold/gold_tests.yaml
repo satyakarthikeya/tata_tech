@@ -1,0 +1,1867 @@
+- id: gold_read_vin_default
+  title: Read VIN in default session
+  requirement_ids:
+  - REQ-001
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 22f190
+    expected_responses_hex:
+    - 62f19053594e544845544943424d303030303031
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: dids.VIN
+    quote: null
+  review_status: draft
+  explanation: VIN is readable in every session; default value echoed.
+  origin: gold
+- id: gold_read_vin_extended
+  title: Read VIN in extended session
+  requirement_ids:
+  - REQ-001
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f190
+    expected_responses_hex:
+    - 62f19053594e544845544943424d303030303031
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: dids.VIN
+    quote: null
+  review_status: draft
+  explanation: VIN readable in extended session too.
+  origin: gold
+- id: gold_read_partnum_serial_multi
+  title: 'Multi-DID read: part number + serial'
+  requirement_ids:
+  - REQ-002
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 22f187f18c
+    expected_responses_hex:
+    - 62f18742434d2d31323334352df18c5345303030303031
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x22 ReadDataByIdentifier
+    quote: null
+  review_status: draft
+  explanation: Two DIDs in one request, both echoed in order.
+  origin: gold
+- id: gold_read_unknown_did
+  title: Read an unknown DID
+  requirement_ids:
+  - REQ-001
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '229999'
+    expected_responses_hex:
+    - 7f2231
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x22 checks
+    quote: null
+  review_status: draft
+  explanation: Unknown DID -> NRC 0x31.
+  origin: gold
+- id: gold_session_to_extended
+  title: 'Session control: default -> extended'
+  requirement_ids:
+  - REQ-003
+  category: session
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x10 DiagnosticSessionControl
+    quote: null
+  review_status: draft
+  explanation: Positive response carries session byte + P2(50ms)/P2*(5000ms/10=500)
+    timing.
+  origin: gold
+- id: gold_session_back_default
+  title: 'Session control: extended -> default'
+  requirement_ids:
+  - REQ-003
+  category: session
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1001'
+    expected_responses_hex:
+    - 5001003201f4
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x10 DiagnosticSessionControl
+    quote: null
+  review_status: draft
+  explanation: Can return to default session from extended.
+  origin: gold
+- id: gold_session_programming
+  title: 'Session control: default -> programming'
+  requirement_ids:
+  - REQ-004
+  category: session
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1002'
+    expected_responses_hex:
+    - 5002003201f4
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x10 DiagnosticSessionControl
+    quote: null
+  review_status: draft
+  explanation: Programming session has the same timing record.
+  origin: gold
+- id: gold_session_unsupported_sub
+  title: Session control with unsupported subfunction
+  requirement_ids:
+  - REQ-003
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1005'
+    expected_responses_hex:
+    - 7f1012
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: Subfunction supported
+    quote: null
+  review_status: draft
+  explanation: 0x10 only supports 01/02/03 -> NRC 0x12 for 0x05.
+  origin: gold
+- id: gold_session_wrong_length
+  title: Session control with extra byte
+  requirement_ids:
+  - REQ-003
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '100300'
+    expected_responses_hex:
+    - 7f1013
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: Generic length
+    quote: null
+  review_status: draft
+  explanation: 0x10 must be exactly 2 bytes -> NRC 0x13.
+  origin: gold
+- id: gold_ecu_reset_hard
+  title: ECU hard reset
+  requirement_ids:
+  - REQ-013
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1101'
+    expected_responses_hex:
+    - '5101'
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x11 ECUReset
+    quote: null
+  review_status: draft
+  explanation: Hard reset (0x01) is supported -> 51 01.
+  origin: gold
+- id: gold_ecu_reset_soft
+  title: ECU soft reset
+  requirement_ids:
+  - REQ-013
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1103'
+    expected_responses_hex:
+    - '5103'
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x11 ECUReset
+    quote: null
+  review_status: draft
+  explanation: Soft reset (0x03) is supported -> 51 03.
+  origin: gold
+- id: gold_ecu_reset_bad_sub
+  title: ECU reset with unsupported subfunction
+  requirement_ids:
+  - REQ-013
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1102'
+    expected_responses_hex:
+    - 7f1112
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: ecu_reset.supported_subfunctions
+    quote: null
+  review_status: draft
+  explanation: Only 0x01/0x03 are supported -> NRC 0x12 for 0x02.
+  origin: gold
+- id: gold_security_not_allowed_default_session
+  title: SecurityAccess not allowed in default session
+  requirement_ids: []
+  category: session
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 7f277f
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: sessions.default.allowed_services
+    quote: null
+  review_status: draft
+  explanation: 0x27 is globally supported but not in default session's allowed_services
+    -> NRC 0x7F.
+  origin: gold
+- id: gold_unsupported_sid
+  title: Completely unsupported service id
+  requirement_ids: []
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 2f01
+    expected_responses_hex:
+    - 7f2f11
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: Service supported
+    quote: null
+  review_status: draft
+  explanation: 0x2F is not in any session's allowed_services -> NRC 0x11.
+  origin: gold
+- id: gold_write_without_unlock
+  title: Write secured DID without unlocking
+  requirement_ids:
+  - REQ-005
+  category: security
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e010014
+    expected_responses_hex:
+    - 7f2e33
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x2E security check
+    quote: null
+  review_status: draft
+  explanation: write_security_level 0x01 required but not unlocked -> 0x33.
+  origin: gold
+- id: gold_write_secured_positive_lighting
+  title: Unlock level 1, write & read back lighting brightness
+  requirement_ids:
+  - REQ-005
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e010014
+    expected_responses_hex:
+    - 6e0100
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '220100'
+    expected_responses_hex:
+    - '62010014'
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: dids.interior_lighting_brightness_pct
+    quote: null
+  review_status: draft
+  explanation: Session -> unlock level 1 -> write 20 (0x14) -> read back confirms.
+  origin: gold
+- id: gold_write_secured_positive_ambient_color
+  title: Unlock level 1, write ambient color to max
+  requirement_ids:
+  - REQ-006
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e01010f
+    expected_responses_hex:
+    - 6e0101
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '220101'
+    expected_responses_hex:
+    - 6201010f
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: dids.ambient_lighting_color_index
+    quote: null
+  review_status: draft
+  explanation: Value 0x0F is within range [0,15].
+  origin: gold
+- id: gold_write_out_of_range_wiper
+  title: Write wiper sensitivity above max
+  requirement_ids:
+  - REQ-007
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e013006
+    expected_responses_hex:
+    - 7f2e31
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: dids.wiper_sensitivity_level
+    quote: null
+  review_status: draft
+  explanation: value_range is [1,5]; 6 is out of range -> 0x31.
+  origin: gold
+- id: gold_write_out_of_range_brightness
+  title: Write brightness above 100
+  requirement_ids:
+  - REQ-008
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e010065
+    expected_responses_hex:
+    - 7f2e31
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: dids.interior_lighting_brightness_pct
+    quote: null
+  review_status: draft
+  explanation: 101 (0x65) is outside [0,100] -> 0x31.
+  origin: gold
+- id: gold_write_wrong_length
+  title: Write brightness with wrong data length
+  requirement_ids:
+  - REQ-005
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e01000014
+    expected_responses_hex:
+    - 7f2e13
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x2E length check
+    quote: null
+  review_status: draft
+  explanation: Length check happens before the security check -> 0x13.
+  origin: gold
+- id: gold_write_readonly_did
+  title: Write a read-only DID
+  requirement_ids: []
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e011000
+    expected_responses_hex:
+    - 7f2e31
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: dids.driver_door_lock_state
+    quote: null
+  review_status: draft
+  explanation: Empty write_sessions -> always NRC 0x31.
+  origin: gold
+- id: gold_write_unknown_did
+  title: Write an unknown DID
+  requirement_ids: []
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e999900
+    expected_responses_hex:
+    - 7f2e31
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x2E checks
+    quote: null
+  review_status: draft
+  explanation: Unknown DID -> NRC 0x31 (in a session where 0x2E is allowed).
+  origin: gold
+- id: gold_security_seed_level1
+  title: Request seed for level 1
+  requirement_ids: []
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x27 seed request
+    quote: null
+  review_status: draft
+  explanation: First seed for level 1 (counter 0) is deterministic.
+  origin: gold
+- id: gold_security_wrong_key_once
+  title: Send one wrong key
+  requirement_ids:
+  - REQ-010
+  category: security
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '270200000000'
+    expected_responses_hex:
+    - 7f2735
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x27 wrong key
+    quote: null
+  review_status: draft
+  explanation: Wrong key, attempt 1 of 3 -> NRC 0x35.
+  origin: gold
+- id: gold_security_lockout_after_3
+  title: Lockout after 3 wrong keys, then 0x37
+  requirement_ids:
+  - REQ-010
+  category: security
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '270200000000'
+    expected_responses_hex:
+    - 7f2735
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 670132a31485
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '270200000000'
+    expected_responses_hex:
+    - 7f2735
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701cf40b122
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '270200000000'
+    expected_responses_hex:
+    - 7f2736
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 7f2737
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x27 lockout
+    quote: null
+  review_status: draft
+  explanation: 3rd wrong key reaches max_attempts -> 0x36 and arms a 10s delay; further
+    seed requests get 0x37.
+  origin: gold
+- id: gold_security_key_without_seed
+  title: Send key with no pending seed
+  requirement_ids: []
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '270200000000'
+    expected_responses_hex:
+    - 7f2724
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x27 key without pending seed
+    quote: null
+  review_status: draft
+  explanation: No requestSeed first -> NRC 0x24.
+  origin: gold
+- id: gold_security_level3_subfunction_wrong_session
+  title: Level 3 subfunction not allowed in extended session
+  requirement_ids: []
+  category: session
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2703'
+    expected_responses_hex:
+    - 7f277e
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: security_levels.programming.allowed_sessions
+    quote: null
+  review_status: draft
+  explanation: Level 3's seed subfunction (0x03) is only allowed in programming session
+    (0x02) -> 0x7E.
+  origin: gold
+- id: gold_routine_start_without_security
+  title: Start door calibration routine without unlocking
+  requirement_ids: []
+  category: security
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '3101020200'
+    expected_responses_hex:
+    - 7f3133
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: routines.door_actuator_calibration
+    quote: null
+  review_status: draft
+  explanation: security_level 0x01 required -> NRC 0x33.
+  origin: gold
+- id: gold_routine_lighting_full_sequence
+  title: Full lighting self-test routine sequence
+  requirement_ids:
+  - REQ-011
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31010201'
+    expected_responses_hex:
+    - '7101020101'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31020201'
+    expected_responses_hex:
+    - '7102020103'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31010201'
+    expected_responses_hex:
+    - '7101020101'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31030201'
+    expected_responses_hex:
+    - '7103020101'
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: routines.lighting_self_test
+    quote: null
+  review_status: draft
+  explanation: start -> stop -> restart (allowed after stopped) -> results reports
+    RUNNING (0x01).
+  origin: gold
+- id: gold_routine_stop_before_start
+  title: Stop lighting routine before it started
+  requirement_ids:
+  - REQ-011
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31020201'
+    expected_responses_hex:
+    - 7f3124
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x31 sequence
+    quote: null
+  review_status: draft
+  explanation: Stop before start -> NRC 0x24.
+  origin: gold
+- id: gold_routine_results_before_start
+  title: Request lighting routine results before start
+  requirement_ids:
+  - REQ-011
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31030201'
+    expected_responses_hex:
+    - 7f3124
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x31 sequence
+    quote: null
+  review_status: draft
+  explanation: Results before start -> NRC 0x24.
+  origin: gold
+- id: gold_routine_door_cal_condition_fail
+  title: Start door calibration while vehicle moving
+  requirement_ids:
+  - REQ-012
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: set_environment
+    vehicle_speed_kph: 10
+    nvm_write_fault: null
+    description: Vehicle moving.
+  - kind: send
+    request_hex: '3101020200'
+    expected_responses_hex:
+    - 7f3122
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: routines.door_actuator_calibration
+    quote: null
+  review_status: draft
+  explanation: vehicle_stationary not met -> NRC 0x22.
+  origin: gold
+- id: gold_routine_door_cal_positive
+  title: Start door calibration while stationary
+  requirement_ids:
+  - REQ-012
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '3101020200'
+    expected_responses_hex:
+    - '7101020201'
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: routines.door_actuator_calibration
+    quote: null
+  review_status: draft
+  explanation: Vehicle stationary by default -> starts fine.
+  origin: gold
+- id: gold_routine_nvm_restore_long_running
+  title: Long-running NVM factory restore start
+  requirement_ids: []
+  category: timing
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1002'
+    expected_responses_hex:
+    - 5002003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2703'
+    expected_responses_hex:
+    - 67030b7ced5e
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 270420a92dba
+    expected_responses_hex:
+    - '6704'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31010203'
+    expected_responses_hex:
+    - 7f3178
+    - '7101020302'
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: Long-running routines
+    quote: null
+  review_status: draft
+  explanation: Start answers with NRC 0x78 responsePending, then completes immediately
+    (status 0x02).
+  origin: gold
+- id: gold_routine_nvm_restore_wrong_session
+  title: NVM restore attempted in default session
+  requirement_ids: []
+  category: session
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '31010203'
+    expected_responses_hex:
+    - 7f317f
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: sessions.default.allowed_services
+    quote: null
+  review_status: draft
+  explanation: 0x31 not allowed in default session -> 0x7F.
+  origin: gold
+- id: gold_dtc_read_default
+  title: Read DTCs by status mask at power-on
+  requirement_ids:
+  - REQ-014
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 1902ff
+    expected_responses_hex:
+    - 5902ff
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x19 subfunction 02
+    quote: null
+  review_status: draft
+  explanation: All DTC statuses start at 0x00 -> no DTC matches any mask.
+  origin: gold
+- id: gold_dtc_read_bad_sub
+  title: ReadDTCInformation with unsupported subfunction
+  requirement_ids:
+  - REQ-014
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 1901ff
+    expected_responses_hex:
+    - 7f1912
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: read_dtc_supported_subfunctions
+    quote: null
+  review_status: draft
+  explanation: Only 0x02 is supported -> NRC 0x12.
+  origin: gold
+- id: gold_dtc_set_and_read
+  title: Inject a DTC status and read it back with a mask
+  requirement_ids: []
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: set_dtc_status
+    code: B10101
+    status: 8
+    description: Confirmed bit set.
+  - kind: send
+    request_hex: '190208'
+    expected_responses_hex:
+    - 5902ffb1010108
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x19 subfunction 02
+    quote: null
+  review_status: draft
+  explanation: DTC matches mask 0x08 and is reported with status & 0xFF.
+  origin: gold
+- id: gold_dtc_clear_all
+  title: Clear all DTCs
+  requirement_ids: []
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: set_dtc_status
+    code: B10101
+    status: 8
+    description: ''
+  - kind: send
+    request_hex: '190208'
+    expected_responses_hex:
+    - 5902ffb1010108
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 14ffffff
+    expected_responses_hex:
+    - '54'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '190208'
+    expected_responses_hex:
+    - 5902ff
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x14 ClearDiagnosticInformation
+    quote: null
+  review_status: draft
+  explanation: Group 0xFFFFFF clears every DTC status.
+  origin: gold
+- id: gold_dtc_clear_specific
+  title: Clear one specific DTC, others untouched
+  requirement_ids: []
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: set_dtc_status
+    code: B10101
+    status: 8
+    description: ''
+  - kind: set_dtc_status
+    code: B10205
+    status: 8
+    description: ''
+  - kind: send
+    request_hex: 14b10101
+    expected_responses_hex:
+    - '54'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '190208'
+    expected_responses_hex:
+    - 5902ffb1020508
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x14 ClearDiagnosticInformation
+    quote: null
+  review_status: draft
+  explanation: Only the matching DTC number is cleared.
+  origin: gold
+- id: gold_dtc_clear_unknown_group
+  title: Clear with an unknown DTC group
+  requirement_ids: []
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '14123456'
+    expected_responses_hex:
+    - 7f1431
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x14 which DTCs are cleared
+    quote: null
+  review_status: draft
+  explanation: Group not 0xFFFFFF and not a spec DTC -> NRC 0x31.
+  origin: gold
+- id: gold_dtc_clear_nvm_fault
+  title: Clear DTCs while NVM write fault is active
+  requirement_ids: []
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: set_environment
+    vehicle_speed_kph: null
+    nvm_write_fault: true
+    description: ''
+  - kind: send
+    request_hex: 14ffffff
+    expected_responses_hex:
+    - 7f1472
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x14 NVM fault
+    quote: null
+  review_status: draft
+  explanation: NVM fault flag active -> NRC 0x72, nothing cleared.
+  origin: gold
+- id: gold_write_nvm_fault
+  title: Write a DID while NVM write fault is active
+  requirement_ids: []
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: set_environment
+    vehicle_speed_kph: null
+    nvm_write_fault: true
+    description: ''
+  - kind: send
+    request_hex: 2e010014
+    expected_responses_hex:
+    - 7f2e72
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x2E NVM fault
+    quote: null
+  review_status: draft
+  explanation: NVM fault flag active on write -> NRC 0x72.
+  origin: gold
+- id: gold_tester_present
+  title: TesterPresent keeps the S3 timer alive
+  requirement_ids:
+  - REQ-015
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 3e00
+    expected_responses_hex:
+    - 7e00
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x3E TesterPresent
+    quote: null
+  review_status: draft
+  explanation: 0x3E 00 -> 0x7E 00.
+  origin: gold
+- id: gold_tester_present_suppressed
+  title: TesterPresent with suppress bit set
+  requirement_ids: []
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 3e80
+    expected_responses_hex: []
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: Suppress bit
+    quote: null
+  review_status: draft
+  explanation: Positive outcome suppressed -> no response frame sent.
+  origin: gold
+- id: gold_tester_present_bad_sub_not_suppressed
+  title: Negative responses are never suppressed
+  requirement_ids: []
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 3e81
+    expected_responses_hex:
+    - 7f3e12
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: Suppress bit
+    quote: null
+  review_status: draft
+  explanation: '3E 81: bad subfunction with suppress bit set still answers 0x7F 3E
+    12.'
+  origin: gold
+- id: gold_s3_timeout_reverts
+  title: S3 timeout reverts session before next request
+  requirement_ids: []
+  category: timing
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: advance_time
+    ms: 5001
+    description: Idle past s3_ms (5000).
+  - kind: send
+    request_hex: 22f186
+    expected_responses_hex:
+    - 62f18601
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: S3 timeout
+    quote: null
+  review_status: draft
+  explanation: 5001 ms idle > 5000 ms s3_ms -> reverted to default (0x01) before the
+    read.
+  origin: gold
+- id: gold_s3_no_timeout_at_exactly_s3ms
+  title: Exactly s3_ms idle does not expire the session
+  requirement_ids: []
+  category: timing
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: advance_time
+    ms: 5000
+    description: Idle exactly s3_ms.
+  - kind: send
+    request_hex: 22f186
+    expected_responses_hex:
+    - 62f18603
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: S3 timeout
+    quote: null
+  review_status: draft
+  explanation: Idle strictly greater than s3_ms is required; exactly 5000 ms does
+    not expire.
+  origin: gold
+- id: gold_ecu_reset_suppressed
+  title: Suppressed ECU reset still changes state
+  requirement_ids: []
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1181'
+    expected_responses_hex: []
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f186
+    expected_responses_hex:
+    - 62f18601
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: Suppress bit
+    quote: null
+  review_status: draft
+  explanation: 11 81 suppresses the response but still resets to default session.
+  origin: gold
+- id: gold_multi_did_read_one_bad
+  title: Multi-DID read where one DID is unknown fails the whole request
+  requirement_ids:
+  - REQ-002
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 22f1909999
+    expected_responses_hex:
+    - 7f2231
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x22 checks
+    quote: null
+  review_status: draft
+  explanation: One bad DID in a multi-DID request fails the whole request -> 0x31.
+  origin: gold
+- id: gold_duplicate_did_read
+  title: Duplicate DIDs are allowed in one read request
+  requirement_ids: []
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '2201400140'
+    expected_responses_hex:
+    - '62014000014000'
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x22 checks
+    quote: null
+  review_status: draft
+  explanation: Duplicate DIDs are allowed; vehicle speed defaults to 0.
+  origin: gold
+- id: gold_security_already_unlocked_seed
+  title: Requesting a new seed while already unlocked
+  requirement_ids: []
+  category: security
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - '670100000000'
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x27 seed request, already unlocked
+    quote: null
+  review_status: draft
+  explanation: Already-unlocked level -> all-zero seed and no state change.
+  origin: gold
+- id: gold_read_vehicle_speed_live
+  title: Live vehicle speed DID reflects environment
+  requirement_ids: []
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: set_environment
+    vehicle_speed_kph: 42
+    nvm_write_fault: null
+    description: ''
+  - kind: send
+    request_hex: '220140'
+    expected_responses_hex:
+    - 6201402a
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x22 live DIDs
+    quote: null
+  review_status: draft
+  explanation: DID 0x0140 is read live from the environment (42 = 0x2A).
+  origin: gold
+- id: gold_read_active_session_live
+  title: Live active-session DID reflects the current session
+  requirement_ids: []
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1002'
+    expected_responses_hex:
+    - 5002003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f186
+    expected_responses_hex:
+    - 62f18602
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x22 live DIDs
+    quote: null
+  review_status: draft
+  explanation: DID 0xF186 is read live from the current session (0x02).
+  origin: gold
+- id: gold_write_coding_variant
+  title: Unlock level 3 in programming session, write 2-byte coding variant
+  requirement_ids: []
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1002'
+    expected_responses_hex:
+    - 5002003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2703'
+    expected_responses_hex:
+    - 67030b7ced5e
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 270420a92dba
+    expected_responses_hex:
+    - '6704'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e01600005
+    expected_responses_hex:
+    - 6e0160
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '220160'
+    expected_responses_hex:
+    - '6201600005'
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: dids.coding_variant_id
+    quote: null
+  review_status: draft
+  explanation: 2-byte DID write/read round trip.
+  origin: gold
+- id: gold_write_factory_reset_flag_positive
+  title: Write factory reset flag while stationary
+  requirement_ids:
+  - REQ-009
+  category: positive
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1002'
+    expected_responses_hex:
+    - 5002003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2703'
+    expected_responses_hex:
+    - 67030b7ced5e
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 270420a92dba
+    expected_responses_hex:
+    - '6704'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e015001
+    expected_responses_hex:
+    - 6e0150
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: dids.factory_reset_flag
+    quote: null
+  review_status: draft
+  explanation: Programming session + level 3 + vehicle stationary (default) -> write
+    succeeds.
+  origin: gold
+- id: gold_write_factory_reset_flag_moving
+  title: Write factory reset flag while moving
+  requirement_ids:
+  - REQ-009
+  category: negative
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1002'
+    expected_responses_hex:
+    - 5002003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2703'
+    expected_responses_hex:
+    - 67030b7ced5e
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 270420a92dba
+    expected_responses_hex:
+    - '6704'
+    description: ''
+    max_response_time_ms: null
+  - kind: set_environment
+    vehicle_speed_kph: 5
+    nvm_write_fault: null
+    description: ''
+  - kind: send
+    request_hex: 2e015001
+    expected_responses_hex:
+    - 7f2e22
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: bcm_spec.yaml
+    ref: dids.factory_reset_flag
+    quote: null
+  review_status: draft
+  explanation: vehicle_stationary not met -> NRC 0x22.
+  origin: gold
+- id: gold_security_wrong_level_unlock
+  title: Correct key for the wrong level does not unlock it
+  requirement_ids: []
+  category: security
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '270200000001'
+    expected_responses_hex:
+    - 7f2735
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x27 key comparison
+    quote: null
+  review_status: draft
+  explanation: A key not equal to compute_key(seed, level) is rejected.
+  origin: gold
+- id: gold_write_unknown_did_default_session
+  title: Unknown DID write in a session where 0x2E isn't allowed
+  requirement_ids: []
+  category: session
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 2e999900
+    expected_responses_hex:
+    - 7f2e7f
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: Service allowed in the active session
+    quote: null
+  review_status: draft
+  explanation: 'The service-in-session check (step 2) wins over the DID lookup (step
+    6): default session doesn''t allow 0x2E at all, so this is 0x7F, not 0x31, even
+    for an unknown DID.'
+  origin: gold
+- id: gold_security_relocked_on_session_reentry
+  title: Security is re-locked by any positive 0x10, even same session
+  requirement_ids: []
+  category: security
+  template_id: null
+  parameters: {}
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e010014
+    expected_responses_hex:
+    - 6e0100
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: ''
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e010014
+    expected_responses_hex:
+    - 7f2e33
+    description: ''
+    max_response_time_ms: null
+  citations:
+  - source: behaviour_contract
+    ref: 0x10 effects
+    quote: null
+  review_status: draft
+  explanation: Re-entering the same session still locks security; the write after
+    re-entry needs unlocking again -> 0x33.
+  origin: gold
