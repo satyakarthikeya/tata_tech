@@ -480,6 +480,10 @@ def _security_lockout_instantiate(spec: EcuSpec, p: SecurityLockoutParams) -> Te
         "Request seed during lockout -> expect NRC 0x37.",
     )
     b.advance(level_def.delay_ms + 1, "Advance past the lockout delay.")
+    # The wait also exceeds S3, so the ECU is back in the default session where
+    # SecurityAccess is not allowed; re-enter the level's session first so the
+    # next request really exercises delay expiry (lockout state survives this).
+    b.send(session_control(session), "Re-enter the session (S3 expired during the wait).")
     b.send(
         security_request_seed(level_def.seed_subfunction),
         "Request seed after delay expiry -> seed issued again.",
