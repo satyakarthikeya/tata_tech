@@ -1,0 +1,16 @@
+id,text,category
+REQ-001,"The tester shall be able to read the VIN (DID 0xF190) in any diagnostic session.",read_did
+REQ-002,"The tester shall be able to read the ECU part number (DID 0xF187) and serial number (DID 0xF18C) in any session.",read_did
+REQ-003,"The tester shall be able to switch the BCM into extended diagnostic session (0x03) and back to default session (0x01).",session
+REQ-004,"The tester shall be able to switch the BCM into programming session (0x02) only when required preconditions are met.",session
+REQ-005,"Writing the interior lighting brightness DID (0x0100) shall require extended session and security level 0x01.",security
+REQ-006,"Writing the ambient lighting color index DID (0x0101) shall require extended session and security level 0x01.",security
+REQ-007,"The wiper sensitivity level (DID 0x0130) shall only accept values between 1 and 5 inclusive.",negative
+REQ-008,"The interior lighting brightness (DID 0x0100) shall only accept values between 0 and 100 inclusive.",negative
+REQ-009,"The factory reset flag (DID 0x0150) shall only be writable in programming session with security level 0x03, and only while the vehicle is stationary.",conditions
+REQ-010,"SecurityAccess level 0x01 shall lock out further attempts for 10 seconds after 3 consecutive invalid keys.",security
+REQ-011,"The lighting self-test routine (0x0201) shall not accept a stop or requestResults subfunction before start has been sent.",sequence
+REQ-012,"The door actuator calibration routine (0x0202) shall only run while the vehicle is stationary.",conditions
+REQ-013,"ECUReset shall support hard reset (0x01) and soft reset (0x03) subfunctions only.",negative
+REQ-014,"ReadDTCInformation shall support subfunction 0x02 (reportDTCByStatusMask) only.",negative
+REQ-015,"TesterPresent shall be accepted in every diagnostic session to keep the S3 session timer from expiring.",timing

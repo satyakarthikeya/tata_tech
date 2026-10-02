@@ -1,0 +1,33 @@
+[project]
+name = "uds-assistant"
+version = "0.1.0"
+description = "Local UDS diagnostics & automated test generation assistant"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2",
+    "pyyaml",
+    "udsoncan",
+    "can-isotp",
+    "python-can",
+    "rank-bm25",
+    "fastapi",
+    "httpx",
+    "langgraph",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "needs_model: test requires a real local LLM/embedding model (skipped unless RUN_MODEL_TESTS=1)",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["uds_assistant*"]

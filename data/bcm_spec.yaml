@@ -1,0 +1,219 @@
+# SYNTHETIC ECU SPEC — NOT a real OEM document.
+#
+# This describes a fictional "Body Control Module" (BCM) in a realistic
+# OEM-style diagnostic spec format, authored for this project to exercise
+# the rules engine, simulator, and test generator. No ISO 14229 text is
+# copied; only public protocol wire values (SIDs, NRCs) are used, and the
+# session/security/DID/routine/DTC content below is invented.
+
+ecu_name: "Synthetic BCM (Body Control Module) — demo ECU"
+synthetic: true
+
+sessions:
+  - id: 0x01
+    name: default
+    allowed_services: [0x10, 0x11, 0x14, 0x19, 0x22, 0x3E]
+    timing: { p2_ms: 50, p2_star_ms: 5000, s3_ms: 5000 }
+  - id: 0x02
+    name: programming
+    allowed_services: [0x10, 0x11, 0x22, 0x27, 0x2E, 0x31, 0x3E]
+    timing: { p2_ms: 50, p2_star_ms: 5000, s3_ms: 5000 }
+  - id: 0x03
+    name: extended
+    allowed_services: [0x10, 0x11, 0x14, 0x19, 0x22, 0x27, 0x2E, 0x31, 0x3E]
+    timing: { p2_ms: 50, p2_star_ms: 5000, s3_ms: 5000 }
+
+security_levels:
+  - level: 0x01
+    name: extended_diag
+    seed_subfunction: 0x01
+    key_subfunction: 0x02
+    seed_length: 4
+    max_attempts: 3
+    delay_ms: 10000
+    allowed_sessions: [0x03]
+  - level: 0x03
+    name: programming
+    seed_subfunction: 0x03
+    key_subfunction: 0x04
+    seed_length: 4
+    max_attempts: 3
+    delay_ms: 10000
+    allowed_sessions: [0x02]
+
+dids:
+  - id: 0xF190
+    name: VIN
+    length: 17
+    encoding: ascii
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: []
+    default_value: "53594e544845544943424d303030303031"  # "SYNTHETICBM000001"[:17] in hex
+
+  - id: 0xF187
+    name: manufacturer_part_number
+    length: 10
+    encoding: ascii
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: []
+    default_value: "42434d2d31323334352d"  # "BCM-12345-" (10 chars)
+
+  - id: 0xF18C
+    name: ecu_serial_number
+    length: 8
+    encoding: ascii
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: []
+    default_value: "5345303030303031"  # "SE000001" (8 chars)
+
+  - id: 0xF186
+    name: active_diagnostic_session
+    length: 1
+    encoding: uint8
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: []
+    default_value: "01"
+
+  - id: 0x0100
+    name: interior_lighting_brightness_pct
+    length: 1
+    encoding: uint8
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: [0x03]
+    write_security_level: 0x01
+    value_range: { min: 0, max: 100 }
+    default_value: "32"
+
+  - id: 0x0101
+    name: ambient_lighting_color_index
+    length: 1
+    encoding: uint8
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: [0x03]
+    write_security_level: 0x01
+    value_range: { min: 0, max: 15 }
+    default_value: "00"
+
+  - id: 0x0110
+    name: driver_door_lock_state
+    length: 1
+    encoding: uint8
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: []
+    default_value: "01"
+
+  - id: 0x0111
+    name: passenger_door_lock_state
+    length: 1
+    encoding: uint8
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: []
+    default_value: "01"
+
+  - id: 0x0120
+    name: central_locking_auto_relock_enable
+    length: 1
+    encoding: uint8
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: [0x03]
+    write_security_level: 0x01
+    value_range: { min: 0, max: 1 }
+    default_value: "01"
+
+  - id: 0x0130
+    name: wiper_sensitivity_level
+    length: 1
+    encoding: uint8
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: [0x03]
+    write_security_level: 0x01
+    value_range: { min: 1, max: 5 }
+    default_value: "03"
+
+  - id: 0x0131
+    name: wiper_auto_mode_enable
+    length: 1
+    encoding: uint8
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: [0x03]
+    write_security_level: 0x01
+    value_range: { min: 0, max: 1 }
+    default_value: "01"
+
+  - id: 0x0140
+    name: vehicle_speed_kph
+    length: 1
+    encoding: uint8
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: []
+    default_value: "00"
+
+  - id: 0x0150
+    name: factory_reset_flag
+    length: 1
+    encoding: uint8
+    read_sessions: [0x03]
+    write_sessions: [0x02]
+    write_security_level: 0x03
+    value_range: { min: 0, max: 1 }
+    default_value: "00"
+    conditions:
+      requires: [vehicle_stationary]
+
+  - id: 0x0160
+    name: coding_variant_id
+    length: 2
+    encoding: uint16
+    read_sessions: [0x01, 0x02, 0x03]
+    write_sessions: [0x02]
+    write_security_level: 0x03
+    value_range: { min: 0, max: 65535 }
+    default_value: "0001"
+
+routines:
+  - id: 0x0201
+    name: lighting_self_test
+    allowed_subfunctions: [0x01, 0x02, 0x03]  # start, stop, requestResults
+    sessions: [0x03]
+    security_level: 0x01
+    option_record_length: 0
+    stop_requires_start: true
+    results_requires_start: true
+
+  - id: 0x0202
+    name: door_actuator_calibration
+    allowed_subfunctions: [0x01, 0x02, 0x03]
+    sessions: [0x03]
+    security_level: 0x01
+    option_record_length: 1
+    stop_requires_start: true
+    results_requires_start: true
+    conditions:
+      requires: [vehicle_stationary]
+
+  - id: 0x0203
+    name: nvm_factory_restore
+    allowed_subfunctions: [0x01, 0x03]  # start, requestResults (no stop)
+    sessions: [0x02]
+    security_level: 0x03
+    option_record_length: 0
+    stop_requires_start: false
+    results_requires_start: true
+
+dtcs:
+  - code: "B10101"
+    name: interior_lighting_circuit_short
+    initial_status: 0x00
+  - code: "B10205"
+    name: driver_door_actuator_stuck
+    initial_status: 0x00
+  - code: "B10310"
+    name: wiper_motor_overcurrent
+    initial_status: 0x00
+
+dtc_status_availability_mask: 0xFF
+
+ecu_reset:
+  supported_subfunctions: [0x01, 0x03]  # hardReset, softReset
+
+read_dtc_supported_subfunctions: [0x02]  # reportDTCByStatusMask only

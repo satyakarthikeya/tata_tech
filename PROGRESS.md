@@ -19,3 +19,22 @@ Heavy packages (torch, transformers, sentence-transformers, chromadb, onnxruntim
 9. MODEL_SETUP.md, README.md, FINAL_REPORT.md, ruff, final pytest, commit
 
 **Execution:** each phase delegated sequentially to a subagent (Sonnet for routine phases, Opus for oracle/simulator/agent), then verified by the orchestrator (pytest + ruff) before commit.
+
+## Phase 1 — Protocol core, BCM spec, seed/key security (2026-10-03T01:14:02+05:30)
+
+**Done:**
+- `uds_assistant/config.py`: `get_config()` reads `LLM_MODE` (mock|ollama) and `RETRIEVER` (bm25|chroma) into a pydantic `Config`; invalid values fall back to default with a warning.
+- `uds_assistant/protocol/constants.py`: `ServiceId` and `Nrc` IntEnums (0x10,0x11,0x14,0x19,0x22,0x27,0x2E,0x31,0x3E and the 16 scoped NRCs), `POSITIVE_RESPONSE_OFFSET`, `NEGATIVE_RESPONSE_SID`, `SUPPRESS_POS_RESP_BIT`, `SERVICES_WITH_SUBFUNCTION`, `SERVICES_WITH_SUPPRESS_BIT`, `NRC_DESCRIPTIONS`.
+- `uds_assistant/protocol/codec.py`: `UdsRequest`/`UdsResponse` pydantic models with `to_bytes()`, `decode_request()`/`decode_response()`, `positive_response()`, `negative_response()`, `is_negative()`, `format_hex()`.
+- `uds_assistant/protocol/builders.py`: typed builders for all 9 in-scope services (`session_control`, `ecu_reset`, `clear_dtc`, `read_dtc_by_status_mask`, `read_did`, `security_request_seed`, `security_send_key`, `write_did`, `routine_control`, `tester_present`).
+- `uds_assistant/protocol/security.py`: documented synthetic seed/key algorithm (`generate_seed`, `compute_key`, `is_key_valid`) and a pure `SecurityLockoutState` model with `record_failed_attempt`, `record_successful_unlock`, `is_delay_active`, `clear_expired_lockout` — no wall-clock calls, clock is always injected.
+- `uds_assistant/spec/schema.py`: `EcuSpec` pydantic model (sessions, security levels, DIDs, routines, DTCs, ECU reset subfunctions) with full cross-reference validation, plus `load_spec(path)`.
+- `data/bcm_spec.yaml`: synthetic BCM spec — 3 sessions, 2 security levels, 14 DIDs (VIN, part number, serial, active session, lighting/door/wiper config, one condition-gated DID), 3 routines, 3 DTCs.
+- `data/requirements_seed.csv`: 15 plain-English requirements referencing the spec.
+- `pyproject.toml`, `tests/conftest.py` (auto-skip `needs_model` unless `RUN_MODEL_TESTS=1`).
+
+**Tests:** 90 passed, 0 failed (`python -m pytest -q`). Includes hypothesis round-trip properties for request/response encode-decode and seed/key, table-driven builder/NRC/spec-validation tests, and a full cross-check of every SID/NRC constant plus 12 request-encoding comparisons against `udsoncan` 1.26.1.
+
+**Ruff:** clean (`python -m ruff check .` → "All checks passed!").
+
+**Key design notes logged to DECISIONS.md:** synthetic seed/key formula, DID/session/security cross-ref validation rules, bytes-field hex-string convention for YAML spec authoring.
