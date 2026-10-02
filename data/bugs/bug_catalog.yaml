@@ -1,0 +1,206 @@
+# Injectable faults for the simulated BCM (uds_assistant/simulator).
+# Each id is implemented by an explicit hook in uds_assistant/simulator/{ecu,services}.py.
+# category: nrc_order | session | security | timing | data | format | sequence
+# expected_detection: test categories (positive | negative | session | security | timing)
+# that should catch the fault.
+
+bugs:
+  - id: nrc_order_did_before_session
+    title: "Wrong NRC priority: 0x31 before 0x7F"
+    description: >
+      For 0x22/0x2E the DID is looked up before the service-in-session check, so an
+      unknown DID in a session where the service is not allowed gives 0x31 instead of 0x7F.
+    category: nrc_order
+    expected_detection: [negative, session]
+
+  - id: nrc_order_security_before_length
+    title: "Wrong NRC priority: 0x33 before 0x13 on WriteDataByIdentifier"
+    description: >
+      0x2E checks security before the data length, so a wrong-length write while locked
+      answers 0x33 instead of 0x13.
+    category: nrc_order
+    expected_detection: [negative, security]
+
+  - id: general_reject_instead_of_0x12
+    title: "generalReject (0x10) instead of subFunctionNotSupported (0x12)"
+    description: >
+      Any unsupported subfunction (generic gate and routine-specific) is answered with
+      NRC 0x10 instead of 0x12.
+    category: format
+    expected_detection: [negative]
+
+  - id: security_not_reset_on_session_change
+    title: "Security not re-locked on session change"
+    description: >
+      A positive DiagnosticSessionControl keeps the unlocked security level, so protected
+      writes stay possible after re-entering a session.
+    category: session
+    expected_detection: [security, session]
+
+  - id: s3_timeout_never_fires
+    title: "S3 session timeout never fires"
+    description: >
+      The ECU stays in a non-default session forever, no matter how long the tester is silent.
+    category: timing
+    expected_detection: [timing, session]
+
+  - id: s3_timeout_off_by_one
+    title: "S3 timeout fires at exactly s3_ms"
+    description: >
+      The session times out when idle >= s3_ms instead of strictly greater, so a request
+      exactly 5000 ms after the previous one finds the ECU back in the default session.
+    category: timing
+    expected_detection: [timing]
+
+  - id: lockout_after_extra_attempt
+    title: "Lockout counter off by one (locks after 4)"
+    description: >
+      The attempt counter threshold is max_attempts + 1, so the third invalid key gives 0x35
+      instead of 0x36 and the ECU only locks after the fourth.
+    category: security
+    expected_detection: [security, negative]
+
+  - id: lockout_delay_ignored
+    title: "Lockout delay ignored (no 0x37)"
+    description: >
+      The required-time-delay check is skipped; seed requests are served during the lockout.
+    category: security
+    expected_detection: [security, timing]
+
+  - id: lockout_delay_never_expires
+    title: "Lockout delay never expires"
+    description: >
+      Once armed, the lockout deadline is never cleared, so SecurityAccess keeps answering
+      0x37 long after delay_ms has elapsed.
+    category: timing
+    expected_detection: [security, timing]
+
+  - id: accepts_any_key
+    title: "Any key accepted"
+    description: >
+      sendKey unlocks the level whatever key bytes are sent (as long as a seed is pending).
+    category: security
+    expected_detection: [security, negative]
+
+  - id: seed_not_consumed
+    title: "Seed not consumed by a valid key"
+    description: >
+      After a successful key the pending seed is kept, so replaying the same sendKey is
+      accepted again instead of answering 0x24 requestSequenceError.
+    category: sequence
+    expected_detection: [security]
+
+  - id: static_seed
+    title: "Static seed"
+    description: >
+      The seed counter never advances, so every requestSeed returns the same seed
+      (replay-attack weakness).
+    category: security
+    expected_detection: [security]
+
+  - id: write_ignores_value_range
+    title: "Write ignores value range"
+    description: >
+      0x2E stores values outside the DID's value_range instead of answering 0x31.
+    category: data
+    expected_detection: [negative]
+
+  - id: readonly_did_writable
+    title: "Read-only DID writable"
+    description: >
+      DIDs with no write_sessions (e.g. VIN, door lock state) can be written in any session
+      without security.
+    category: data
+    expected_detection: [negative]
+
+  - id: write_length_off_by_one
+    title: "0x2E length check off by one"
+    description: >
+      The data record may be one byte longer than the DID length (extra byte ignored),
+      so an over-long write is not rejected with 0x13.
+    category: format
+    expected_detection: [negative]
+
+  - id: write_positive_sid_wrong
+    title: "Wrong positive SID for WriteDataByIdentifier"
+    description: >
+      The positive response to 0x2E starts with 0x6F instead of 0x6E (offset 0x41).
+    category: format
+    expected_detection: [positive]
+
+  - id: session_response_missing_timing
+    title: "Session response missing timing bytes"
+    description: >
+      The DiagnosticSessionControl positive response is only `50 ss`, without the P2/P2*
+      timing record.
+    category: format
+    expected_detection: [positive, session]
+
+  - id: suppress_bit_ignored
+    title: "Suppress-positive-response bit ignored"
+    description: >
+      Requests with bit 7 of the subfunction set still receive their positive response.
+    category: format
+    expected_detection: [positive]
+
+  - id: negative_response_suppressed
+    title: "Negative responses suppressed when bit set"
+    description: >
+      With the suppress bit set, negative responses are dropped too (e.g. `3E 81` gets
+      silence instead of `7F 3E 12`).
+    category: format
+    expected_detection: [negative]
+
+  - id: routine_stop_without_start
+    title: "Routine stop accepted without start"
+    description: >
+      RoutineControl stop is answered positively for a routine that is not running,
+      instead of 0x24.
+    category: sequence
+    expected_detection: [negative]
+
+  - id: condition_ignored
+    title: "vehicle_stationary condition ignored"
+    description: >
+      Preconditions on DIDs and routines are not evaluated, so writes and routine starts
+      succeed while the vehicle is moving instead of 0x22.
+    category: data
+    expected_detection: [negative]
+
+  - id: dtc_clear_ignores_group
+    title: "DTC clear ignores group"
+    description: >
+      0x14 clears every DTC whatever group is requested, and never answers 0x31 for an
+      unknown group.
+    category: data
+    expected_detection: [negative, positive]
+
+  - id: dtc_clear_noop
+    title: "DTC clear does not clear"
+    description: >
+      0x14 answers 0x54 but leaves the DTC statuses untouched.
+    category: data
+    expected_detection: [positive]
+
+  - id: multi_did_read_first_only
+    title: "Multi-DID read returns only the first DID"
+    description: >
+      0x22 with several DIDs answers with the first DID record only.
+    category: data
+    expected_detection: [positive]
+
+  - id: missing_response_pending
+    title: "Missing 0x78 response pending"
+    description: >
+      Long-running routine starts answer with the final positive response only, without
+      the preceding `7F 31 78`.
+    category: timing
+    expected_detection: [positive, timing]
+
+  - id: dtc_read_ignores_mask
+    title: "DTC read ignores status mask"
+    description: >
+      0x19 02 lists every DTC regardless of the status mask, including DTCs whose status
+      has no bit in common with the mask.
+    category: data
+    expected_detection: [positive]

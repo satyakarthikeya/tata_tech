@@ -52,3 +52,21 @@ Heavy packages (torch, transformers, sentence-transformers, chromadb, onnxruntim
 **Tests:** 276 passed, 0 failed overall (`python -m pytest -q`); 186 in `tests/rules/` — 155 table-driven cases (every NRC path per service, every positive path, S3/lockout timing), hypothesis properties (never raises, well-formed responses, input not mutated, determinism, sequence invariants), AST checks that only `evaluate_nrc` names NRCs and every NRC is cited, unit tests.
 
 **Ruff:** clean.
+
+## Phase 3 — Independent ECU simulator, bug catalog, virtual CAN transport (2026-10-03T01:41:40+05:30)
+
+**Done:**
+- `uds_assistant/simulator/memory.py`: mutable `EcuMemory` (session, unlocked level, per-level lockouts, pending seeds, seed counter, routine status, DTC statuses, DID store, environment, S3 timestamp).
+- `uds_assistant/simulator/services.py`: per-service handler classes (0x10/0x11/0x14/0x19/0x22/0x27/0x2E/0x31/0x3E) in a SID dispatch table; negatives raised as `Reject`; explicit bug hooks.
+- `uds_assistant/simulator/ecu.py`: `SimulatedEcu(spec, bugs=None, clock=None)` with `handle(request, now_ms=None) -> list[bytes]`, `set_vehicle_speed`, `set_nvm_write_fault`, `set_environment`, `set_dtc_status`, `reset_state`, `advance`, `enable_bug`/`disable_bug`/`active_bugs`; thread-safe (RLock).
+- `uds_assistant/simulator/bugs.py` + `data/bugs/bug_catalog.yaml`: 26 injectable bugs (pydantic `BugCatalog`, `load_bug_catalog`).
+- `uds_assistant/simulator/transport.py`: `InProcessTransport`, `EcuCanServer` (ECU behind ISO-TP on a python-can virtual bus, background thread, context manager), `IsoTpClientTransport` (tester side, follows 0x78 pending), `make_isotp_stack`.
+- Simulator never imports the rules engine (AST + subprocess test).
+
+**Tests:** 367 passed, 0 failed overall (`python -m pytest -q`, ~19 s); 91 in `tests/simulator/`:
+- Agreement simulator vs rules engine: hypothesis (300 sequences, up to 30 steps), 40 seeded walks x 100 steps, 3000 single-request fuzz cases from random prefixes, 60 directed unlocked walks — ~26,800 requests compared per run (hypothesis part varies, ~4,000), **100% byte-identical, 0 discrepancies**; generators reach every NRC used by the contract (0x11/12/13/22/24/31/33/35/36/37/72/78/7E/7F) and every positive SID.
+- Bugs: catalog == implemented set, every bug has a dedicated scenario whose output differs bug-on vs bug-off, toggling restores clean behaviour.
+- Transport: in-process, ISO-TP round trip incl. multi-frame VIN and 0x78+final over CAN, udsoncan client (extended session -> seed -> compute_key -> key -> read 0x0100 -> write 0x50 -> read back) and NegativeResponseException 0x33.
+- 20 direct contract-example tests.
+
+**Ruff:** clean.
