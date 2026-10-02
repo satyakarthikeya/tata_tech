@@ -1,6 +1,6 @@
 # Evaluation report — UDS test generation assistant
 
-- **Generated:** 2026-10-02T21:32:43.937820+00:00 (git `1a9a02f57b11dd0b2b633ff9de627109c2afe9be`, uncommitted changes present)
+- **Generated:** 2026-10-02T21:50:46.917317+00:00 (git `f3c643c40c15ee4ecbc7e7de2c440904b6a07e57`)
 - **LLM mode used:** `mock` (requested `mock`)
 - **Agent engine:** `langgraph` · **Retriever:** `Bm25Retriever`
 - **Template set:** `v2` (23 templates)
@@ -147,19 +147,19 @@ Totals: 171 kept, 0 dropped, 0 rejected, 0 re-plans, 0 failed runs.
 - `exports/gold_tests_test.py`
 - `exports/generated_tests.can`
 - `exports/gold_tests.can`
-- Ran `generated_tests_test.py` (transport `inprocess`) with pytest in a subprocess: **PASSED** — `171 passed in 0.97s` (3.53 s).
+- Ran `generated_tests_test.py` (transport `inprocess`) with pytest in a subprocess: **PASSED** — `171 passed in 0.97s` (3.51 s).
 - CAPL files (`*.can`) are **UNVERIFIED TEMPLATES — not compiled or run in CANoe**.
 
 ## Runtime
 
 | Phase | seconds |
 |---|---|
-| setup | 1.643 |
-| generation | 3.41 |
-| execution_and_bug_matrix | 18.795 |
-| metrics | 0.207 |
-| exports | 4.299 |
-| total | 28.355 |
+| setup | 1.658 |
+| generation | 3.55 |
+| execution_and_bug_matrix | 19.263 |
+| metrics | 0.215 |
+| exports | 4.314 |
+| total | 29.001 |
 
 ## Metric definitions
 

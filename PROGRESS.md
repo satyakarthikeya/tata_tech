@@ -154,3 +154,19 @@ Heavy packages (torch, transformers, sentence-transformers, chromadb, onnxruntim
 **Ruff:** clean (`python -m ruff check .` -> "All checks passed!").
 
 **Key design notes logged to DECISIONS.md:** `/run`/`/export` accept either `run_id` (fetched from the audit store) or inline `tests`; the review endpoint is `/tests/{run_id}/{test_id}/review` (not `/tests/{id}/review`) because `AuditStore.set_review_status` needs a `run_id` to locate the row and test ids are only unique within a run; `/eval` defaults to a temp output directory precisely so repeated API calls cannot clobber the Phase-7 committed `outputs/eval_report*.json`.
+
+## Phase 9 — Docs, model setup guide, final report (2026-10-03T03:23:18+05:30)
+
+**Done:**
+- Wrote `MODEL_SETUP.md`: exact Windows (PowerShell + bash) steps to install Ollama, pull `qwen2.5:3b-instruct-q4_K_M`, verify via `ollama list`/`curl /api/tags`, set `OLLAMA_HOST`/`OLLAMA_MODEL`/`LLM_MODE`/`RETRIEVER` (all names verified against `config.py`/`llm/client.py`/`rag/chroma.py`), install `chromadb`+`sentence-transformers` (warned about torch), pre-download `BAAI/bge-small-en-v1.5`, run `needs_model` tests, run `--mode ollama` eval, run the Streamlit UI, plus troubleshooting for silent mock/bm25 fallback.
+- Wrote `README.md`: project summary (synthetic BCM disclosed), setup, runtime switches, test/eval/API/UI commands, exports, repo layout, ASCII architecture diagram incl. oracle/simulator/gold triangulation, governance notes, links to the other docs.
+- Wrote `FINAL_REPORT.md` with the required sections, citing actual command output from this phase only (no invented numbers): full suite `753 passed, 2 skipped` in 83.28s, `ruff check .` clean, per-directory collection counts, `test_agreement.py` (4 passed), `test_gold.py` (126 passed), `test_udsoncan_full_sequence` (1 passed), mock-mode eval headline numbers (25/26, 24/26, 26/26 bug detection; 100% request validity after intent exemption; etc.), the v1->v2 template-detection non-independence caveat, the circularity of the oracle self-consistency metric, no-SWS-citation caveat, and concrete known limitations/next steps.
+- Regenerated `outputs/eval_report.{json,md}` via `python -m uds_assistant.eval.run_eval --mode mock` (this is the final committed report; numbers match what was already there from Phase 7/8, confirming reproducibility).
+- Verified SCOPE.md tonight success criteria: pytest passes (753 passed/2 skipped, model tests marked not deleted); mock eval produces a real report with bug-detection rate; simulator/rules-engine agreement test passes (4/4, zero disagreements, not literally "100% of randomized requests" as a number since the test design is pass/fail on a fixed sample, not a percentage metric); all 60 gold tests pass on the bug-free simulator (126 pytest cases, all green); a udsoncan client completes a full sequence over virtual CAN (`test_udsoncan_full_sequence`, 1 passed); this FINAL_REPORT is honest about what's untested.
+- Checked `.gitignore` already excludes `*.sqlite`, `outputs/*.db`, `.hypothesis/`, `__pycache__/`, `outputs/chroma/`; `git status` showed only the regenerated `outputs/eval_report.{json,md}` as modified plus the new docs, nothing stray.
+
+**Not done / deferred (see FINAL_REPORT.md):** Ollama install/pull, ChromaDB+embeddings install/download, `needs_model` tests, `--mode ollama` eval, interactive Streamlit click-through — all explicitly deferred per SCOPE.md's offline-build constraint; MODEL_SETUP.md gives the exact verified steps for later.
+
+**Test status:** `python -m pytest -q` -> 753 passed, 2 skipped (83.28s). `python -m ruff check .` -> All checks passed.
+
+**Commit:** phase 9: docs, model setup guide, final report
