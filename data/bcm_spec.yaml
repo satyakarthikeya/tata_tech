@@ -199,6 +199,7 @@ routines:
     option_record_length: 0
     stop_requires_start: false
     results_requires_start: true
+    long_running: true  # start answered with 0x78 responsePending, then final positive
 
 dtcs:
   - code: "B10101"
@@ -217,3 +218,6 @@ ecu_reset:
   supported_subfunctions: [0x01, 0x03]  # hardReset, softReset
 
 read_dtc_supported_subfunctions: [0x02]  # reportDTCByStatusMask only
+
+# Largest positive response the (ISO-TP, classic CAN) transport can carry.
+max_response_length: 4095

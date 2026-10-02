@@ -58,6 +58,41 @@ def generate_seed(length: int, rng: random.Random) -> bytes:
     return bytes(rng.randrange(0, 256) for _ in range(length))
 
 
+_SEED_BASE = 0x5A
+_SEED_LEVEL_MUL = 0x3B
+_SEED_COUNTER_MUL = 0x9D
+_SEED_INDEX_MUL = 0x71
+
+
+def derive_seed(level: int, counter: int, length: int) -> bytes:
+    """Derive the deterministic seed the synthetic ECU issues (no RNG involved).
+
+    Byte ``i`` of the seed is::
+
+        (0x5A + 0x3B * level + 0x9D * counter + 0x71 * i) mod 256
+
+    where ``counter`` is the ECU-wide count of non-zero seeds issued so far
+    (0 for the first seed after power-on). If every byte comes out as 0x00
+    (only possible for a 1-byte seed), the last byte is forced to 0x01, because
+    an all-zero seed is reserved to mean "this level is already unlocked".
+
+    This lets the rules engine and an independently written simulator agree
+    byte-for-byte on every seed without sharing code or RNG state.
+    """
+    if length < 1:
+        raise ValueError("Seed length must be at least 1 byte.")
+    if counter < 0:
+        raise ValueError("Seed counter must be non-negative.")
+    seed = bytearray(
+        (_SEED_BASE + _SEED_LEVEL_MUL * level + _SEED_COUNTER_MUL * counter + _SEED_INDEX_MUL * i)
+        & 0xFF
+        for i in range(length)
+    )
+    if not any(seed):
+        seed[-1] = 0x01
+    return bytes(seed)
+
+
 def compute_key(seed: bytes, level: int) -> bytes:
     """Compute the expected key for ``seed`` at security ``level``.
 

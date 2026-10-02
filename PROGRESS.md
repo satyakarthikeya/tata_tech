@@ -38,3 +38,17 @@ Heavy packages (torch, transformers, sentence-transformers, chromadb, onnxruntim
 **Ruff:** clean (`python -m ruff check .` → "All checks passed!").
 
 **Key design notes logged to DECISIONS.md:** synthetic seed/key formula, DID/session/security cross-ref validation rules, bytes-field hex-string convention for YAML spec authoring.
+
+## Phase 2 — Rules engine oracle with cited NRC order (2026-10-03T01:27:53+05:30)
+
+**Done:**
+- `uds_assistant/rules/state.py`: immutable pydantic `EcuState` (session, unlocked level, per-level `SecurityLockoutState`, pending seeds, ECU-wide seed counter, routine status, DTC statuses, DID values, `EnvironmentConditions` with vehicle speed / NVM-fault flag, S3 last-request timestamp, now_ms), `initial_state(spec, now_ms)`, `with_environment`, `with_dtc_status`, `RoutineStatus`.
+- `uds_assistant/rules/request.py`: lenient `ParsedRequest` so the oracle answers any byte string.
+- `uds_assistant/rules/nrc_order.py`: the single `evaluate_nrc()` implementing PROJECT.md §5 order plus SecurityAccess (0x37/0x24/0x35/0x36), 0x14, 0x72, 0x78; every check has a `Source:` comment tagged to a DECISIONS.md line (no SWS IDs cited — document unavailable offline).
+- `uds_assistant/rules/engine.py`: pure `evaluate(spec, state, request, now_ms) -> RuleResult` (S3 timeout + lockout expiry first, positive payloads for all 9 services, suppress-bit, 0x78+final sequence, new state), `explain()`, stateful `RulesSession`.
+- `protocol/security.py`: added deterministic `derive_seed(level, counter, length)`.
+- `spec/schema.py` + `data/bcm_spec.yaml`: added `RoutineDef.long_running` (nvm_factory_restore) and `EcuSpec.max_response_length` (4095).
+
+**Tests:** 276 passed, 0 failed overall (`python -m pytest -q`); 186 in `tests/rules/` — 155 table-driven cases (every NRC path per service, every positive path, S3/lockout timing), hypothesis properties (never raises, well-formed responses, input not mutated, determinism, sequence invariants), AST checks that only `evaluate_nrc` names NRCs and every NRC is cited, unit tests.
+
+**Ruff:** clean.

@@ -110,6 +110,9 @@ class RoutineDef(BaseModel):
     option_record_length: int = Field(ge=0, default=0)
     stop_requires_start: bool = False
     results_requires_start: bool = False
+    long_running: bool = False
+    """If True, the ECU answers a start request with NRC 0x78 (response pending)
+    before the final positive response, and the routine completes synchronously."""
 
 
 class DtcDef(BaseModel):
@@ -148,6 +151,8 @@ class EcuSpec(BaseModel):
     dtc_status_availability_mask: int = Field(ge=0, le=0xFF, default=0xFF)
     ecu_reset: EcuResetDef
     read_dtc_supported_subfunctions: list[int] = Field(default_factory=lambda: [0x02])
+    max_response_length: int = Field(gt=0, default=4095)
+    """Largest positive response (bytes, incl. SID) the transport can carry; larger -> 0x14."""
 
     @model_validator(mode="after")
     def _cross_reference_checks(self) -> EcuSpec:
