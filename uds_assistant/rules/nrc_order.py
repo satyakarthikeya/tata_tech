@@ -74,6 +74,8 @@ class NrcDecision(BaseModel):
     - ``suppress_positive``: the request had the suppress-positive-response bit.
     - ``failed_key_attempt``: a SecurityAccess key was verified and was wrong;
       the engine must record the attempt and consume the pending seed.
+    - ``read_dids``: for a positive 0x22, the requested DIDs that are answered,
+      in request order (duplicates kept); failing DIDs are left out.
     - ``trace``: human-readable evaluation steps, in order.
     """
 
@@ -83,6 +85,7 @@ class NrcDecision(BaseModel):
     ignored: bool = False
     suppress_positive: bool = False
     failed_key_attempt: bool = False
+    read_dids: list[int] = Field(default_factory=list)
     trace: list[str] = Field(default_factory=list)
 
     @property
@@ -96,7 +99,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
 
     Order (generic steps from PROJECT.md §5, then service-specific checks):
     1 service supported (0x11) → 2 service in session (0x7F) → 3 length (0x13)
-    → 4 subfunction supported (0x12) → 5 subfunction in session (0x7E)
+    → 4 subfunction supported (0x12; not for 0x31) → 5 subfunction in session (0x7E)
     → 5b subfunction/identifier-specific length (0x13) → 6 service-specific
     (identifier 0x31, identifier-in-session 0x31, security 0x33, conditions
     0x22, sequence 0x24, value range 0x31, SecurityAccess 0x37/0x24/0x35/0x36,
@@ -161,15 +164,24 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
     sub = request.subfunction
     level_def = None
     is_seed_request = False
-    if sub is not None:
+    if sub is not None and sid == ServiceId.ROUTINE_CONTROL:
+        # Step 4 is not run for RoutineControl: the control type is checked per
+        # routine at step 6b', after the routine identifier and session checks.
+        # Source: design decision — see DECISIONS.md [R-ROUTINE-SUB]
+        # + SWS_Dcm_00273 (the generic sub-function check is not done for 0x31).
+        trace.append(
+            f"Step 4: skipped for SID 0x31; control type 0x{sub:02X} is checked per "
+            "routine at step 6b'."
+        )
+    elif sub is not None:
         # Step 4 — subfunction supported else 0x12.
         # Source: design decision — see DECISIONS.md [R-ORDER] (PROJECT.md §5 step 4);
-        # bit 7 is stripped only for services with a suppress bit [R-SPRMIB].
+        # bit 7 (suppress) is already stripped for every subfunction service [R-SPRMIB].
         # + SWS_Dcm_00273 (subfunction without a configured sub-service gives 0x12),
         # SWS_Dcm_00307 (0x10: unconfigured session type gives 0x12), SWS_Dcm_00321
         # (0x27: unconfigured access type gives 0x12), SWS_Dcm_00251 (0x3E only
-        # supports zeroSubFunction). The SWS defers this check for 0x31 and masks
-        # bit 7 for 0x19/0x27 too — see docs/SWS_DISAGREEMENTS.md D2, D6.
+        # supports zeroSubFunction), SWS_Dcm_00201 / SWS_Dcm_01411 (the suppress
+        # bit is masked before this check, so 27 81 / 19 82 are 27 01 / 19 02).
         if sid == ServiceId.DIAGNOSTIC_SESSION_CONTROL:
             supported_subs = {s.id for s in spec.sessions}
         elif sid == ServiceId.ECU_RESET:
@@ -180,8 +192,6 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
             supported_subs = {lvl.seed_subfunction for lvl in spec.security_levels} | {
                 lvl.key_subfunction for lvl in spec.security_levels
             }
-        elif sid == ServiceId.ROUTINE_CONTROL:
-            supported_subs = {ROUTINE_START, ROUTINE_STOP, ROUTINE_RESULTS}
         else:  # TesterPresent: zeroSubFunction only
             supported_subs = {0x00}
         if sub not in supported_subs:
@@ -265,25 +275,46 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
 
     elif sid == ServiceId.READ_DATA_BY_IDENTIFIER:
         dids = [int.from_bytes(raw[i : i + 2], "big") for i in range(1, request.length, 2)]
-        response_len = 1
+        # Each requested DID (every occurrence of a duplicate separately) is
+        # filtered; failing DIDs are skipped, and 0x31 only if none is left.
+        supported: list[int] = []
         for did in dids:
+            if spec.get_did(did) is None:
+                trace.append(f"Step 6a: DID 0x{did:04X} not supported -> skipped.")
+            else:
+                supported.append(did)
+        # Step 6a — at least one requested DID supported else 0x31.
+        # Source: design decision — see DECISIONS.md [R-MULTI-DID]
+        # + SWS_Dcm_00438 (0x31 only if none of the requested DIDs is supported).
+        if not supported:
+            trace.append("Step 6a: none of the requested DIDs is supported -> NRC 0x31.")
+            return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
+        readable: list[int] = []
+        response_len = 1
+        for did in supported:
             did_def = spec.get_did(did)
-            # Step 6a — every DID supported else 0x31 (strict multi-DID rule).
-            # Source: design decision — see DECISIONS.md [R-MULTI-DID]
-            if did_def is None:
-                trace.append(f"Step 6a: DID 0x{did:04X} not supported -> NRC 0x31.")
-                return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
-            # Step 6b — every DID readable in the active session else 0x31.
-            # Source: design decision — see DECISIONS.md [R-MULTI-DID]
+            assert did_def is not None
             if state.active_session not in did_def.read_sessions:
                 trace.append(
                     f"Step 6b: DID 0x{did:04X} not readable in session "
-                    f"0x{state.active_session:02X} -> NRC 0x31."
+                    f"0x{state.active_session:02X} -> skipped."
                 )
-                return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
+                continue
+            readable.append(did)
             response_len += 2 + did_def.length
-        trace.append(f"Step 6a/6b: {len(dids)} DID(s) supported and readable.")
-        # Step 7 — positive response fits the transport else 0x14.
+        # Step 6b — at least one supported DID readable (read access configured and
+        # the active session in its read_sessions) else 0x31.
+        # Source: design decision — see DECISIONS.md [R-MULTI-DID]
+        # + SWS_Dcm_00433 (0x31 only if none has read access) and SWS_Dcm_00434
+        # (0x31 only if none can be read in the active session).
+        if not readable:
+            trace.append(
+                "Step 6b: none of the supported DIDs is readable in session "
+                f"0x{state.active_session:02X} -> NRC 0x31."
+            )
+            return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
+        trace.append(f"Step 6a/6b: {len(readable)} of {len(dids)} requested DID(s) answered.")
+        # Step 7 — positive response (answered DIDs only) fits the transport else 0x14.
         # Source: design decision — see DECISIONS.md [R-0x14]
         # + SWS_Dcm_01059 (response longer than the response buffer gives 0x14).
         if response_len > spec.max_response_length:
@@ -292,16 +323,19 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
                 f"{spec.max_response_length} -> NRC 0x14."
             )
             return NrcDecision(sid=sid, nrc=Nrc.RESPONSE_TOO_LONG, trace=trace)
+        trace.append("Result: positive response.")
+        return NrcDecision(sid=sid, read_dids=readable, trace=trace)
 
     elif sid == ServiceId.SECURITY_ACCESS:
         assert level_def is not None
         level = level_def.level
         lockout = state.lockouts.get(level)
-        # Step 6d — lockout delay still running else continue; 0x37.
+        # Step 6d — requestSeed while the level's lockout delay runs gives 0x37.
+        # A sendKey during the delay is not checked here: it falls through to the
+        # normal key handling (in practice 0x24, since no seed can be pending).
         # Source: design decision — see DECISIONS.md [R-SEC-LOCKOUT]
-        # + SWS_Dcm_01350 (requestSeed while the level's delay timer runs gives 0x37);
-        # applying it to sendKey as well is ours — see docs/SWS_DISAGREEMENTS.md D5.
-        if lockout is not None and is_delay_active(lockout, state.now_ms):
+        # + SWS_Dcm_01350 (0x37 on a requestSeed while the level's delay timer runs).
+        if is_seed_request and lockout is not None and is_delay_active(lockout, state.now_ms):
             trace.append(
                 f"Step 6d: level 0x{level:02X} lockout delay active until "
                 f"{lockout.locked_until_ms} ms (now {state.now_ms}) -> NRC 0x37."
@@ -442,11 +476,18 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
                 f"0x{state.active_session:02X} -> NRC 0x31."
             )
             return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
-        # Step 6b' — control type supported by this routine else 0x12.
+        # Step 6b' — control type supported by this routine else 0x12. This is the
+        # only 0x12 check for 0x31 (generic step 4 is skipped for 0x31), so it also
+        # rejects any type outside start/stop/results (e.g. 00, 04).
         # Source: design decision — see DECISIONS.md [R-ROUTINE-SUB]
-        # + SWS_Dcm_00869 (control type not configured for this routine gives 0x12);
-        # the SWS lists it after the security check — see SWS_DISAGREEMENTS D4.
-        if sub not in routine.allowed_subfunctions:
+        # + SWS_Dcm_00869 (control type not configured for this routine gives 0x12)
+        # with SWS_Dcm_00273 (no generic sub-function check for 0x31); the SWS lists
+        # it after the security check — see SWS_DISAGREEMENTS D4.
+        if sub not in routine.allowed_subfunctions or sub not in (
+            ROUTINE_START,
+            ROUTINE_STOP,
+            ROUTINE_RESULTS,
+        ):
             trace.append(
                 f"Step 6b': routine 0x{rid:04X} does not support control type 0x{sub:02X} "
                 "-> NRC 0x12."

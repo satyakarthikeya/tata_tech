@@ -574,3 +574,13 @@ The ollama model did not beat mock on any headline metric. Its parsed-target rec
 | C6 | Docs, UI, UI checklist, final checks, final commit | Subagent, Sonnet |
 
 Steps run in this order, because C1, C2 and C3 all change the pipeline or the oracle and each must be verified before the next starts. The orchestrator verifies and commits after every step.
+
+## C2 — done (2026-10-03T22:24:50+05:30)
+
+- D2, D5, D6 and D7 are fixed in the rules engine, the behaviour contract and the independent simulator. They are marked FIXED in `docs/SWS_DISAGREEMENTS.md`. D1, D3, D4, D8 and D9 stay open.
+- Acceptance checks:
+  - Simulator and rules engine agree on 100% of requests on two seeds, each with at least 13,000 requests.
+  - All 60 gold tests pass on the clean simulator and validate against the rules engine.
+  - The udsoncan virtual-CAN sequence passes.
+- Full suite: 1023 passed, 13 skipped. Ruff is clean.
+- Open SWS disagreements: 9 before, 5 now.

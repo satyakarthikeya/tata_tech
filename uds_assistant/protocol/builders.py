@@ -33,12 +33,15 @@ def clear_dtc(group: bytes) -> UdsRequest:
     return UdsRequest(sid=ServiceId.CLEAR_DIAGNOSTIC_INFORMATION, data=group)
 
 
-def read_dtc_by_status_mask(mask: int) -> UdsRequest:
+def read_dtc_by_status_mask(mask: int, suppress_positive: bool = False) -> UdsRequest:
     """Build a ReadDTCInformation (0x19) subfunction 0x02 request with a status mask."""
     if not 0 <= mask <= 0xFF:
         raise ValueError("Status mask must fit in one byte.")
     return UdsRequest(
-        sid=ServiceId.READ_DTC_INFORMATION, subfunction=0x02, data=bytes([mask])
+        sid=ServiceId.READ_DTC_INFORMATION,
+        subfunction=0x02,
+        suppress_positive=suppress_positive,
+        data=bytes([mask]),
     )
 
 
@@ -54,14 +57,21 @@ def read_did(*dids: int) -> UdsRequest:
     return UdsRequest(sid=ServiceId.READ_DATA_BY_IDENTIFIER, data=bytes(data))
 
 
-def security_request_seed(level: int) -> UdsRequest:
+def security_request_seed(level: int, suppress_positive: bool = False) -> UdsRequest:
     """Build a SecurityAccess (0x27) requestSeed request for an odd ``level``."""
-    return UdsRequest(sid=ServiceId.SECURITY_ACCESS, subfunction=level)
+    return UdsRequest(
+        sid=ServiceId.SECURITY_ACCESS, subfunction=level, suppress_positive=suppress_positive
+    )
 
 
-def security_send_key(level: int, key: bytes) -> UdsRequest:
+def security_send_key(level: int, key: bytes, suppress_positive: bool = False) -> UdsRequest:
     """Build a SecurityAccess (0x27) sendKey request for an even ``level``."""
-    return UdsRequest(sid=ServiceId.SECURITY_ACCESS, subfunction=level, data=key)
+    return UdsRequest(
+        sid=ServiceId.SECURITY_ACCESS,
+        subfunction=level,
+        suppress_positive=suppress_positive,
+        data=key,
+    )
 
 
 def write_did(did: int, data: bytes) -> UdsRequest:

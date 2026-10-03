@@ -489,18 +489,18 @@ add(
 )
 # 50
 add(
-    "gold_multi_did_read_one_bad", "Multi-DID read where one DID is unknown fails the whole request", "negative",
+    "gold_multi_did_read_one_bad", "Multi-DID read skips an unknown DID and answers the readable one", "positive",
     ["REQ-002"],
-    [RAW("22f19099 99", "7f2231".replace(" ", "")), ],
-    [Citation(source=BC, ref="0x22 checks")], "One bad DID in a multi-DID request fails the whole request -> 0x31.",
+    [RAW("22f19099 99", "62f19053594e544845544943424d303030303031"), ],
+    [Citation(source=BC, ref="0x22 checks")], "An unknown DID in a multi-DID request is skipped; the readable DID (VIN F190) is answered. NRC 0x31 only if no requested DID is readable.",
 )
 # fix request hex above (had stray formatting); rebuild properly below instead.
 tests.pop()
 add(
-    "gold_multi_did_read_one_bad", "Multi-DID read where one DID is unknown fails the whole request", "negative",
+    "gold_multi_did_read_one_bad", "Multi-DID read skips an unknown DID and answers the readable one", "positive",
     ["REQ-002"],
-    [S(read_did(0xF190, 0x9999), "7f2231")],
-    [Citation(source=BC, ref="0x22 checks")], "One bad DID in a multi-DID request fails the whole request -> 0x31.",
+    [S(read_did(0xF190, 0x9999), "62f19053594e544845544943424d303030303031")],
+    [Citation(source=BC, ref="0x22 checks")], "An unknown DID in a multi-DID request is skipped; the readable DID (VIN F190) is answered. NRC 0x31 only if no requested DID is readable.",
 )
 # 51
 add(

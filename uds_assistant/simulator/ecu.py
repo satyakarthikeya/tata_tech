@@ -208,7 +208,7 @@ class SimulatedEcu:
             sub = req[1] & 0x7F if handler.suppress_bit else req[1]
             if sid == 0x10 and self.bug(B.SESSION_SUPPRESS_BIT_NOT_MASKED):
                 sub = req[1]
-            if sub not in handler.subfunctions(self):
+            if handler.generic_subfunction_gate and sub not in handler.subfunctions(self):
                 bad = self.bug(B.GENERAL_REJECT_INSTEAD_OF_0X12)
                 raise Reject(NRC_GENERAL_REJECT if bad else NRC_SUBFUNCTION_NOT_SUPPORTED)
             handler.check_subfunction_session(self, sub)

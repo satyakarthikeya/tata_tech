@@ -43,15 +43,8 @@ SERVICES_WITH_SUBFUNCTION: frozenset[ServiceId] = frozenset(
 )
 
 #: Services for which the suppress-positive-response bit (bit 7 of the
-#: subfunction byte) is meaningful.
-SERVICES_WITH_SUPPRESS_BIT: frozenset[ServiceId] = frozenset(
-    {
-        ServiceId.DIAGNOSTIC_SESSION_CONTROL,
-        ServiceId.ECU_RESET,
-        ServiceId.ROUTINE_CONTROL,
-        ServiceId.TESTER_PRESENT,
-    }
-)
+#: subfunction byte) is meaningful: every service with a subfunction byte.
+SERVICES_WITH_SUPPRESS_BIT: frozenset[ServiceId] = SERVICES_WITH_SUBFUNCTION
 
 
 class Nrc(IntEnum):

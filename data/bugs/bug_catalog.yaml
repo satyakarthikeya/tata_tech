@@ -70,8 +70,8 @@ bugs:
   - id: lockout_delay_never_expires
     title: "Lockout delay never expires"
     description: >
-      Once armed, the lockout deadline is never cleared, so SecurityAccess keeps answering
-      0x37 long after delay_ms has elapsed.
+      Once armed, the lockout deadline is never cleared, so seed requests keep being
+      answered 0x37 long after delay_ms has elapsed.
     category: timing
     expected_detection: [security, timing]
 

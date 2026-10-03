@@ -19,6 +19,15 @@ from uds_assistant.protocol import builders
         (builders.read_did(0xF190, 0xF187), bytes([0x22, 0xF1, 0x90, 0xF1, 0x87])),
         (builders.security_request_seed(0x01), bytes([0x27, 0x01])),
         (builders.security_send_key(0x02, bytes([1, 2, 3, 4])), bytes([0x27, 0x02, 1, 2, 3, 4])),
+        (
+            builders.read_dtc_by_status_mask(0x08, suppress_positive=True),
+            bytes([0x19, 0x82, 0x08]),
+        ),
+        (builders.security_request_seed(0x01, suppress_positive=True), bytes([0x27, 0x81])),
+        (
+            builders.security_send_key(0x02, bytes([1, 2, 3, 4]), suppress_positive=True),
+            bytes([0x27, 0x82, 1, 2, 3, 4]),
+        ),
         (builders.write_did(0x0100, bytes([0x32])), bytes([0x2E, 0x01, 0x00, 0x32])),
         (builders.routine_control(0x01, 0x0201), bytes([0x31, 0x01, 0x02, 0x01])),
         (

@@ -286,3 +286,29 @@ This subagent was interrupted when the session ended before it could report back
   - I separately compared the current mock tests with those committed before Part C: 171 of 171 have identical steps.
   - Evidence: `outputs/partC/mock_equivalence.json`.
 - **[PC-FLAKE]** One earlier full run had a single failure: `tests/protocol/test_codec.py::test_request_roundtrip_with_subfunction`, a hypothesis `too_slow` health check. It passed in isolation and in the final full run, so it looks load-related rather than a code problem.
+
+### C2 (fix SWS disagreements D2, D5, D6, D7)
+
+- **[PC2-RULES]** The rules engine fixes four disagreements. Each was checked against the SWS text before changing behaviour, and each cites the SWS IDs it now matches.
+  - D2: RoutineControl has no generic "subfunction supported" 0x12 check. An unknown routine or wrong session now answers 0x31 first, and the per-routine check is the only 0x12. Example: `31 04 FF FF` went from `7F 31 12` to `7F 31 31`.
+  - D5: 0x37 applies to requestSeed only. A key sent during the delay takes the normal key path and answers 0x24, with no attempt counted and the deadline unchanged.
+  - D6: bit 7 is the suppress-positive bit for all six subfunction services, including 0x19 and 0x27. `27 81` now behaves as `27 01` with the positive response suppressed, and negatives are still sent.
+  - D7: multi-DID read skips unknown or unreadable DIDs, and answers 0x31 only if none remain. Duplicates are answered per occurrence, and 0x14 is computed on the answered DIDs only.
+  - D1, D3, D4, D8 and D9 stay documented and open.
+- **[PC2-SIM]** The simulator was changed in a separate step by an agent that never read the rules engine, working from `docs/behaviour_contract.md` and the SWS description. The two implementations agree on 100% of requests, with all bugs off:
+  - seed 20261003: 13,487 requests
+  - seed 777001: 13,556 requests
+  - plus a 300-example hypothesis test and a 3,000-request fuzz
+
+  The generators were extended so each new path is exercised (for example 824 key-during-delay requests answered 0x24 on one seed). No disagreement was found.
+- **[PC2-LABELS]** The simulator agent referred to the suppress-bit fix as D7 and the multi-DID fix as D6, the opposite of `docs/SWS_DISAGREEMENTS.md`. Only the labels differ; the behaviour it implemented is correct.
+- **[PC2-CODEC]** In the shared protocol layer, `SERVICES_WITH_SUPPRESS_BIT` now equals `SERVICES_WITH_SUBFUNCTION`.
+  - The builders for 0x19 and 0x27 take `suppress_positive`.
+  - A udsoncan cross-check covers the new suppress cases for 0x19 and 0x27, which udsoncan supports.
+- **[PC2-GOLD]** One gold test changed, by hand:
+  - `gold_multi_did_read_one_bad`: request `22 F1 90 99 99` now expects `62 F1 90` plus the 17-byte VIN, instead of `7F 22 31`.
+  - Category changed from negative to positive, and the title and explanation were updated.
+  - `scripts/gen_gold.py` was kept in sync.
+  - The 59 other gold tests passed unchanged, so none of them exercised D2, D5 or D6. The set is still 60 tests.
+  - The new expected bytes pass both on the clean simulator and against the rules engine.
+- **[PC2-BUGS]** No bug needed changing. One catalog description changed: `lockout_delay_never_expires` now says "seed requests keep being answered 0x37", because keys now get 0x24 during the delay. Its behaviour and intent are unchanged, and every bug still differs from clean on its demonstrating sequence.

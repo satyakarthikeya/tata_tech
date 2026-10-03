@@ -48,10 +48,6 @@ def test_request_roundtrip_with_subfunction(
     sid: ServiceId, sub: int, suppress: bool, data: bytes
 ) -> None:
     from uds_assistant.protocol.codec import UdsRequest
-    from uds_assistant.protocol.constants import SERVICES_WITH_SUPPRESS_BIT
-
-    if suppress and sid not in SERVICES_WITH_SUPPRESS_BIT:
-        suppress = False
     req = UdsRequest(sid=sid, subfunction=sub, suppress_positive=suppress, data=data)
     raw = req.to_bytes()
     decoded = decode_request(raw)
@@ -92,6 +88,20 @@ def test_negative_response_roundtrip(sid: ServiceId, nrc: Nrc) -> None:
     resp = negative_response(sid, nrc)
     decoded = decode_response(resp.to_bytes())
     assert decoded == resp
+
+
+def test_suppress_bit_allowed_for_all_six_subfunction_services() -> None:
+    from uds_assistant.protocol.codec import UdsRequest
+    from uds_assistant.protocol.constants import SERVICES_WITH_SUPPRESS_BIT
+
+    assert {int(s) for s in SERVICES_WITH_SUPPRESS_BIT} == {0x10, 0x11, 0x19, 0x27, 0x31, 0x3E}
+    for raw in (bytes.fromhex("1982ff"), bytes.fromhex("2781"), bytes.fromhex("278201020304")):
+        req = decode_request(raw)
+        assert req.suppress_positive
+        assert req.to_bytes() == raw
+    assert UdsRequest(
+        sid=ServiceId.SECURITY_ACCESS, subfunction=1, suppress_positive=True
+    ).to_bytes() == bytes.fromhex("2781")
 
 
 def test_suppress_bit_rejected_for_unsupported_service() -> None:

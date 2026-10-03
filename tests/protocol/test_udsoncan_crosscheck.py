@@ -89,6 +89,25 @@ def test_read_dtc_by_status_mask_matches_udsoncan() -> None:
     assert ours == theirs
 
 
+def test_suppress_on_read_dtc_and_security_matches_udsoncan() -> None:
+    def theirs(request: object) -> bytes:
+        request.suppress_positive_response = True  # type: ignore[attr-defined]
+        return request.get_payload()  # type: ignore[attr-defined]
+
+    assert builders.read_dtc_by_status_mask(0x08, suppress_positive=True).to_bytes() == theirs(
+        services.ReadDTCInformation.make_request(subfunction=0x02, status_mask=0x08)
+    )
+    assert builders.security_request_seed(0x01, suppress_positive=True).to_bytes() == theirs(
+        services.SecurityAccess.make_request(level=0x01, mode=services.SecurityAccess.Mode.RequestSeed)
+    )
+    key = bytes([1, 2, 3, 4])
+    assert builders.security_send_key(0x02, key, suppress_positive=True).to_bytes() == theirs(
+        services.SecurityAccess.make_request(
+            level=0x02, mode=services.SecurityAccess.Mode.SendKey, data=key
+        )
+    )
+
+
 def test_read_did_matches_udsoncan() -> None:
     ours = builders.read_did(0xF190).to_bytes()
     theirs = services.ReadDataByIdentifier.make_request(didlist=0xF190, didconfig=None).get_payload()

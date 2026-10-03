@@ -18,6 +18,7 @@ PART = "42 43 4D 2D 31 32 33 34 35 2D"
 TIMING = "00 32 01 F4"  # P2 = 50 ms, P2* = 5000 ms in 10 ms units (500 = 0x01F4)
 SEED_L1_C0 = "95 06 77 E8"  # derive_seed(level=1, counter=0, 4)
 SEED_L3_C0 = "0B 7C ED 5E"  # derive_seed(level=3, counter=0, 4)
+KEY_L1_C0 = "9A 06 8F 73"  # compute_key(SEED_L1_C0, level=1)
 UNLOCK1 = ["ext", "unlock1"]
 UNLOCK3 = ["prog", "unlock3"]
 
@@ -57,10 +58,14 @@ GENERIC_CASES: list[Case] = [
     ("0x10_unknown_session", [], "10 05", ["7F 10 12"]),
     ("0x11_unsupported_reset_type", [], "11 02", ["7F 11 12"]),
     ("0x19_unsupported_report_type", [], "19 01 FF", ["7F 19 12"]),
-    ("0x19_bit7_is_not_suppress", [], "19 82 FF", ["7F 19 12"]),
+    ("0x19_suppressed_unsupported_report_type", [], "19 81 FF", ["7F 19 12"]),
     ("0x27_unknown_level", ["ext"], "27 05", ["7F 27 12"]),
-    ("0x27_bit7_is_not_suppress", ["ext"], "27 81", ["7F 27 12"]),
+    ("0x27_suppressed_unknown_level", ["ext"], "27 85", ["7F 27 12"]),
+    # 0x31 skips step 4 (SWS_Dcm_00273): the control type is checked per routine
+    # after the routine id and session (step 6b'), so it still gives 0x12 here.
     ("0x31_unknown_control_type", ["ext"], "31 04 02 01", ["7F 31 12"]),
+    ("0x31_control_type_00", ["ext"], "31 00 02 01", ["7F 31 12"]),
+    ("0x31_suppressed_control_type_00", ["ext"], "31 80 02 01", ["7F 31 12"]),
     ("0x3E_nonzero_subfunction", [], "3E 01", ["7F 3E 12"]),
     ("suppress_bit_never_hides_nrc_3E", [], "3E 81", ["7F 3E 12"]),
     ("suppress_bit_never_hides_nrc_11", [], "11 82", ["7F 11 12"]),
@@ -68,12 +73,15 @@ GENERIC_CASES: list[Case] = [
     ("0x27_level3_seed_in_extended", ["ext"], "27 03", ["7F 27 7E"]),
     ("0x27_level3_key_in_extended", ["ext"], "27 04 00 00 00 00", ["7F 27 7E"]),
     ("0x27_level1_seed_in_programming", ["prog"], "27 01", ["7F 27 7E"]),
+    ("0x27_suppressed_level3_seed_in_extended", ["ext"], "27 83", ["7F 27 7E"]),
     # --- Step 5b: subfunction-specific length -> 0x13
     ("0x19_02_missing_mask", [], "19 02", ["7F 19 13"]),
     ("0x19_02_extra_byte", [], "19 02 FF 00", ["7F 19 13"]),
+    ("0x19_82_missing_mask", [], "19 82", ["7F 19 13"]),
     ("0x27_seed_with_data", ["ext"], "27 01 00", ["7F 27 13"]),
     ("0x27_key_too_short", ["ext", "27 01"], "27 02 00 00 00", ["7F 27 13"]),
     ("0x27_key_too_long", ["ext", "27 01"], "27 02 00 00 00 00 00", ["7F 27 13"]),
+    ("0x27_suppressed_seed_with_data", ["ext"], "27 81 00", ["7F 27 13"]),
 ]
 
 SERVICE_CASES: list[Case] = [
@@ -83,9 +91,12 @@ SERVICE_CASES: list[Case] = [
     ("0x14_unknown_group_before_nvm_fault", ["nvm_fault"], "14 00 00 01", ["7F 14 31"]),
     # --- 0x22 ReadDataByIdentifier
     ("0x22_unknown_did", [], "22 12 34", ["7F 22 31"]),
-    ("0x22_multi_one_unknown", [], "22 F1 90 12 34", ["7F 22 31"]),
     ("0x22_did_not_readable_in_default", [], "22 01 50", ["7F 22 31"]),
+    ("0x22_multi_all_unknown", [], "22 12 34 56 78", ["7F 22 31"]),
+    ("0x22_multi_duplicate_unknown", [], "22 12 34 12 34", ["7F 22 31"]),
+    ("0x22_multi_unknown_and_not_in_session", [], "22 12 34 01 50", ["7F 22 31"]),
     ("0x22_response_too_long", [], "22" + " F1 90" * 216, ["7F 22 14"]),
+    ("0x22_too_long_despite_skipped_did", [], "22 12 34" + " F1 90" * 216, ["7F 22 14"]),
     # --- 0x2E WriteDataByIdentifier
     ("0x2E_unknown_did", ["ext"], "2E 12 34 00", ["7F 2E 31"]),
     ("0x2E_read_only_did", UNLOCK1, "2E F1 90 " + VIN, ["7F 2E 31"]),
@@ -104,6 +115,11 @@ SERVICE_CASES: list[Case] = [
     ("0x2E_range_before_nvm_fault", [*UNLOCK1, "nvm_fault"], "2E 01 00 FF", ["7F 2E 31"]),
     # --- 0x31 RoutineControl
     ("0x31_unknown_routine", ["ext"], "31 01 12 34", ["7F 31 31"]),
+    ("0x31_bad_type_unknown_routine", ["ext"], "31 04 FF FF", ["7F 31 31"]),
+    ("0x31_suppressed_bad_type_unknown_routine", ["ext"], "31 84 FF FF", ["7F 31 31"]),
+    ("0x31_bad_type_routine_not_in_session", ["ext"], "31 05 02 03", ["7F 31 31"]),
+    ("0x31_bad_type_before_length", ["ext"], "31 04 02 01 FF", ["7F 31 12"]),
+    ("0x31_bad_type_before_security", ["ext"], "31 7F 02 01", ["7F 31 12"]),
     ("0x31_routine_not_in_session", UNLOCK1, "31 01 02 03", ["7F 31 31"]),
     ("0x31_routine_lacks_stop", UNLOCK3, "31 02 02 03", ["7F 31 12"]),
     ("0x31_missing_option_record", UNLOCK1, "31 01 02 02", ["7F 31 13"]),
@@ -132,12 +148,51 @@ SERVICE_CASES: list[Case] = [
         ["7F 27 36"],
     ),
     ("0x27_seed_during_delay", ["ext", "badkey1", "badkey1", "badkey1"], "27 01", ["7F 27 37"]),
+    # sendKey during the delay is not answered 0x37 (SWS_Dcm_01350 covers requestSeed
+    # only); it takes the normal key path, and no seed can be pending -> 0x24.
     (
         "0x27_key_during_delay",
         ["ext", "badkey1", "badkey1", "badkey1"],
         "27 02 00 00 00 00",
+        ["7F 27 24"],
+    ),
+    (
+        "0x27_correct_format_key_during_delay",
+        ["ext", "badkey1", "badkey1", "badkey1"],
+        "27 02 " + KEY_L1_C0,
+        ["7F 27 24"],
+    ),
+    (
+        "0x27_seed_still_delayed_after_key_during_delay",
+        ["ext", "badkey1", "badkey1", "badkey1", "27 02 00 00 00 00"],
+        "27 01",
         ["7F 27 37"],
     ),
+    (
+        "0x27_key_during_delay_does_not_extend_delay",
+        ["t=0", "ext", "badkey1", "badkey1", "badkey1", "+5000", "27 02 00 00 00 00",
+         "+4000", "3E 80", "+1000"],
+        "27 01",
+        ["67 01 6C DD 4E BF"],  # t=10000: delay armed at t=0 has expired; counter 3
+    ),
+    (
+        "0x27_key_during_delay_then_wrong_key_after_expiry",
+        ["t=0", "ext", "badkey1", "badkey1", "badkey1", "+5000", "27 02 00 00 00 00",
+         "+4000", "3E 80", "+1000", "27 01"],
+        "27 02 00 00 00 00",
+        ["7F 27 36"],  # count stays 3 (not 4); the next wrong key re-arms the delay
+    ),
+    (
+        "0x27_wrong_level_key_during_delay",
+        ["ext", "badkey1", "badkey1", "badkey1"],
+        "27 04 00 00 00 00",
+        ["7F 27 7E"],
+    ),
+    ("0x27_suppressed_seed_during_delay", ["ext", "badkey1", "badkey1", "badkey1"], "27 81",
+     ["7F 27 37"]),
+    ("0x27_suppressed_invalid_key_not_hidden", ["ext", "27 01"], "27 82 00 00 00 00",
+     ["7F 27 35"]),
+    ("0x27_suppressed_key_without_seed", ["ext"], "27 82 " + KEY_L1_C0, ["7F 27 24"]),
     (
         "0x27_seed_one_ms_before_delay_expiry",
         ["ext", "badkey1", "badkey1", "badkey1", "+4000", "3E 80", "+4000", "3E 80", "+1999"],
@@ -195,6 +250,8 @@ POSITIVE_CASES: list[Case] = [
     ("0x19_all_in_spec_order", ["dtc:B10310=01", "dtc:B10101=01", "dtc:B10205=04"], "19 02 FF",
      ["59 02 FF B1 01 01 01 B1 02 05 04 B1 03 10 01"]),
     ("0x19_zero_mask", ["dtc:B10101=09"], "19 02 00", ["59 02 FF"]),
+    ("0x19_suppressed", ["dtc:B10101=09"], "19 82 FF", []),
+    ("0x19_suppressed_in_extended", ["ext"], "19 82 FF", []),
     # --- 0x22
     ("0x22_vin", [], "22 F1 90", ["62 F1 90 " + VIN]),
     ("0x22_multi_did", [], "22 F1 87 01 00 01 30", ["62 F1 87 " + PART + " 01 00 32 01 30 03"]),
@@ -205,6 +262,18 @@ POSITIVE_CASES: list[Case] = [
     ("0x22_condition_gated_did_in_extended", ["ext"], "22 01 50", ["62 01 50 00"]),
     ("0x22_coding_variant_2byte", [], "22 01 60", ["62 01 60 00 01"]),
     ("0x22_max_length_fits", [], "22" + " F1 90" * 215, ["62" + (" F1 90 " + VIN) * 215]),
+    # Multi-DID (SWS_Dcm_00438/00434): failing DIDs are skipped, the rest answered.
+    ("0x22_multi_one_unknown", [], "22 F1 90 12 34", ["62 F1 90 " + VIN]),
+    ("0x22_multi_unknown_first", [], "22 12 34 F1 86", ["62 F1 86 01"]),
+    ("0x22_multi_not_in_session_skipped", [], "22 01 50 F1 86", ["62 F1 86 01"]),
+    ("0x22_multi_session_gated_answered_in_extended", ["ext"], "22 01 50 12 34",
+     ["62 01 50 00"]),
+    ("0x22_multi_mixed_with_duplicates", [], "22 01 00 12 34 01 00 01 50",
+     ["62 01 00 32 01 00 32"]),
+    ("0x22_multi_keeps_request_order", [], "22 01 60 FF FF 01 00",
+     ["62 01 60 00 01 01 00 32"]),
+    ("0x22_skipped_did_not_counted_for_length", [], "22" + " F1 90" * 215 + " 12 34",
+     ["62" + (" F1 90 " + VIN) * 215]),
     # --- 0x27
     ("0x27_seed_level1", ["ext"], "27 01", ["67 01 " + SEED_L1_C0]),
     ("0x27_seed_level3", ["prog"], "27 03", ["67 03 " + SEED_L3_C0]),
@@ -212,6 +281,15 @@ POSITIVE_CASES: list[Case] = [
     ("0x27_key_level1", ["ext", "27 01"], "27 02 9A 06 8F 73", ["67 02"]),
     ("0x27_zero_seed_when_unlocked", UNLOCK1, "27 01", ["67 01 00 00 00 00"]),
     ("0x27_key_after_zero_seed", [*UNLOCK1, "27 01"], "27 02 00 00 00 00", ["7F 27 24"]),
+    # Suppress bit on 0x27 (SWS_Dcm_00201/01411): 27 81 is 27 01 with no positive response.
+    ("0x27_suppressed_seed", ["ext"], "27 81", []),
+    ("0x27_suppressed_seed_still_issued", ["ext", "27 81"], "27 02 " + KEY_L1_C0, ["67 02"]),
+    ("0x27_suppressed_seed_advances_counter", ["ext", "27 81"], "27 01",
+     ["67 01 32 A3 14 85"]),
+    ("0x27_suppressed_key", ["ext", "27 01"], "27 82 " + KEY_L1_C0, []),
+    ("0x27_suppressed_key_still_unlocks", ["ext", "27 01", "27 82 " + KEY_L1_C0],
+     "2E 01 00 32", ["6E 01 00"]),
+    ("0x27_suppressed_zero_seed_when_unlocked", UNLOCK1, "27 81", []),
     # --- 0x2E
     ("0x2E_write_ok", UNLOCK1, "2E 01 00 64", ["6E 01 00"]),
     ("0x2E_write_readback", [*UNLOCK1, "2E 01 00 64"], "22 01 00", ["62 01 00 64"]),

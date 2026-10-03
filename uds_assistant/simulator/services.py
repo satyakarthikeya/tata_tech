@@ -96,6 +96,8 @@ class ServiceHandler:
     sid: int = 0
     uses_subfunction: bool = False
     suppress_bit: bool = False
+    #: Whether the generic "subfunction supported -> 0x12" gate applies (not for 0x31).
+    generic_subfunction_gate: bool = True
 
     def length_ok(self, req: bytes) -> bool:
         """Generic length rule (contract step 3)."""
@@ -202,6 +204,7 @@ class ReadDtcInfo(ServiceHandler):
 
     sid = 0x19
     uses_subfunction = True
+    suppress_bit = True
 
     def length_ok(self, req: bytes) -> bool:
         return len(req) >= 2
@@ -245,16 +248,19 @@ class ReadDataById(ServiceHandler):
 
     def execute(self, ctx: EcuContext, req: bytes, sub: int | None) -> Outcome:
         requested = [int.from_bytes(req[i : i + 2], "big") for i in range(1, len(req), 2)]
+        known: list[DidDef] = []
         defs: list[DidDef] = []
         for did_id in requested:
             did = ctx.spec.get_did(did_id)
             if did is None:
-                raise Reject(NRC_OUT_OF_RANGE)
-            if ctx.mem.session not in did.read_sessions and not ctx.bug(
+                continue
+            known.append(did)
+            if ctx.mem.session in did.read_sessions or ctx.bug(
                 B.READ_DID_SESSION_RESTRICTION_IGNORED
             ):
-                raise Reject(NRC_OUT_OF_RANGE)
-            defs.append(did)
+                defs.append(did)
+        if not known or not defs:
+            raise Reject(NRC_OUT_OF_RANGE)
         size = 1 + sum(2 + d.length for d in defs)
         if size > ctx.spec.max_response_length:
             raise Reject(NRC_RESPONSE_TOO_LONG)
@@ -271,6 +277,7 @@ class SecurityAccess(ServiceHandler):
 
     sid = 0x27
     uses_subfunction = True
+    suppress_bit = True
 
     def length_ok(self, req: bytes) -> bool:
         return len(req) >= 2
@@ -304,12 +311,12 @@ class SecurityAccess(ServiceHandler):
         assert sub is not None
         lvl, is_seed = self.level_for(ctx, sub)
         lock = ctx.mem.lockouts[lvl.level]
-        delay_active = lock.deadline_ms is not None and (
-            ctx.bug(B.LOCKOUT_DELAY_NEVER_EXPIRES) or ctx.now_ms < lock.deadline_ms
-        )
-        if delay_active and not ctx.bug(B.LOCKOUT_DELAY_IGNORED):
-            raise Reject(NRC_DELAY_ACTIVE)
         if is_seed:
+            delay_active = lock.deadline_ms is not None and (
+                ctx.bug(B.LOCKOUT_DELAY_NEVER_EXPIRES) or ctx.now_ms < lock.deadline_ms
+            )
+            if delay_active and not ctx.bug(B.LOCKOUT_DELAY_IGNORED):
+                raise Reject(NRC_DELAY_ACTIVE)
             return self._seed(ctx, lvl, sub)
         return self._key(ctx, lvl, sub, req[2:])
 
@@ -402,14 +409,12 @@ class RoutineControl(ServiceHandler):
     sid = 0x31
     uses_subfunction = True
     suppress_bit = True
+    generic_subfunction_gate = False
 
     START, STOP, RESULTS = 0x01, 0x02, 0x03
 
     def length_ok(self, req: bytes) -> bool:
         return len(req) >= 4
-
-    def subfunctions(self, ctx: EcuContext) -> set[int]:
-        return {self.START, self.STOP, self.RESULTS}
 
     def execute(self, ctx: EcuContext, req: bytes, sub: int | None) -> Outcome:
         assert sub is not None
@@ -417,7 +422,9 @@ class RoutineControl(ServiceHandler):
         routine = ctx.spec.get_routine(rid)
         if routine is None or ctx.mem.session not in routine.sessions:
             raise Reject(NRC_OUT_OF_RANGE)
-        if sub not in routine.allowed_subfunctions:
+        if sub not in (self.START, self.STOP, self.RESULTS) or (
+            sub not in routine.allowed_subfunctions
+        ):
             raise Reject(
                 NRC_GENERAL_REJECT
                 if ctx.bug(B.GENERAL_REJECT_INSTEAD_OF_0X12)

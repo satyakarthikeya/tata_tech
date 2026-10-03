@@ -5,30 +5,33 @@ Source: AUTOSAR CP R24-11 "Specification of Diagnostic Communication Manager"
 because AUTOSAR's terms do not allow redistribution). Every SWS statement below is
 paraphrased. None of it is quoted.
 
-**Status:** these are documented, not fixed. Changing the oracle
-(`uds_assistant/rules/nrc_order.py`) would also mean coordinated changes to the
-independent simulator, `docs/behaviour_contract.md`, and the frozen gold and
-template data. Where the engine and the SWS agree, the check in `nrc_order.py`
-cites the SWS ID. Where they disagree, it points here and cites no ID.
+**Status (2026-10-03):** D2, D5, D6 and D7 are **FIXED** in the rules engine
+(`uds_assistant/rules/`) and in `docs/behaviour_contract.md`; the fixed checks
+now cite the SWS IDs below. The independent simulator and the frozen gold and
+template data are updated in later steps, so until then they still show the old
+behaviour. D1, D3, D4, D8 and D9 remain documented, not fixed. Where the engine
+and the SWS agree, the check in `nrc_order.py` cites the SWS ID. Where they
+disagree, it points here and cites no ID.
 
 The "ours" column was produced by running each example through
-`rules.engine.evaluate` against `data/bcm_spec.yaml`. The "SWS" column is what the
-SWS requirements imply.
+`rules.engine.evaluate` against `data/bcm_spec.yaml` before the fixes. The "SWS"
+column is what the SWS requirements imply; for fixed rows it is also what the
+engine now returns.
 
 **Confidence:**
 - **high:** a normative requirement contradicts what we do.
 - **medium:** the SWS order comes from listing order or section order, not from an explicit ordering rule.
 - **none:** no observable effect with the current spec.
 
-| # | Topic | Example request(s) | Ours | SWS | Confidence |
+| # | Topic | Example request(s) | Ours (before fix) | SWS | Confidence |
 |---|---|---|---|---|---|
 | D1 | Exact length (0x13) checked before subfunction support (0x12) | `11 05 00` | `7F 11 13` | `7F 11 12` | medium |
-| D2 | 0x31: generic 0x12 check runs before routine-id lookup | `10 03`, `31 04 FF FF` | `7F 31 12` | `7F 31 31` | high |
+| D2 | **FIXED 2026-10-03.** 0x31: generic 0x12 check runs before routine-id lookup | `10 03`, `31 04 FF FF` | `7F 31 12` | `7F 31 31` | high |
 | D3 | 0x2E: data length (0x13) checked before security (0x33) | `10 03`, `2E 01 00 01 02` (locked) | `7F 2E 13` | `7F 2E 33` | medium |
 | D4 | 0x31: per-routine control type (0x12) and length (0x13) checked before security (0x33) | `10 02`, `31 02 02 03` (locked; routine 0x0203 has no stop) | `7F 31 12` | `7F 31 33` | medium |
-| D5 | 0x37 also returned for sendKey | three bad keys → 0x36, then `27 02 00 00 00 00` | `7F 27 37` | no key comparison without a seed; 0x24 per the SWS's informative list | high |
-| D6 | Suppress bit not masked for 0x19 / 0x27 | `10 03`, `27 81`; `19 82 FF` | `7F 27 12`; `7F 19 12` | handled as `27 01` / `19 02` with the positive response suppressed | high |
-| D7 | 0x22 with several DIDs: strict all-or-nothing | `22 F1 90 FF FF` | `7F 22 31` | positive response for F190 only; unsupported DID skipped | high |
+| D5 | **FIXED 2026-10-03.** 0x37 also returned for sendKey | three bad keys → 0x36, then `27 02 00 00 00 00` | `7F 27 37` | no key comparison without a seed; 0x24 per the SWS's informative list | high |
+| D6 | **FIXED 2026-10-03.** Suppress bit not masked for 0x19 / 0x27 | `10 03`, `27 81`; `19 82 FF` | `7F 27 12`; `7F 19 12` | handled as `27 01` / `19 02` with the positive response suppressed | high |
+| D7 | **FIXED 2026-10-03.** 0x22 with several DIDs: strict all-or-nothing | `22 F1 90 FF FF` | `7F 22 31` | positive response for F190 only; unsupported DID skipped | high |
 | D8 | Security re-locked on every positive 0x10 | `10 01` while in default | locks | locks only when leaving a non-default session | none |
 | D9 | Request SIDs in the response range (0x40–0x7F, 0xC0–0xFF) | `50 01` | `7F 50 11` | no response if DcmRespondAllRequest = FALSE; 0x11 if TRUE | config choice |
 
@@ -60,6 +63,10 @@ SWS requirements imply.
   - Only after that do 0x31 (identifier) and 0x12 (per-routine type, [R-ROUTINE-SUB]) follow.
 - **Impact:** an invalid control type combined with an unknown or session-forbidden routine id gives 0x12 from us. The SWS gives 0x31.
 - **Recommended change:** for SID 0x31, skip step 4 and check the control type after the routine id, session and security checks (see D4).
+- **FIXED 2026-10-03** (SWS_Dcm_00273, SWS_Dcm_00568, SWS_Dcm_00570, SWS_Dcm_00869):
+  - Step 4 is skipped for 0x31. The per-routine control-type check (step 6b', [R-ROUTINE-SUB]) is now the only 0x12 check for 0x31, and it also rejects types outside 01/02/03.
+  - `31 04 FF FF` → `7F 31 31` (was `7F 31 12`); `31 05 02 03` in extended → `7F 31 31`; `31 04 02 01` in extended → still `7F 31 12`.
+  - The position of that check relative to security (0x33) and length (0x13) is unchanged; that is D4, still open.
 
 ## D3 — WriteDataByIdentifier: length vs security
 
@@ -89,6 +96,10 @@ SWS requirements imply.
 - **Ours:** [R-SEC-LOCKOUT] checks the delay first for both seed and key, so a sendKey during the delay gets 0x37.
 - **Impact:** a sendKey during the lockout delay gets 0x37 from us. The SWS gives 0x24 (sequence).
 - **Recommended change:** restrict the delay check to seed requests and let the sendKey fall through to the existing pending-seed check (0x24).
+- **FIXED 2026-10-03** (SWS_Dcm_01350, SWS_Dcm_00863; attempt counting unchanged per SWS_Dcm_01397, SWS_Dcm_00660, SWS_Dcm_01349):
+  - The 0x37 check now runs only for requestSeed. A sendKey during the delay takes the normal key path. No seed can be pending then (the delay is armed by the wrong key that consumed it, and seeds are refused while it runs), so the answer is `7F 27 24` with no attempt counted and the deadline unchanged.
+  - Three bad keys, then `27 02 00 00 00 00` during the delay: `7F 27 37` → `7F 27 24`. `27 01` during the delay is still `7F 27 37`.
+  - The 0x24 itself rests on our existing [R-SEC-SEQ] rule plus SWS_Dcm_00863 (a key is only compared after a successful seed request). The SWS names 0x24 for this only in an informative list, so that NRC value is ours, not normative.
 
 ## D6 — Suppress-positive bit for 0x19 and 0x27
 
@@ -99,6 +110,12 @@ SWS requirements imply.
 - **Ours:** [R-SPRMIB] strips bit 7 only for 0x10, 0x11, 0x31 and 0x3E. So `27 81` and `19 82 FF` get 0x12.
 - **Impact:** `27 81` (suppressed seed request, rarely useful) and `19 82` (suppressed DTC read) are rejected by us and processed silently by the SWS.
 - **Recommended change:** honour SPRMIB for every service that has subfunctions. This needs the simulator, the behaviour contract (§"Subfunction byte"/§"Suppress bit"), and gold cases that use `27 81` or `19 82` to change at the same time.
+- **FIXED 2026-10-03** (SWS_Dcm_00201, SWS_Dcm_00204, SWS_Dcm_01411, SWS_Dcm_00200):
+  - `rules/request.py` masks bit 7 for every subfunction service (0x10, 0x11, 0x19, 0x27, 0x31, 0x3E).
+  - `27 81` in extended: `7F 27 12` → no response; the seed is still issued, stored and the seed counter advances. `27 82 <correct key>` unlocks silently.
+  - `19 82 FF`: `7F 19 12` → no response.
+  - Negatives are still sent (`27 85` → `7F 27 12`, `27 81` during the delay → `7F 27 37`, `19 82` → `7F 19 13`).
+  - The strict codec (`protocol/constants.SERVICES_WITH_SUPPRESS_BIT`, outside the rules package) still rejects a suppress flag on 0x19/0x27. The rules engine no longer uses that set.
 
 ## D7 — ReadDataByIdentifier with several DIDs
 
@@ -108,6 +125,13 @@ SWS requirements imply.
 - **Ours:** [R-MULTI-DID] answers 0x31 if *any* requested DID is unknown or not readable in the session.
 - **Impact:** a request that mixes valid and invalid DIDs gets 0x31 from us. The SWS gives a positive response with only the valid DIDs. A request with a single DID behaves the same in both.
 - **Recommended change:** switch to the lenient rule: skip failing DIDs, and send 0x31 only when none pass. This needs the simulator, the behaviour contract, and the multi-DID gold cases to change together.
+- **FIXED 2026-10-03** (SWS_Dcm_00438, SWS_Dcm_00433, SWS_Dcm_00434; 0x14 per SWS_Dcm_01059):
+  - Each requested DID is filtered: unknown, or not readable in the active session, means skipped. 0x31 is sent only if no DID is left. The response lists the remaining DIDs in request order.
+  - `22 F1 90 12 34`: `7F 22 31` → `62 F1 90 <VIN>`. `22 12 34 56 78` → still `7F 22 31`.
+  - The 0x14 check uses the length of the answered DIDs only.
+  - The SWS says nothing about duplicate DIDs. We keep answering each occurrence.
+  - The SWS also states no explicit "omit" rule. Leaving failing DIDs out of the response is inferred from the "only if none" wording.
+  - Not applicable with this spec: per-DID read security (SWS_Dcm_00435, 0x33), because no DID has read security, and the max-DIDs-per-request limit (SWS_Dcm_01335, 0x13), because none is configured.
 
 ## D8 — Security reset on session change (no observable impact)
 

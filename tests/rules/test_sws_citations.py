@@ -18,8 +18,23 @@ from uds_assistant.rules.sws import SWS_PDF, find_requirement, load_sws_text
 RULES_DIR = Path(rules_pkg.__file__).resolve().parent
 CITATION_RE = re.compile(r"SWS_Dcm_\d+")
 
-#: Number of distinct SWS IDs cited in rules/*.py when the citations were added.
-MIN_CITATIONS = 38
+#: Number of distinct SWS IDs cited in rules/*.py (38 when the citations were
+#: added; 44 after the D2/D5/D6/D7 fixes of docs/SWS_DISAGREEMENTS.md).
+MIN_CITATIONS = 44
+
+#: Requirements behind the fixed SWS disagreements; each must stay cited.
+FIX_CITATIONS: list[tuple[str, str]] = [
+    ("D2", "SWS_Dcm_00273"),
+    ("D2", "SWS_Dcm_00869"),
+    ("D5", "SWS_Dcm_01350"),
+    ("D5", "SWS_Dcm_00863"),
+    ("D6", "SWS_Dcm_00201"),
+    ("D6", "SWS_Dcm_00204"),
+    ("D6", "SWS_Dcm_01411"),
+    ("D7", "SWS_Dcm_00438"),
+    ("D7", "SWS_Dcm_00433"),
+    ("D7", "SWS_Dcm_00434"),
+]
 
 #: Cited requirements whose text must name the NRC the check returns.
 NRC_OF_CITATION: list[tuple[str, str]] = [
@@ -48,6 +63,21 @@ NRC_OF_CITATION: list[tuple[str, str]] = [
     ("SWS_Dcm_00869", "0x12"),
     ("SWS_Dcm_01140", "0x13"),
     ("SWS_Dcm_00024", "0x78"),
+    ("SWS_Dcm_00438", "0x31"),
+    ("SWS_Dcm_00433", "0x31"),
+    ("SWS_Dcm_00434", "0x31"),
+]
+
+#: Fixed-disagreement requirements whose text must contain a key phrase that the
+#: new behaviour relies on (checked case-insensitively, whitespace-normalised).
+PHRASE_OF_CITATION: list[tuple[str, str]] = [
+    ("SWS_Dcm_00273", "shall not be done for uds service 0x31"),
+    ("SWS_Dcm_01350", "requestseed"),
+    ("SWS_Dcm_00201", "masking"),
+    ("SWS_Dcm_01411", "sprmib set to 0 or 1"),
+    ("SWS_Dcm_00438", "if none of the requested dids is supported"),
+    ("SWS_Dcm_00433", "if none"),
+    ("SWS_Dcm_00434", "if none"),
 ]
 
 
@@ -84,6 +114,20 @@ def test_cited_requirement_names_the_nrc(sws_text: str, sws_id: str, nrc: str) -
     body = find_requirement(sws_id, sws_text)
     assert body is not None
     assert nrc.lower() in body.lower(), sws_id
+
+
+@pytest.mark.parametrize(("disagreement", "sws_id"), FIX_CITATIONS)
+def test_fixed_disagreement_is_cited(sws_text: str, disagreement: str, sws_id: str) -> None:
+    assert sws_id in _cited_ids(), disagreement
+    assert find_requirement(sws_id, sws_text) is not None, disagreement
+
+
+@pytest.mark.parametrize(("sws_id", "phrase"), PHRASE_OF_CITATION)
+def test_cited_requirement_supports_the_fix(sws_text: str, sws_id: str, phrase: str) -> None:
+    body = find_requirement(sws_id, sws_text)
+    assert body is not None
+    normalised = " ".join(body.replace("- ", "").lower().split())
+    assert phrase in normalised, sws_id
 
 
 def test_load_returns_none_without_pdf(tmp_path: Path) -> None:

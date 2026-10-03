@@ -1494,10 +1494,10 @@
   explanation: 11 81 suppresses the response but still resets to default session.
   origin: gold
 - id: gold_multi_did_read_one_bad
-  title: Multi-DID read where one DID is unknown fails the whole request
+  title: Multi-DID read skips an unknown DID and answers the readable one
   requirement_ids:
   - REQ-002
-  category: negative
+  category: positive
   template_id: null
   parameters: {}
   preconditions: []
@@ -1505,7 +1505,7 @@
   - kind: send
     request_hex: 22f1909999
     expected_responses_hex:
-    - 7f2231
+    - 62f19053594e544845544943424d303030303031
     description: ''
     max_response_time_ms: null
   citations:
@@ -1513,7 +1513,7 @@
     ref: 0x22 checks
     quote: null
   review_status: draft
-  explanation: One bad DID in a multi-DID request fails the whole request -> 0x31.
+  explanation: An unknown DID in a multi-DID request is skipped; the readable DID (VIN F190) is answered. NRC 0x31 only if no requested DID is readable.
   origin: gold
 - id: gold_duplicate_did_read
   title: Duplicate DIDs are allowed in one read request

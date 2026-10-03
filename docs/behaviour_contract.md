@@ -53,8 +53,14 @@ The simulator must be written from this document and the spec YAML only, and nev
 
 ## Subfunction byte
 
-- For 0x10, 0x11, 0x31 and 0x3E, bit 7 is the suppress-positive-response bit. It is stripped from the subfunction and honoured.
-- For 0x19 and 0x27 the whole byte is the subfunction. So `27 81` and `19 82` are answered with NRC 0x12.
+- Six services have a subfunction byte (the byte right after the SID): 0x10, 0x11, 0x19, 0x27, 0x31 and 0x3E.
+- For **all six**, bit 7 of that byte is the suppress-positive-response bit (SPRMIB). Before any check runs:
+  - the subfunction value is the byte with bit 7 cleared (`byte & 0x7F`);
+  - the suppress flag is bit 7 (`byte & 0x80 ≠ 0`).
+- Every rule below that names a subfunction uses this 7-bit value. So `27 81` is handled exactly as `27 01`, `27 82 …` as `27 02 …`, `19 82 FF` as `19 02 FF`, `31 81 …` as `31 01 …`, `3E 80` as `3E 00`.
+- Positive responses that echo the subfunction echo the 7-bit value (bit 7 clear), e.g. `67 01 …`, never `67 81 …`. (This only matters for the final response after a 0x78, see 0x31; all other suppressed positives are not sent.)
+- What the suppress flag does is defined in the "Suppress bit" section.
+- The other services (0x14, 0x22, 0x2E) have no subfunction and no suppress bit; their second byte is data.
 
 ## NRC evaluation order (the first failing check wins)
 
@@ -82,14 +88,20 @@ The SID must be in the union of all sessions' `allowed_services`. Otherwise the 
 
 ### 4. Subfunction supported → 0x12
 
+The subfunction here is the 7-bit value (suppress bit already removed).
+
 | Service | Supported subfunctions |
 |---|---|
 | 0x10 | 01, 02, 03 |
 | 0x11 | 01, 03 |
 | 0x19 | 02 |
 | 0x27 | 01, 02, 03, 04 |
-| 0x31 | 01, 02, 03 |
 | 0x3E | 00 |
+
+**This step is not applied to 0x31.** For RoutineControl the control type is checked only per routine, inside the 0x31 checks (step 3 of the 0x31 list), i.e. *after* the routine identifier and the routine's session have been checked. Examples (extended session, security locked):
+- `31 04 FF FF` (bad type, unknown routine) → `7F 31 31`
+- `31 05 02 03` (bad type, routine 0203 not allowed in extended) → `7F 31 31`
+- `31 04 02 01` (bad type, known routine allowed in extended) → `7F 31 12`
 
 ### 5. Subfunction allowed in session → 0x7E
 
@@ -101,9 +113,11 @@ This step only applies to 0x27, using each security level's `allowed_sessions`:
 
 | Request | Length rule |
 |---|---|
-| `19 02` | exactly 3 |
-| 0x27 seed request | exactly 2 |
-| 0x27 key | exactly 2 + seed_length (4) |
+| 0x19 subfunction 02 (`19 02` or `19 82`) | exactly 3 |
+| 0x27 seed request (odd subfunction, with or without bit 7) | exactly 2 |
+| 0x27 key (even subfunction, with or without bit 7) | exactly 2 + seed_length (4) |
+
+For example `19 82` (no mask byte) → `7F 19 13`, and `27 81 00` → `7F 27 13`.
 
 ### 6. Service-specific checks
 
@@ -154,32 +168,61 @@ These are listed per service below.
 - DTCs are listed in spec order.
 - The reported status is `status & 0xFF`, where 0xFF is the availability mask.
 - NRC 0x14 if the response would be longer than `max_response_length` (4095).
+- `19 82 mm` is the same request with the positive response suppressed: no response is sent. Negative outcomes (e.g. `19 81 FF` → `7F 19 12`, `19 82` → `7F 19 13`) are still sent.
 
 ### 0x22 ReadDataByIdentifier
 
-**Checks for each DID, in request order**
-- Unknown DID → 0x31.
-- Session not in the DID's `read_sessions` → 0x31.
-- One bad DID fails the whole request.
-- Duplicate DIDs are allowed.
+The request carries a list of 2-byte DIDs (the generic length step already guarantees at least one DID and a whole number of DIDs). There is no limit on the number of DIDs per request (the spec configures none); only the response length (below) bounds it.
 
-**Length check (after the DID checks)**
-- If `1 + Σ(2 + DID length) > 4095`, the answer is NRC 0x14.
+**Which DIDs are answered (lenient multi-DID rule)**
+
+Each entry of the list is judged on its own; a duplicate DID is simply judged (and answered) once per occurrence. An entry is **answered** only if both hold:
+1. the DID exists in the spec (otherwise the entry is "unsupported"), and
+2. the active session is in the DID's `read_sessions` (an empty `read_sessions` means never readable).
+
+Entries that fail either condition are **silently skipped**: they produce no bytes in the response and no NRC by themselves.
+
+**NRCs, in this order**
+1. If **no** entry passes condition 1 (every requested DID is unknown) → NRC 0x31.
+2. If **no** entry passes both conditions (some DIDs exist, but none is readable in the active session) → NRC 0x31.
+3. Compute the positive response length from the answered entries only: `1 + Σ(2 + DID length)` over answered entries (duplicates counted each time; skipped entries count 0). If it is greater than `max_response_length` (4095) → NRC 0x14.
+
+There is no read security in this spec, so 0x33 never occurs for 0x22. Reading never changes state (other than the S3 restart every request causes).
 
 **Response**
-- `62`, then `DID(2 bytes) value` for each DID in request order.
+- `62`, then `DID(2 bytes) value` for each answered entry, in request order (duplicates repeated).
 - Two DIDs are read live from state:
   - F186 returns the current session byte.
   - 0140 returns `min(vehicle_speed, 255)`.
 - All other DIDs return their stored value.
 
+**Examples** (default session unless stated)
+
+| Request | Response | Why |
+|---|---|---|
+| `22 F1 90 12 34` | `62 F1 90 <VIN 17 bytes>` | 1234 unknown → skipped |
+| `22 12 34 F1 86` | `62 F1 86 01` | skipped entry may come first |
+| `22 12 34 56 78` | `7F 22 31` | no DID exists |
+| `22 12 34 12 34` | `7F 22 31` | duplicates of an unknown DID |
+| `22 01 50` | `7F 22 31` | 0150 readable only in extended |
+| `22 01 50 F1 86` | `62 F1 86 01` | 0150 skipped (session) |
+| `22 12 34 01 50` | `7F 22 31` | one unknown, one not readable → none answered |
+| `22 01 00 12 34 01 00 01 50` | `62 01 00 32 01 00 32` | duplicates answered twice; bad entries skipped |
+| `22 01 60 FF FF 01 00` | `62 01 60 00 01 01 00 32` | request order kept |
+| extended: `22 01 50 12 34` | `62 01 50 00` | |
+| `22` + `F1 90` ×216 | `7F 22 14` | 1 + 216·19 = 4105 > 4095 |
+| `22` + `F1 90` ×215 + `12 34` | `62` + (`F1 90 <VIN>`) ×215 | 4086 bytes; the skipped DID adds nothing |
+| `22 12 34` + `F1 90` ×216 | `7F 22 14` | |
+
 ### 0x27 SecurityAccess
 
 Both levels use seed_length 4, max_attempts 3 and delay_ms 10000.
 
-**1. Delay check**
-- If this level's delay is active (`now < deadline`), the answer is NRC 0x37.
-- This applies to both seed and key requests.
+"Level" means the security level whose `seed_subfunction` or `key_subfunction` equals the 7-bit subfunction (01/02 → level 1, 03/04 → level 3). The generic steps 4, 5 and 5b (0x12, 0x7E, 0x13) have already passed.
+
+**1. Delay check — seed requests only**
+- For a **seed request** (odd subfunction): if this level's delay is active (`now < deadline`), the answer is NRC 0x37. No state changes.
+- A **key** (even subfunction) is **never** answered 0x37. It skips this check and goes straight to the key handling in point 3, even while the delay runs.
 
 **2. Seed request (odd subfunction)**
 - If this level is already unlocked: respond `67 ss 00 00 00 00` and change no state.
@@ -192,8 +235,8 @@ Both levels use seed_length 4, max_attempts 3 and delay_ms 10000.
   - The new seed is stored as this level's pending seed, replacing any older one.
   - Respond `67 ss <seed>`.
 
-**3. Key (even subfunction)**
-- If this level has no pending seed, the answer is NRC 0x24.
+**3. Key (even subfunction)** — the same rules apply whether or not this level's delay is active.
+- If this level has no pending seed, the answer is NRC 0x24. Nothing else changes: the failed-attempt count is **not** incremented and the deadline is **not** changed or re-armed.
 - Otherwise compare the key with `compute_key(seed, level)` from `uds_assistant.protocol.security`.
 - **Wrong key:**
   - Increment the failed-attempt count and consume the pending seed.
@@ -204,6 +247,20 @@ Both levels use seed_length 4, max_attempts 3 and delay_ms 10000.
   - The unlocked level becomes this level. Only one level can be unlocked at a time.
   - Reset the count to 0, clear the deadline, and consume the pending seed.
   - Respond `67 kk`.
+
+**Key during the delay.** The delay is armed only by the wrong key that consumed this level's pending seed, and while it runs every seed request for the level is refused with 0x37. So over the wire a key sent during the delay always finds no pending seed and gets **0x24**, with no state change (no attempt counted, deadline unchanged). Examples, extended session, after three wrong keys at t=0 (count 3, deadline 10000):
+- `27 02 00 00 00 00` at t=1000 → `7F 27 24` (count stays 3, deadline stays 10000)
+- `27 02 9A 06 8F 73` at t=1000 → `7F 27 24`
+- `27 01` at t=5000, even after such a key → `7F 27 37`
+- `27 01` at t=10000 → positive seed (the key during the delay did not extend it)
+- then a wrong key → `7F 27 36` (count was still 3, so the limit is reached again and the delay re-arms)
+
+(If a state were ever constructed with a pending seed during the delay, the key would simply be compared as above: wrong → count+1, 0x36, deadline re-armed from now; right → unlock.)
+
+**Suppress bit on 0x27**
+- `27 81` / `27 83` are seed requests with the positive response suppressed: every check and every state effect is exactly as for `27 01` / `27 03` (a non-zero seed is issued, stored as the pending seed, and the seed counter increments; for an already-unlocked level the all-zero seed changes nothing), but **no response is sent**.
+- `27 82 <key>` / `27 84 <key>` are keys with the positive response suppressed: a correct key unlocks the level (same state effects as `27 02`), and no response is sent.
+- Negative responses are always sent: e.g. `27 85` → `7F 27 12`, `27 83` in extended → `7F 27 7E`, `27 81` during the delay → `7F 27 37`, `27 82 <wrong key>` → `7F 27 35`/`36` (attempt counted), `27 82 …` with no pending seed → `7F 27 24`.
 
 **Lockout lifetime**
 - Lockout state survives session changes, S3 timeout and ECU reset.
@@ -227,11 +284,13 @@ Checks, in this order:
 
 ### 0x31 RoutineControl
 
+The generic step 4 (subfunction supported) is **not** applied to 0x31, so any control-type value (7-bit, after removing the suppress bit) reaches these checks.
+
 **Checks, in this order**
 
-1. Unknown routine → 0x31.
-2. Active session not in the routine's sessions → 0x31.
-3. Subfunction not in the routine's `allowed_subfunctions` → 0x12.
+1. Unknown routine → 0x31. (Regardless of the control type: `31 04 FF FF` → `7F 31 31`.)
+2. Active session not in the routine's sessions → 0x31. (Regardless of the control type.)
+3. Control type not one of 01 (start), 02 (stop), 03 (results), or not in the routine's `allowed_subfunctions` → 0x12. This is the only 0x12 check for 0x31; e.g. `31 00 02 01`, `31 04 02 01`, `31 80 02 01` in extended → `7F 31 12`, and it comes before the length and security checks (`31 04 02 01 FF` → `7F 31 12`).
 4. Wrong length → 0x13:
    - start must be exactly 4 + `option_record_length`
    - stop and results must be exactly 4
@@ -272,8 +331,22 @@ Checks, in this order:
 
 ## Suppress bit
 
-- When the outcome is positive and the suppress bit is set, no response is sent. The state change still happens.
+Applies to every service with a subfunction: 0x10, 0x11, 0x19, 0x27, 0x31, 0x3E (see "Subfunction byte").
+
+- When the outcome is positive and the suppress bit is set, no response is sent. The state change still happens exactly as without the bit.
 - Negative responses are never suppressed. For example, `3E 81` gives `7F 3E 12`.
+- Exception: a long-running 0x31 start (see 0x31) sends `7F 31 78` and then its final positive response even when the bit is set.
+
+| Service | Suppressed example | Response | State effect still applied |
+|---|---|---|---|
+| 0x10 | `10 83` | none | session → 03, security locked, seeds/routines cleared |
+| 0x11 | `11 81` | none | reset to default session |
+| 0x19 | `19 82 FF` | none | none (read only) |
+| 0x27 | `27 81` | none | seed issued and stored as pending, counter +1 |
+| 0x27 | `27 82 <correct key>` | none | level unlocked, count reset, seed consumed |
+| 0x31 | `31 81 02 01` | none | routine 0201 RUNNING |
+| 0x31 | `31 81 02 03` (long-running) | `7F 31 78`, `71 01 02 03 02` | routine 0203 COMPLETED |
+| 0x3E | `3E 80` | none | none |
 
 ## How the remaining NRCs are used
 

@@ -125,7 +125,7 @@ def _did_value(spec: EcuSpec, state: EcuState, did: int) -> bytes:
 
 
 def _positive(
-    spec: EcuSpec, state: EcuState, req: ParsedRequest, trace: list[str]
+    spec: EcuSpec, state: EcuState, req: ParsedRequest, decision: NrcDecision, trace: list[str]
 ) -> tuple[EcuState, bytes]:
     """Apply the positive-outcome state transition and build the response bytes."""
     raw = req.raw
@@ -175,10 +175,11 @@ def _positive(
         return state, head + bytes(body)
 
     if sid == ServiceId.READ_DATA_BY_IDENTIFIER:
+        # Only the DIDs that passed the checks, in request order (duplicates kept):
+        # [R-MULTI-DID] + SWS_Dcm_00438 / SWS_Dcm_00434 (failing DIDs are skipped).
         body = bytearray()
-        for i in range(1, len(raw), 2):
-            did = int.from_bytes(raw[i : i + 2], "big")
-            body.extend(raw[i : i + 2])
+        for did in decision.read_dids:
+            body.extend(did.to_bytes(2, "big"))
             body.extend(_did_value(spec, state, did))
         return state, head + bytes(body)
 
@@ -305,7 +306,7 @@ def evaluate(
             request=req.raw, responses=[neg], trace=trace, decision=decision, next_state=st
         )
 
-    st, positive = _positive(spec, st, req, trace)
+    st, positive = _positive(spec, st, req, decision, trace)
     responses: list[bytes] = []
     if decision.pending_nrc is not None:
         responses.append(bytes([NEGATIVE_RESPONSE_SID, sid, int(decision.pending_nrc)]))

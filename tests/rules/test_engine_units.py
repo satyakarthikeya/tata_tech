@@ -71,8 +71,13 @@ def test_parse_request_lenient() -> None:
     assert parse_request(b"").sid is None
     p = parse_request(bytes([0x3E, 0x80]))
     assert p.subfunction == 0x00 and p.suppress_positive
+    # The suppress bit is masked for every subfunction service, 0x19/0x27 included.
     p = parse_request(bytes([0x27, 0x81]))
-    assert p.subfunction == 0x81 and not p.suppress_positive
+    assert p.subfunction == 0x01 and p.suppress_positive
+    p = parse_request(bytes([0x19, 0x82, 0xFF]))
+    assert p.subfunction == 0x02 and p.suppress_positive
+    p = parse_request(bytes([0x27, 0x02, 0x00]))
+    assert p.subfunction == 0x02 and not p.suppress_positive
     p = parse_request(bytes([0xFF]))
     assert p.sid == 0xFF and p.subfunction is None
 
@@ -195,3 +200,55 @@ def test_session_send_accepts_hex_and_clock(spec: EcuSpec) -> None:
     r = session.send("3E00")
     assert r.next_state.now_ms == 150
     assert len(session.history) == 1
+
+
+def test_key_during_delay_changes_no_lockout_state(spec: EcuSpec) -> None:
+    """A sendKey during the delay gets 0x24 and neither counts nor re-arms the delay."""
+    session = RulesSession(spec)
+    session.send("1003")
+    for _ in range(3):
+        session.send("2701")
+        session.send("270200000000")
+    before = session.state.lockouts[0x01]
+    assert before.failed_attempts == 3 and before.locked_until_ms == 10_000
+    session.advance(1000)
+    r = session.send("270200000000")
+    assert r.nrc == Nrc.REQUEST_SEQUENCE_ERROR
+    assert not r.decision.failed_key_attempt
+    assert session.state.lockouts[0x01] == before
+    assert session.state.pending_seeds == {}
+
+
+def test_key_during_delay_with_pending_seed_is_compared(spec: EcuSpec) -> None:
+    """Unreachable over the wire, but defined: a pending seed is compared normally."""
+    session = RulesSession(spec)
+    session.send("1003")
+    for _ in range(3):
+        session.send("2701")
+        session.send("270200000000")
+    seed = derive_seed(1, 99, 4)
+    state = session.state.model_copy(update={"pending_seeds": {0x01: seed}})
+    wrong = evaluate(spec, state, bytes([0x27, 0x02]) + bytes(4), 500)
+    assert wrong.nrc == Nrc.EXCEED_NUMBER_OF_ATTEMPTS
+    assert wrong.next_state.lockouts[0x01].failed_attempts == 4
+    assert wrong.next_state.lockouts[0x01].locked_until_ms == 10_500
+    good = evaluate(spec, state, bytes([0x27, 0x02]) + compute_key(seed, 1), 500)
+    assert good.responses == [b"g"]
+    assert good.next_state.unlocked_level == 0x01
+
+
+def test_suppressed_seed_applies_state(spec: EcuSpec) -> None:
+    session = RulesSession(spec)
+    session.send("1003")
+    r = session.send("2781")
+    assert r.responses == [] and r.nrc is None
+    assert session.state.pending_seeds == {0x01: derive_seed(1, 0, 4)}
+    assert session.state.seed_counter == 1
+
+
+def test_multi_did_decision_lists_answered_dids(spec: EcuSpec) -> None:
+    r = evaluate(spec, initial_state(spec), bytes.fromhex("22123401000150F186"), 0)
+    assert r.decision.read_dids == [0x0100, 0xF186]
+    assert r.responses == [bytes.fromhex("62010032F18601")]
+    assert any("0x1234 not supported -> skipped" in t for t in r.trace)
+    assert any("0x0150 not readable" in t for t in r.trace)
