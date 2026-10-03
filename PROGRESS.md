@@ -805,3 +805,18 @@ Checks: `python -m pytest -q tests/agent tests/llm`: 307 passed, 3 skipped. `ruf
 - Revision 2 is selected and restored. Revision 6 (revision 2 plus the two robustness fixes) was run once afterwards and gave the same dev scores.
 - Open issues found by D1b are closed: the planner now skips the model when nothing is on offer, and hex ids are padded to the spec's spelling.
 - Verification: full suite 1265 passed, 14 skipped in 626 s; ruff clean; model tests for llm and agent passed in the D1b step.
+
+## Part D freeze (2026-10-04T04:59:27+05:30)
+
+No change to templates, the conformance sweep, prompts, the planner, the service lexicon or the gold tests is allowed from here until the end of D6. The v3 bug and requirement sets are written blind after this point, and nothing is tuned on them.
+
+| What | Hash |
+|---|---|
+| Commit | `4042f260527f76b781546cb39687b080d19ecb61` |
+| `uds_assistant/testgen` tree | `d990ef45a4f5f38c4ea59cc30e42011ccecf6ab9` |
+| `uds_assistant/llm` tree | `0dad8c4165842d10e7bf15c0c5554881d8db13d3` |
+| `uds_assistant/agent` tree | `5875c8629e01fe7dadab98d6f2de584aa0b4af05` |
+| `uds_assistant/llm/prompts.py` blob | `c117f993ef0d10657f36eaf2c08f132d02efbda4` |
+| `uds_assistant/testgen/conformance.py` blob | `edc143372c412ba65305231d6241eeacdc18b7d8` |
+| `uds_assistant/agent/service_lexicon.py` blob | `42ceae7509950189d69da8ce7516d15c2b1b1982` |
+| `data/gold` tree | `778740195a3dc923ae2f6a34fd4b78e11d87b024` |
