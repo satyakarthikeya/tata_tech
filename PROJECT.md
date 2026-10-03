@@ -4,6 +4,20 @@
 
 ---
 
+## Status (as of Part A)
+
+The original design below is implemented and tested in `mock` mode; the numbers here are copied from `outputs/eval_report.md` / `.json` (see `FINAL_REPORT.md` for the honest summary).
+
+- **Mock mode: done. Ollama mode: pending Part B** (no model download in the offline build; every ollama cell reads "pending Part B").
+- **Templates: 23, frozen.** v1 had 14; the 9 generic v2 templates were added in Phase 7 *after* inspecting which in-sample bugs v1 missed, so in-sample detection is optimistic. Templates (and gold tests) are now frozen at `uds_assistant/testgen` tree hash `9a121b2742c5f85fa48fd4f5340caf3b85979c67`.
+- **Headline bug-detection number is held-out:** generated suite **3/12 (25.0%)**, gold 3/12 (25.0%), union 5/12 (41.7%) on 12 held-out bugs written by a subagent that could not see templates, gold, eval, LLM or agent code. The in-sample 26-bug number (generated 25/26, 96.2%) is secondary and labelled "in-sample (templates tuned on these)".
+- **Natural requirements:** 20 labelled requirements (`data/requirements_natural.csv`; 8 dev / 12 test) measure requirement understanding; the test split is the main number.
+- **AUTOSAR SWS citations:** the rules engine cites 38 distinct AUTOSAR CP R24-11 Dcm SWS IDs; 9 documented disagreements (D1-D9) are in `docs/SWS_DISAGREEMENTS.md` and are **not fixed**. The SWS PDF is git-ignored and not redistributed; SWS tests skip without a local copy.
+- **Python 3.13** (3.13.6) is what the project was built and tested on; code is kept 3.11-syntax-compatible.
+- More: `docs/RECONCILIATION.md` (no older doc set found), `docs/CODE_TOUR.md`, `docs/ARCHITECTURE.md`, `docs/RESULTS.md`, `docs/DEMO_SCRIPT.md`.
+
+---
+
 ## 1. The problem
 
 UDS (Unified Diagnostic Services) is the protocol a diagnostic tester uses to talk to a car ECU: read data, write data, unlock security, run routines, clear fault codes. To test an ECU's diagnostics, an engineer must combine the generic protocol rules with OEM- and ECU-specific specs. They then hand-build request bytes, work out preconditions (session, security), predict positive and negative responses, and turn all of that into automation scripts.
@@ -47,9 +61,9 @@ Because of this, the system stays correct with a small 3B local model, and it ru
 | 2 | **ECU spec** (`spec/`, `data/bcm_spec.yaml`) | Pydantic model of a Body Control Module: sessions, security levels, DIDs, routines, DTCs, timing (P2, P2*, S3) |
 | 3 | **Rules engine** (`rules/`) | The oracle: (spec, state, request) → exact expected response + reason trace. Explicit NRC evaluation order |
 | 4 | **ECU simulator** (`simulator/`) | Independent stateful ECU implementation, bug injection, in-process and virtual-CAN/ISO-TP transports |
-| 5 | **Test model and templates** (`testgen/`) | `TestCase` schema, 8–12 reusable parameterized templates |
-| 6 | **Gold set** (`data/gold/`) | 40–60 hand-authored tests that must pass on the bug-free simulator |
-| 7 | **Bug catalog** (`data/bugs/`) | 15+ realistic injectable faults |
+| 5 | **Test model and templates** (`testgen/`) | `TestCase` schema, 23 reusable parameterized templates (originally planned 8–12; v1 14 + v2 9, frozen) |
+| 6 | **Gold set** (`data/gold/`) | 60 hand-authored tests that must pass on the bug-free simulator |
+| 7 | **Bug catalog** (`data/bugs/`) | 26 in-sample injectable faults (`bug_catalog.yaml`) + 12 held-out faults (`heldout_catalog.yaml`) |
 | 8 | **Retrieval** (`rag/`) | Layered collections (standard / ecu_spec / project), citations. Backends: BM25 (offline) and ChromaDB + embeddings |
 | 9 | **LLM layer** (`llm/`) | Pluggable: `mock` (deterministic), `ollama` (local Qwen2.5-3B Q4_K_M) |
 | 10 | **Agent** (`agent/`) | LangGraph pipeline, with a plain-Python fallback using the same node functions |
@@ -94,7 +108,7 @@ Because of this, the system stays correct with a small 3B local model, and it ru
 
 All data is small and self-authored. Correctness comes from **triangulation**, not volume:
 
-1. Rules cite the free AUTOSAR Dcm SWS (if available) or are logged as design decisions.
+1. Rules cite the AUTOSAR Dcm SWS (R24-11; 38 distinct SWS IDs cited, 9 documented disagreements in `docs/SWS_DISAGREEMENTS.md`) or are logged as design decisions.
 2. Every encoded request must round-trip identically through `udsoncan`.
 3. Every gold test must pass on the bug-free simulator.
 4. The simulator and the rules engine are written independently and must agree on 100% of randomized requests.
@@ -103,22 +117,36 @@ The ECU spec is **synthetic, in a realistic OEM style**, and this is stated open
 
 ## 7. Evaluation metrics
 
-| Metric | Meaning |
-|---|---|
-| Request validity | % of generated requests accepted as well-formed by the rules engine |
-| Expected-response accuracy | Agreement with the rules-engine oracle and the gold tests |
-| Coverage | Tests per category (positive / negative / session / security / timing) per requirement |
-| Template reuse rate | % of tests built from approved templates |
-| Citation validity | % of citations that exist and contain the referenced identifier |
-| **Bug detection rate** | % of injected bugs caught by the generated suite (headline number) |
-| Gold baseline | Detection rate of the hand-written gold suite, for comparison |
+The original metric list (request validity, expected-response accuracy, coverage, template reuse, citation validity, bug detection, gold baseline) is retained in `outputs/eval_report.md`, but several of them were circular or in-sample, so the headline is now a 7-row table. Numbers are exactly those in `outputs/eval_report.md` (mode `mock`).
 
-Each metric is reported separately for `mock` and `ollama` LLM modes.
+| Metric | mock | ollama |
+|---|---|---|
+| 1. Simulator <-> rules-engine agreement (seeded random sample, live) | 5000/5000 (100.0%) | same (LLM-independent) |
+| 2. Gold tests passing on the bug-free simulator | 60/60 (100.0%) | same (LLM-independent) |
+| 3. udsoncan virtual-CAN sequence | PASS | same (LLM-independent) |
+| **4. Held-out bug detection (12 bugs; HEADLINE = generated)** | **generated 3/12 (25.0%)**, gold 3/12 (25.0%), union 5/12 (41.7%) | pending Part B |
+| 5. Requirement understanding (natural requirements, test split n=12) | target exact match parsed 5/12 (F1 0.700), exercised 2/12 (F1 0.449); category recall 67.9% micro / 69.7% macro; precondition recall 80.0% micro / 75.0% macro; fallback/nothing 3/12 | pending Part B |
+| 6. Coverage (seed requirements) | positive 36, negative 70, session 21, security 18, timing 26; 15/15 requirements with at least 1 test | pending Part B |
+| 7. Citation validity | 774/774 (100.0%) | pending Part B |
+
+Secondary and appendix numbers:
+
+| Metric | Value | Label |
+|---|---|---|
+| In-sample bug detection (26 bugs): generated / gold / union | 25/26 (96.2%) / 24/26 (92.3%) / 26/26 (100.0%) | **in-sample (templates tuned on these)**; optimistic, non-independent |
+| In-sample baseline, template set v1 (14 templates), generated | 17/26 (65.4%) | before the Phase 7 additions |
+| Request validity (adjusted for intentional format probes) | 445/445 (100.0%); unadjusted 404/445 (90.8%) | |
+| Expected-response accuracy vs oracle | 445/445 (100.0%) | **self-consistency, circular by construction**; appendix only |
+| Template reuse | 171/171 (100.0%) | true by construction (byte-identical re-instantiation) |
+
+Requirement-understanding detail (per split and per requirement), the held-out per-bug table with reasons for each miss, and metric definitions are in `outputs/eval_report.md`. The Streamlit UI shows the headline table, the held-out table and the understanding results.
+
+Each LLM-dependent metric is reported separately for `mock` and `ollama` modes; the `ollama` column is pending Part B.
 
 ## 8. Tech stack
 
-- **Always available (lightweight):** Python 3.11, pydantic, pyyaml, udsoncan, can-isotp, python-can (virtual bus), pytest, hypothesis, fastapi, uvicorn, langgraph, rank-bm25 or an in-house BM25.
-- **Needs downloads (model phase):** Ollama + `qwen2.5:3b-instruct-q4_K_M`, sentence-transformers + `BAAI/bge-small-en-v1.5`, chromadb, streamlit.
+- **Always available (lightweight):** Python 3.13 (built and tested on 3.13.6; code stays 3.11-syntax-compatible), pydantic, pyyaml, udsoncan, can-isotp, python-can (virtual bus), pytest, hypothesis, fastapi, uvicorn, langgraph, rank-bm25 or an in-house BM25.
+- **Needs downloads (model phase, Part B):** Ollama + `qwen2.5:3b-instruct-q4_K_M`, sentence-transformers + `BAAI/bge-small-en-v1.5`, chromadb. (streamlit is installed and the UI is tested headless.)
 - **Runtime switches:**
   - `LLM_MODE=mock|ollama` (default `mock`)
   - `RETRIEVER=bm25|chroma` (default `bm25`)

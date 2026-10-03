@@ -288,3 +288,38 @@ Table of check → SWS IDs cited (with your one-line paraphrase), count of citat
 > (Note: two other agents work concurrently on uds_assistant/rules/ citations and on data/requirements_natural.csv; do not touch those. If an unrelated test fails transiently because of them, re-run once and report.)
 
 **Deviation from the brief's A1 read-list:** A1 was also allowed to read `tests/simulator/` (needed to follow the bug-test style and fix tests that enumerate bug ids) and was additionally forbidden to read `uds_assistant/rules/`, `runner/`, `export/`, `docs/` and the progress logs.
+
+## Part A — completed (2026-10-03T11:26:16+05:30)
+
+| Step | Work | Model |
+|---|---|---|
+| A1 | 12 held-out bugs in `data/bugs/heldout_catalog.yaml`, each with a unit test | subagent, Opus |
+| A2 | 20 natural requirements, 8 dev / 12 test | subagent, Sonnet |
+| A3 | Held-out and requirement-understanding sections in the eval, and the new headline table | subagent, Opus |
+| A4 | 38 SWS citations, 9 documented disagreements | subagent, Opus |
+| A5 | Docs pack (CODE_TOUR, ARCHITECTURE, RESULTS, DEMO_SCRIPT) and `scripts/demo.py` | subagent, Sonnet |
+| A6 | PROJECT.md, UI, FINAL_REPORT.md, README.md | subagent, Sonnet |
+
+**Notes**
+- A3 was interrupted when the session ended. The orchestrator reviewed and verified its on-disk work, which is in checkpoint commit `5bbfe92`.
+- Partway through Part A the owner asked for the cheaper Sonnet model, so A5 and A6 used Sonnet. A1, A3 and A4 had already been started on Opus.
+
+**Freeze check**
+- Frozen at: `9a121b2742c5f85fa48fd4f5340caf3b85979c67`
+- Final testgen tree hash: `9a121b2742c5f85fa48fd4f5340caf3b85979c67`
+- `git diff 5bbfe92` over testgen, gold, llm and agent: empty.
+
+**Final state**
+- ruff: clean.
+- pytest: 834 passed, 2 skipped (`needs_model`).
+
+**Headline, mock mode**
+
+| Metric | Result |
+|---|---|
+| Held-out bug detection | generated 3/12 (25.0%), gold 3/12, union 5/12 |
+| In-sample (templates tuned on these) | 25/26 |
+| Requirement understanding, test split | parsed exact 5/12, F1 0.700; category recall 67.9%; precondition recall 80.0% |
+| Simulator ↔ rules agreement | 5000/5000 |
+| Gold tests on the clean simulator | 60/60 |
+| udsoncan virtual-CAN sequence | PASS |

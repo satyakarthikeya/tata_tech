@@ -95,3 +95,54 @@ def test_app_runs_headless_without_exceptions() -> None:
     at = AppTest.from_file(str(UI_FILE), default_timeout=60)
     at.run()
     assert not at.exception
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_app_shows_headline_heldout_and_understanding() -> None:
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(str(UI_FILE), default_timeout=60)
+    at.run()
+    assert not at.exception
+    subheaders = [s.value for s in at.subheader]
+    assert any("Headline metrics" in s for s in subheaders)
+    assert any("Held-out bug detection" in s for s in subheaders)
+    assert any("Requirement understanding" in s for s in subheaders)
+    # headline table (7 rows) + held-out per-bug (12) + understanding splits and per-requirement
+    assert len(at.table) >= 1
+    assert any(len(df.value) == 12 for df in at.dataframe)
+    assert any(len(df.value) == 20 for df in at.dataframe)
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_bug_multiselect_labels_heldout_and_in_sample() -> None:
+    """Run section needs generated tests, so seed session state directly."""
+    from streamlit.testing.v1 import AppTest
+
+    from uds_assistant.simulator import HELDOUT_BUG_IDS
+
+    at = AppTest.from_file(str(UI_FILE), default_timeout=60)
+    at.run()
+    at.button[0].click().run()  # "Generate tests" with the default requirement
+    assert not at.exception
+    ms = next(m for m in at.multiselect if "Inject bug" in m.label)
+    assert any(o.startswith("[in-sample]") for o in ms.options)
+    held = [o for o in ms.options if o.startswith("[held-out]")]
+    assert len(held) == len(HELDOUT_BUG_IDS)
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_app_tolerates_older_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A report without held-out / understanding / agreement keys must not crash the UI."""
+    import json
+
+    from streamlit.testing.v1 import AppTest
+
+    old = {"timestamp": "x", "actual_mode": "mock", "modes": {"mock": {"generated_tests": {"count": 1}}}}
+    report_path = tmp_path / "old_report.json"
+    report_path.write_text(json.dumps(old), encoding="utf-8")
+    monkeypatch.setenv("UDS_EVAL_REPORT", str(report_path))
+    at = AppTest.from_file(str(UI_FILE), default_timeout=60)
+    at.run()
+    assert not at.exception
+    assert any("older report" in c.value for c in at.caption)

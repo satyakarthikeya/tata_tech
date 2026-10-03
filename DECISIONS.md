@@ -139,3 +139,12 @@ This subagent was interrupted when the session ended before it could report back
   - "exercised": the identifiers the generated tests actually send
 
   Precondition recall uses preconditions worked out from concrete test steps (`uds_assistant/eval/trace.py`); the mapping is documented in the report.
+
+### A5 and A6 (docs pack, UI and final touches)
+
+- **[PA-UI-REPORT-ENV]** The Streamlit UI reads the eval report from `UDS_EVAL_REPORT` if it is set, otherwise from `outputs/eval_report.json`. Tests use this to supply an old-format report without touching `outputs/`.
+- **[PA-UI-BUGLABELS]** The bug picker labels each option `[in-sample]` or `[held-out]`. If the held-out catalog can't be loaded, the UI falls back to in-sample bugs only.
+- **[PA-DOCS-HEADLINE]** PROJECT.md, README.md, FINAL_REPORT.md and docs/RESULTS.md all lead with the held-out generated-suite number (3/12), shown with gold 3/12 and union 5/12.
+  - In-sample 25/26 is a secondary number, labelled "templates tuned on these".
+- **[PA-DOCS-TEMPLATES]** PROJECT.md now documents 23 templates instead of the planned 8–12: 14 in v1, plus 9 added in Phase 7 after seeing the in-sample misses. It also states Python 3.13.
+- **[PA-NEXT-SWS]** D2, D5, D6 and D7 are the first SWS disagreements to fix in Part B. The fix must be coordinated across the rules engine, simulator, behaviour contract and gold tests, and done with a new held-out set.

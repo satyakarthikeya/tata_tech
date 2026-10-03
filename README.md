@@ -54,7 +54,7 @@ instead of crashing.
 python -m pytest -q
 ```
 
-Current result on this machine (Python 3.13.6, Windows): **753 passed, 2
+Current result on this machine (Python 3.13.6, Windows): **834 passed, 2
 skipped** (`needs_model` tests, skipped automatically). Model-dependent tests
 are marked `@pytest.mark.needs_model`; to run them once Ollama/ChromaDB are
 set up (see `MODEL_SETUP.md`):
@@ -73,15 +73,21 @@ Tests mirror the package layout under `tests/` (one subdirectory per package:
 python -m uds_assistant.eval.run_eval --mode mock
 ```
 
-Regenerates `outputs/eval_report.json` and `outputs/eval_report.md` — coverage,
-request validity, expected-response accuracy (vs the oracle, vs the
-independent simulator, vs the hand-written gold set), template reuse, citation
-validity, and **bug-detection rate** (each of the 26 catalog bugs enabled
-alone, generated suite vs gold suite vs their union). See
-`outputs/eval_report.md` for the full current numbers and metric definitions,
-and `FINAL_REPORT.md` for the honest headline summary and caveats (in
-particular: the bug-detection number for the generated suite is **not an
-independent measurement** — see that file).
+Regenerates `outputs/eval_report.json` and `outputs/eval_report.md`: a 7-row
+headline table (simulator/rules agreement, gold on clean simulator, udsoncan
+virtual-CAN sequence, **held-out bug detection**, requirement understanding,
+coverage, citation validity), plus in-sample bug detection, request validity
+and metric definitions. Add `--skip-can` to skip the udsoncan virtual-CAN check
+(fast runs only).
+
+**Headline (mock mode): held-out bug detection, generated suite 3/12 (25.0%)**,
+gold 3/12 (25.0%), union 5/12 (41.7%). The in-sample number (generated 25/26,
+96.2%) is secondary: the templates were tuned on those bugs. Ollama numbers are
+pending Part B. See `outputs/eval_report.md` for all numbers and
+`FINAL_REPORT.md` for the honest summary and caveats.
+
+Quick tour of the whole system: `python scripts/demo.py` (see
+[`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)).
 
 Run in Ollama mode (after `MODEL_SETUP.md` steps) and compare:
 
@@ -121,7 +127,7 @@ from a flatter path.)
 streamlit run uds_assistant/ui/streamlit_app.py
 ```
 
-An engineering UI over the same pipeline (generate → review → run → export),
+An engineering UI over the same pipeline (generate → review → run → export; the bug picker offers in-sample and held-out bugs, and the evaluation section shows the headline table, the held-out per-bug table and the requirement-understanding results),
 calling `agent.run_pipeline` / `runner.run_suite` / `export.render_*` directly
 rather than over HTTP, with its own audit trail (`outputs/ui_audit.sqlite`).
 
@@ -239,9 +245,13 @@ circular by construction.
   `SCOPE.md` is logged in `DECISIONS.md`, one line per decision, tagged
   (e.g. `[R-ORDER]`, `[S-INDEP]`, `[EVAL-TPL-V2]`) so a specific NRC rule or
   test can point at the reasoning behind it.
-- No AUTOSAR Dcm SWS document was reachable offline; `rules/nrc_order.py`
-  cites `"udsoncan behaviour"` or a `DECISIONS.md` tag for every check instead
-  of a fabricated SWS requirement ID.
+- Each check in `rules/nrc_order.py` cites a `DECISIONS.md` tag. Where the
+  AUTOSAR CP R24-11 Dcm SWS actually states the same behaviour, it also cites
+  the `SWS_Dcm_xxxxx` ID (38 distinct IDs, each verified against the local PDF
+  by `tests/rules/test_sws_citations.py`). The PDF is git-ignored, so keep a
+  local copy in `data/sources/`; without it, those tests are skipped. There
+  are 9 known disagreements with the SWS, listed in
+  `docs/SWS_DISAGREEMENTS.md` and not yet fixed.
 - No ISO 14229 text is copied anywhere; protocol notes in
   `data/sources/uds_reference_notes.md` are written from scratch.
 - The LLM (mock or Ollama) never emits bytes that reach a test — see "Core
@@ -255,4 +265,10 @@ circular by construction.
 - [`PROGRESS.md`](PROGRESS.md) — phase-by-phase build log
 - [`DECISIONS.md`](DECISIONS.md) — every non-obvious decision and deviation
 - [`MODEL_SETUP.md`](MODEL_SETUP.md) — exact steps to enable Ollama + ChromaDB
+- [`docs/CODE_TOUR.md`](docs/CODE_TOUR.md) — guided tour of the code
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — architecture
+- [`docs/RESULTS.md`](docs/RESULTS.md) — results walkthrough
+- [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — demo script (`python scripts/demo.py`)
+- [`docs/SWS_DISAGREEMENTS.md`](docs/SWS_DISAGREEMENTS.md) — rules engine vs AUTOSAR Dcm SWS (D1–D9, documented, not fixed)
+- [`docs/RECONCILIATION.md`](docs/RECONCILIATION.md) — search for an older doc set (none found)
 - [`FINAL_REPORT.md`](FINAL_REPORT.md) — honest done/untested/not-done breakdown, test counts, eval numbers, limitations, next steps
