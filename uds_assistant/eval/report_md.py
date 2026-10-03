@@ -1114,8 +1114,8 @@ def _freeze(report: dict[str, Any]) -> list[str]:
         anc = c["recorded_is_ancestor_of_head"]
         rows.insert(0, ["freeze commit", f"`{c['recorded']}`", f"`{c['head']}` (HEAD)",
                         "ancestor of HEAD" if anc else "**NOT an ancestor of HEAD**", "-"])
-    lines += _table(["Path", "recorded (Part C freeze)", "current", "result", "worktree clean"],
-                    rows)
+    lines += _table(["Path", f"recorded ({fr.get('section', 'Part C freeze')})", "current",
+                     "result", "worktree clean"], rows)
     lines += ["", f"All recorded freeze hashes match and are clean: **{fr['all_ok']}**.", ""]
     return lines
 

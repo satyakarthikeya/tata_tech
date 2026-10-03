@@ -142,7 +142,7 @@ def test_markdown_states_synthetic_spec_and_mode(full_report: tuple[Path, dict[s
     assert "**dev (tuned on)**" in headline
     assert "**in-sample (templates tuned on these)**" in headline
     for heading in ("## Noise check", "### Missed held-out v2 bugs — generated suite",
-                    "## Freeze verification", "recorded (Part C freeze)"):
+                    "## Freeze verification", "recorded (Part "):
         assert heading in text, heading
 
 
@@ -788,3 +788,33 @@ def test_union_from_detections_and_catalog_hook() -> None:
     assert list(cats)[:3] == ["heldout_v2", "heldout_v1", "in_sample"]
     keys = [k for k, _l, _a in run_eval.PART_D_CATALOGS]
     assert "heldout_v3" in keys  # the hook for a later fresh set (skipped while absent)
+
+
+def test_freeze_info_prefers_the_part_d_table(tmp_path: Path) -> None:
+    """When both tables exist the newest ("Part D freeze") is used; "Part C freeze" is the fallback."""
+    import subprocess
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=tmp_path,
+            capture_output=True, text=True, check=True).stdout.strip()
+
+    git("init", "-q")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "f.py").write_text("x = 1\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-q", "-m", "freeze")
+    commit, tree = git("rev-parse", "HEAD"), git("rev-parse", "HEAD:pkg")
+    old = ("## Part C freeze (old)\n\n| What | Hash |\n|---|---|\n"
+           f"| Commit | `{commit}` |\n| `pkg` tree | `{'0' * 40}` |\n\n")
+    new = ("## Part D freeze (new)\n\n| What | Hash |\n|---|---|\n"
+           f"| Commit | `{commit}` |\n| `pkg` tree | `{tree}` |\n")
+    (tmp_path / "PROGRESS.md").write_text(old + new, encoding="utf-8")
+    info = run_eval.freeze_info(tmp_path)
+    assert info["section"] == "Part D freeze" and info["all_ok"] is True
+    (tmp_path / "PROGRESS.md").write_text(old, encoding="utf-8")
+    fallback = run_eval.freeze_info(tmp_path)
+    assert fallback["section"] == "Part C freeze" and fallback["all_ok"] is False
+    (tmp_path / "PROGRESS.md").write_text("nothing here\n", encoding="utf-8")
+    missing = run_eval.freeze_info(tmp_path)
+    assert missing["all_ok"] is False and "no hash table" in missing["error"]

@@ -156,6 +156,8 @@ PART_D_DEFINITIONS: dict[str, str] = {
 """Metric definitions added in report version 4 (Part D)."""
 PROGRESS_FILE = "PROGRESS.md"
 FREEZE_SECTION = "Part C freeze"
+FREEZE_SECTIONS = ("Part D freeze", "Part C freeze")
+"""Freeze tables to look for in PROGRESS.md, newest first: the first one found is used."""
 
 
 def load_requirements(path: Path) -> list[dict[str, str]]:
@@ -260,11 +262,18 @@ def freeze_info(root: Path) -> dict[str, Any]:
 
     progress = root / PROGRESS_FILE
     recorded: dict[str, Any] = {"commit": None, "paths": {}}
+    section = FREEZE_SECTIONS[0]
     error: str | None = None
     if progress.exists():
-        recorded = parse_freeze_table(progress.read_text(encoding="utf-8"))
+        text = progress.read_text(encoding="utf-8")
+        for candidate in FREEZE_SECTIONS:
+            found = parse_freeze_table(text, candidate)
+            if found["paths"]:
+                recorded, section = found, candidate
+                break
         if not recorded["paths"]:
-            error = f"no '{FREEZE_SECTION}' hash table found in {PROGRESS_FILE}"
+            error = (f"no hash table found in {PROGRESS_FILE} under any of: "
+                     + ", ".join(f"'{c}'" for c in FREEZE_SECTIONS))
     else:
         error = f"{PROGRESS_FILE} not found"
     paths: dict[str, Any] = {}
@@ -289,8 +298,8 @@ def freeze_info(root: Path) -> dict[str, Any]:
         and all(v["matches"] and v["worktree_clean"] for v in paths.values())
         and commit_info["recorded_is_ancestor_of_head"] is True
     )
-    return {"source": f"{PROGRESS_FILE} '{FREEZE_SECTION}' table", "error": error,
-            "commit": commit_info, "paths": paths, "all_ok": all_ok}
+    return {"source": f"{PROGRESS_FILE} '{section}' table", "section": section,
+            "error": error, "commit": commit_info, "paths": paths, "all_ok": all_ok}
 
 
 def percentile_nearest_rank(values: list[float], pct: float) -> float | None:
