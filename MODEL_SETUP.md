@@ -1,16 +1,21 @@
-# MODEL_SETUP.md — enabling the deferred model features
+# MODEL_SETUP.md — enabling the model features
 
-This project was built offline (slow internet, see `SCOPE.md` "Tonight's scope").
-Everything that doesn't need a model is done and tested (`mode=mock`,
-`RETRIEVER=bm25`). This file is the exact, verified-against-code procedure to
-turn on the two deferred features later:
+This project was built offline first (see `SCOPE.md`): everything that doesn't
+need a model works in `mode=mock` with `RETRIEVER=bm25`. In Part B the two model
+features below were set up and **run for real** (Ollama 0.35.1 with
+`qwen2.5:3b-instruct-q4_K_M` on an RTX 3050 Laptop GPU with 4 GB; chromadb 1.5.9
+and fastembed 0.8.1 with `BAAI/bge-small-en-v1.5`). The `needs_model` tests
+passed (13), the retrieval comparison and the full mock vs ollama evaluation
+were run, and the results are in `outputs/eval_report.md` and
+`docs/RESULTS.md`. This file is the procedure, checked against the code, to turn
+the two features on:
 
 1. a real local LLM via **Ollama** (`LLM_MODE=ollama`)
 2. semantic retrieval via **ChromaDB + sentence-transformers** (`RETRIEVER=chroma`)
 
 Every env var, CLI flag and file path below was checked against the source
 (`uds_assistant/config.py`, `uds_assistant/llm/client.py`,
-`uds_assistant/rag/chroma.py`) — nothing here is guessed.
+`uds_assistant/rag/chroma.py`, `uds_assistant/rag/embedders.py`) — nothing here is guessed.
 
 ## 0. What the switches actually do
 
@@ -18,6 +23,7 @@ From `uds_assistant/config.py` (`get_config()`):
 
 - `LLM_MODE` — `mock` (default) or `ollama`. Invalid values fall back to `mock` with a warning.
 - `RETRIEVER` — `bm25` (default) or `chroma`. Invalid values fall back to `bm25` with a warning.
+- `EMBEDDER` — `fastembed` (default) or `sentence-transformers`. Invalid values fall back to `fastembed` with a warning.
 
 From `uds_assistant/llm/client.py`:
 
@@ -25,11 +31,12 @@ From `uds_assistant/llm/client.py`:
 - `OLLAMA_MODEL` — model tag, default `qwen2.5:3b-instruct-q4_K_M` (`ollama_model()`).
 - `get_llm()` (factory) probes `GET /api/tags` with a 2 s timeout before using `LLM_MODE=ollama`; if unreachable it warns and silently falls back to `MockLLM`. **If your eval report says `"LLM mode used: mock"` while you requested `ollama`, the probe failed — Ollama isn't actually reachable.**
 
-From `uds_assistant/rag/chroma.py`:
+From `uds_assistant/rag/chroma.py` and `uds_assistant/rag/embedders.py`:
 
-- `ChromaRetriever` lazily imports `chromadb` and `sentence_transformers` only inside `__init__` (module imports cleanly without them).
-- `DEFAULT_MODEL_NAME = "BAAI/bge-small-en-v1.5"`.
-- Uses `chromadb.PersistentClient(path=...)`; persisted DB defaults under `outputs/chroma/` (git-ignored).
+- `ChromaRetriever` imports `chromadb` and the embedder lazily (the module imports cleanly without them).
+- `DEFAULT_MODEL_NAME = "BAAI/bge-small-en-v1.5"`, embedded by `fastembed` (ONNX, CPU, no torch) by default.
+- Uses `chromadb.PersistentClient(path=...)`; the store defaults to `outputs/chroma/` (git-ignored), one collection per embedder, cosine distance, and only changed chunks are re-embedded.
+- The factory warns and falls back to BM25 if `chromadb` or the embedder is missing, or if building the store fails.
 
 ## 1. Install Ollama
 
@@ -169,31 +176,27 @@ Smoke test against the real model (5 seed requirements, writes
 python scripts/ollama_smoke.py
 ```
 
-## 3. Install the retrieval stack (ChromaDB + embeddings)
+## 3. Install the retrieval stack (ChromaDB + fastembed)
 
-**Warning:** `sentence-transformers` pulls in `torch` (hundreds of MB). Only do
-this with a fast connection.
-
-```powershell
-python -m pip install chromadb sentence-transformers
-```
+This is what was installed and run in Part B (no torch needed):
 
 ```bash
-python -m pip install chromadb sentence-transformers
+python -m pip install chromadb fastembed
 ```
+
+`fastembed` pulls in `onnxruntime`. The optional `sentence-transformers` path
+(`EMBEDDER=sentence-transformers`) would also pull in `torch` (hundreds of MB);
+it is implemented but was **not installed or run**.
 
 ### Pre-download the embedding model
 
-The first `ChromaRetriever()` construction downloads `BAAI/bge-small-en-v1.5`
-from the Hugging Face Hub via `sentence_transformers.SentenceTransformer`. To
+The first `ChromaRetriever()` construction downloads the ONNX export of
+`BAAI/bge-small-en-v1.5` (384 dimensions) through fastembed into
+`~/.cache/uds_assistant/fastembed` (override with `FASTEMBED_CACHE_PATH`). To
 pre-warm the cache explicitly:
 
-```powershell
-python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-en-v1.5')"
-```
-
 ```bash
-python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-en-v1.5')"
+python -c "from fastembed import TextEmbedding; import os; TextEmbedding('BAAI/bge-small-en-v1.5', cache_dir=os.path.expanduser('~/.cache/uds_assistant/fastembed'))"
 ```
 
 ### Switch the retriever on
@@ -201,20 +204,23 @@ python -c "from sentence_transformers import SentenceTransformer; SentenceTransf
 PowerShell:
 
 ```powershell
-$env:RETRIEVER = "chroma"
+$env:RETRIEVER = "chroma"; $env:EMBEDDER = "fastembed"
 ```
 
 bash:
 
 ```bash
-export RETRIEVER="chroma"
+export RETRIEVER="chroma" EMBEDDER="fastembed"
 ```
+
+Measured result (BM25 vs Chroma on the 19 scorable natural requirements): neither
+is clearly better, so the default stays `bm25` (`docs/RESULTS.md`).
 
 ## 4. Run the model-dependent tests
 
 Tests that need a real model/embeddings are marked `@pytest.mark.needs_model`
 and are skipped by default. Set `RUN_MODEL_TESTS=1` to run them (with Ollama
-running and `chromadb`/`sentence-transformers` installed):
+running with the model pulled, and `chromadb`/`fastembed` installed; they use the GPU and take a few minutes):
 
 PowerShell:
 
@@ -235,30 +241,39 @@ Then run the full suite once more to confirm nothing regressed:
 python -m pytest -q
 ```
 
-`needs_model` tests include `tests/rag/test_chroma.py` and, for Ollama, the real-server
+`needs_model` tests include `tests/rag/test_chroma.py`, `tests/eval/test_retrieval_compare.py` and, for Ollama, the real-server
 smoke tests in `tests/llm/test_client.py`, `tests/llm/test_client_options.py` (one
 parse call returns a valid `ParsedRequirement`) and `tests/agent/test_instrumentation.py`
 (the pipeline completes in ollama mode); the rest of the suite runs unconditionally
-against mock/bm25. To run just the LLM/agent ones: `RUN_MODEL_TESTS=1 python -m pytest -m needs_model -v tests/llm tests/agent`.
+against mock/bm25. Last recorded run: 13 passed. To run just the LLM/agent ones: `RUN_MODEL_TESTS=1 python -m pytest -m needs_model -v tests/llm tests/agent`.
 
 ## 5. Run the evaluation in Ollama mode and compare
 
+This takes about 19 minutes (about 18 minutes of it in ollama mode: roughly 30 s
+per requirement over 35 requirements) and uses the GPU. Do not run it while the
+GPU is busy with something else.
+
 ```powershell
-$env:LLM_MODE = "ollama"
-python -m uds_assistant.eval.run_eval --mode ollama --out outputs/ollama
+python -m uds_assistant.eval.run_eval --mode ollama
 ```
 
 ```bash
-LLM_MODE=ollama python -m uds_assistant.eval.run_eval --mode ollama --out outputs/ollama
+python -m uds_assistant.eval.run_eval --mode ollama
 ```
 
-This writes `outputs/ollama/eval_report.{json,md}` without touching the
-committed mock-mode report at `outputs/eval_report.{json,md}`. Compare the two
-reports' headline tables side by side — bug-detection rate, request validity,
-coverage, citation validity. If the Ollama run falls back to mock (see the
-report's `"LLM mode used"` line and `modes.mode_fallback`), the comparison is
-meaningless; fix the Ollama connection first (`ollama list` / `curl` check
-above) and re-run.
+`--mode ollama` also runs `mock` in the same invocation (`--no-mock-compare`
+turns that off), so both columns of `outputs/eval_report.{json,md}` come from the
+same inputs, templates and retriever. Ollama-mode test exports go to
+`outputs/exports/ollama/` and `outputs/generated_tests_ollama.yaml`. To keep the
+committed report untouched, add `--out <dir>`. The run exits with code 2 if any
+generated test fails the byte-provenance check. If the run falls back to mock
+(see the report's `"LLM mode used"` line, `mode_fallback`, and the fallback
+events section), the comparison is meaningless; fix the Ollama connection first
+(`ollama list` / `curl` check above) and re-run.
+
+Recorded result (the committed report): on the held-out TEST split the 3B model
+did not beat the mock on any headline metric; see `docs/RESULTS.md` and
+`outputs/eval_interpretation.md`.
 
 ## 6. Run the Streamlit UI end to end
 
@@ -286,12 +301,11 @@ will use the real model/embeddings instead of mock/bm25.
   text; this is the designed fallback behaviour (`DECISIONS.md [EVAL-MODES]`,
   `[L-FALLBACK]`), not a bug.
 - **Retriever silently used bm25 instead of chroma** — `RETRIEVER=chroma` only
-  takes effect if `chromadb`/`sentence_transformers` are importable; if either
-  import fails inside `ChromaRetriever.__init__`, the factory falls back to
-  `Bm25Retriever`. Confirm with `python -m pip show chromadb
-  sentence-transformers`.
-- **Embedding download fails/hangs** — Hugging Face Hub access is needed once
-  to cache `BAAI/bge-small-en-v1.5`; after that it's offline. If the download
+  takes effect if `chromadb` and the chosen embedder (`fastembed` by default) are
+  importable and the store builds; otherwise the factory warns and falls back to
+  `Bm25Retriever`. Confirm with `python -m pip show chromadb fastembed`.
+- **Embedding download fails/hangs** — network access is needed once to cache
+  `BAAI/bge-small-en-v1.5`; after that it's offline. If the download
   can't complete, stay on `RETRIEVER=bm25` (fully offline, already tested).
 - **`ollama pull` is slow or stalls** — resume by re-running the same pull
   command; Ollama resumes partial layers.

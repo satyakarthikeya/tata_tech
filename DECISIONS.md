@@ -250,3 +250,11 @@ This subagent was interrupted when the session ended before it could report back
   - No truncations and no fallbacks in either mode.
 
   The model did not beat mock on any headline metric, so mock stays the default.
+
+### B5 (docs, UI and final report)
+
+- **[PB-DEMO-LLM]** `scripts/demo.py --llm ollama` is the only Ollama switch in the demo. It falls back to mock with a printed warning, and the default stays mock. The demo does not read `LLM_MODE`.
+- **[PB-V2-READERS]** The demo's headline lines and the Streamlit UI now read the version 2 report, which has results for each mode. They show "n/a" when a mode or key is missing.
+- **[PB-SMOKE-FALLBACK]** `outputs/ollama_smoke.json` is the early B2 run, from before the plan-context fix. The demo uses it only as an offline fallback, and the docs say so.
+- **[PB-STALE-DOCS]** `MODEL_SETUP.md` and `docs/CODE_TOUR.md` were edited because they still described sentence-transformers and torch, and said no real model had been run.
+- **[PB-DEFAULT-MOCK]** Mock stays the default LLM. On the held-out test split the 3B model did not beat it on any headline metric.

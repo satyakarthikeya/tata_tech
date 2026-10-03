@@ -11,6 +11,16 @@ No real OEM document and no ISO 14229 text is copied anywhere in this repo —
 see `DECISIONS.md` for every design choice and `AGENT.md` for the working
 rules this project was built under.
 
+**Status.** Part A (honest evaluation: held-out bugs, natural requirements,
+SWS citations) and Part B (real-model evaluation) are both done. The local
+Qwen2.5-3B model (Ollama) and Chroma retrieval (fastembed embeddings) were run
+for real and compared with the deterministic mock. **Headline:** on the
+held-out TEST split (n=12) the 3B model did **not** beat the mock on any
+headline metric: it has higher parsed-target recall (0.880 vs 0.560) but much
+lower precision (0.512 vs 0.933), held-out bug detection is 3/12 for both, and
+it is about 120x slower (30.8 s vs 0.25 s mean per requirement). **Mock stays
+the default.** Details: [`docs/RESULTS.md`](docs/RESULTS.md).
+
 **Core principle:** the LLM handles language (parsing the requirement,
 choosing which templates/tests apply, writing the human explanation); it never
 produces a byte that reaches a test. Every byte, NRC and timing value comes
@@ -31,22 +41,38 @@ This installs the pinned pure-Python dependencies from `pyproject.toml`:
 `fastapi`, `httpx`, `langgraph`. Everything above works fully offline with no
 model and no GPU.
 
-Deferred, heavier features (a real local LLM via Ollama, semantic retrieval
-via ChromaDB + sentence-transformers) are documented step by step in
-**[`MODEL_SETUP.md`](MODEL_SETUP.md)** and are not required for anything in
-this README.
+The two heavier, optional features (a real local LLM via Ollama, semantic
+retrieval via ChromaDB + fastembed embeddings) need extra packages and a model
+download. They are documented step by step in
+**[`MODEL_SETUP.md`](MODEL_SETUP.md)**; both have been run and evaluated (see
+Evaluation), but neither is required for anything else in this README.
 
 ## Runtime switches
 
-Two environment variables, read once by `uds_assistant/config.py`:
+Environment variables, read by `uds_assistant/config.py` (first three) and
+`uds_assistant/llm/client.py` / `uds_assistant/rag/` (the rest):
 
 | Variable | Values | Default | Effect |
 |---|---|---|---|
-| `LLM_MODE` | `mock`, `ollama` | `mock` | `mock` = deterministic keyword/rule stand-in LLM, no network. `ollama` = local Qwen2.5-3B via Ollama; falls back to `mock` with a warning if unreachable. |
-| `RETRIEVER` | `bm25`, `chroma` | `bm25` | `bm25` = hand-rolled/`rank-bm25` lexical retrieval, no model. `chroma` = ChromaDB + `BAAI/bge-small-en-v1.5` embeddings; falls back to `bm25` if the packages aren't importable. |
+| `LLM_MODE` | `mock`, `ollama` | `mock` | `mock` = deterministic keyword/rule stand-in LLM, no network. `ollama` = local Qwen2.5-3B via Ollama; falls back to `mock` with a warning if unreachable (check the report's "LLM mode used" line and the fallback events). |
+| `RETRIEVER` | `bm25`, `chroma` | `bm25` | `bm25` = lexical retrieval, no model. `chroma` = ChromaDB with `BAAI/bge-small-en-v1.5` embeddings; falls back to `bm25` with a warning if the packages are missing. Chroma store: `outputs/chroma` (git-ignored). |
+| `EMBEDDER` | `fastembed`, `sentence-transformers` | `fastembed` | Embedding backend for `RETRIEVER=chroma`. `fastembed` runs the model as ONNX on the CPU (no torch). `sentence-transformers` is an optional path that is not installed here and was not run. Model cache: `~/.cache/uds_assistant/fastembed` (`FASTEMBED_CACHE_PATH` overrides). |
+| `OLLAMA_HOST` | URL | `http://localhost:11434` | Ollama server. |
+| `OLLAMA_MODEL` | model tag | `qwen2.5:3b-instruct-q4_K_M` | Model used in ollama mode. |
+| `OLLAMA_NUM_CTX` | integer | `4096` | Context window sent to Ollama. 4096 fits a 4 GB GPU and is the setting that was evaluated. The prompt-budgeting and truncation detection are sized from it. |
+| `OLLAMA_KEEP_ALIVE` | duration | `10m` | How long Ollama keeps the model loaded between calls. |
 
-An invalid value for either falls back to its default and prints a warning
-instead of crashing.
+An invalid value for `LLM_MODE`, `RETRIEVER` or `EMBEDDER` falls back to its
+default and prints a warning instead of crashing. Ollama server-side settings
+for a 4 GB GPU (flash attention, q8_0 KV cache) are in `MODEL_SETUP.md` 2b.
+
+Examples (bash; PowerShell users use `$env:NAME = "value"`):
+
+```bash
+RETRIEVER=chroma EMBEDDER=fastembed python -m uds_assistant.api   # semantic retrieval
+LLM_MODE=ollama streamlit run uds_assistant/ui/streamlit_app.py   # real local model in the UI
+python scripts/demo.py --llm ollama                               # demo with the real model (falls back to mock with a warning)
+```
 
 ## Running the tests
 
@@ -54,14 +80,22 @@ instead of crashing.
 python -m pytest -q
 ```
 
-Current result on this machine (Python 3.13.6, Windows): **834 passed, 2
-skipped** (`needs_model` tests, skipped automatically). Model-dependent tests
-are marked `@pytest.mark.needs_model`; to run them once Ollama/ChromaDB are
-set up (see `MODEL_SETUP.md`):
+Current result on this machine (Python 3.13.6, Windows, default run):
+**912 passed, 13 skipped in 218.26s (0:03:38)**. The skipped tests are the `needs_model` tests, skipped
+automatically unless `RUN_MODEL_TESTS=1`. To run them (needs Ollama running with
+the model pulled, and fastembed + chromadb installed; see `MODEL_SETUP.md`; they
+use the GPU and take a few minutes):
 
 ```bash
-RUN_MODEL_TESTS=1 python -m pytest -m needs_model -v
+RUN_MODEL_TESTS=1 python -m pytest -m needs_model -v      # bash
 ```
+
+```powershell
+$env:RUN_MODEL_TESTS = "1"; python -m pytest -m needs_model -v   # PowerShell
+```
+
+Last recorded result for that run (Part B, B4): **13 passed**.
+`RUN_MODEL_TESTS=1 pytest` (everything, model tests included) also works.
 
 Tests mirror the package layout under `tests/` (one subdirectory per package:
 `protocol/`, `rules/`, `simulator/`, `testgen/`, `rag/`, `llm/`, `agent/`,
@@ -70,30 +104,53 @@ Tests mirror the package layout under `tests/` (one subdirectory per package:
 ## Evaluation
 
 ```bash
-python -m uds_assistant.eval.run_eval --mode mock
+python -m uds_assistant.eval.run_eval --mode mock      # fast, offline
+python -m uds_assistant.eval.run_eval --mode ollama    # ~19 minutes, uses the GPU; also runs mock
 ```
 
-Regenerates `outputs/eval_report.json` and `outputs/eval_report.md`: a 7-row
+`--mode ollama` runs the mock in the same invocation (`--no-mock-compare`
+turns that off), so both columns come from the same inputs, templates and
+retriever. It exits with code 2 if any generated test fails the byte-provenance
+check. Regenerates `outputs/eval_report.json` and `outputs/eval_report.md`: a 7-row
 headline table (simulator/rules agreement, gold on clean simulator, udsoncan
 virtual-CAN sequence, **held-out bug detection**, requirement understanding,
 coverage, citation validity), plus in-sample bug detection, request validity
 and metric definitions. Add `--skip-can` to skip the udsoncan virtual-CAN check
 (fast runs only).
 
-**Headline (mock mode): held-out bug detection, generated suite 3/12 (25.0%)**,
-gold 3/12 (25.0%), union 5/12 (41.7%). The in-sample number (generated 25/26,
-96.2%) is secondary: the templates were tuned on those bugs. Ollama numbers are
-pending Part B. See `outputs/eval_report.md` for all numbers and
+**Headline (report version 2, both modes, one invocation).** On the
+held-out TEST split (n=12 requirements) the local 3B model did **not** beat the
+deterministic mock on any headline metric:
+
+| Metric | mock | ollama |
+|---|---|---|
+| Held-out bug detection, generated (12 bugs) | 3/12 (25.0%) | 3/12 (25.0%) |
+| Parsed-target precision / recall / F1 (test split) | 0.933 / 0.560 / 0.700 | 0.512 / 0.880 / 0.647 |
+| Parsed exact match (test split) | 5/12 | 4/12 |
+| Category recall / precondition recall (test split) | 67.9% / 80.0% | 64.3% / 73.3% |
+| Planner choices rejected (35 requirements) | 0 | 10 |
+| Mean wall-clock per requirement | 0.25 s | 30.8 s |
+| Byte provenance (all generated tests) | 343/343 | 158/158 |
+
+Ollama has higher parsed recall but much lower precision because it invents
+identifiers; held-out detection is equal (the same three bugs; both suites use
+the same templates); it is about 120x slower. **So mock stays the default.**
+Caveats: n=12, GPU nondeterminism of about +-0.05 F1, prompts tuned on only 8
+dev rows, and a 24-option plan shortlist forced by the 4096-token context.
+The in-sample number (generated 25/26 mock, 21/26 ollama) is secondary: the
+templates were tuned on those bugs. Retrieval: neither BM25 nor Chroma is
+clearly better on 19 queries (test split hit@3 63.6% for both), so BM25 stays
+the default. See `outputs/eval_report.md` for all numbers,
+[`docs/RESULTS.md`](docs/RESULTS.md) for the walkthrough, and
 `FINAL_REPORT.md` for the honest summary and caveats.
 
 Quick tour of the whole system: `python scripts/demo.py` (see
 [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)).
 
-Run in Ollama mode (after `MODEL_SETUP.md` steps) and compare:
-
-```bash
-LLM_MODE=ollama python -m uds_assistant.eval.run_eval --mode ollama --out outputs/ollama
-```
+The demo also has an ollama segment: `python scripts/demo.py --llm ollama`
+(about 30 s per requirement; falls back to the mock with a printed warning if
+Ollama is not reachable). The demo script has a pre-recorded fallback for when
+Ollama is slow or down.
 
 ## API
 
@@ -127,7 +184,7 @@ from a flatter path.)
 streamlit run uds_assistant/ui/streamlit_app.py
 ```
 
-An engineering UI over the same pipeline (generate → review → run → export; the bug picker offers in-sample and held-out bugs, and the evaluation section shows the headline table, the held-out per-bug table and the requirement-understanding results),
+An engineering UI over the same pipeline (generate → review → run → export; the bug picker offers in-sample and held-out bugs). The evaluation section reads `outputs/eval_report.json` and shows the side-by-side mock | ollama headline table, requirement understanding per mode on the test split, held-out detection per mode, latency, rejections/retries, fallback and truncation events, byte-provenance counts, and the BM25 vs Chroma retrieval comparison (`n/a` for anything an older report lacks),
 calling `agent.run_pipeline` / `runner.run_suite` / `export.render_*` directly
 rather than over HTTP, with its own audit trail (`outputs/ui_audit.sqlite`).
 
@@ -155,11 +212,11 @@ uds_assistant/
   simulator/  Independent ECU implementation (does not import rules/), bug catalog,
               in-process + virtual-CAN/ISO-TP transports
   testgen/    TestCase model, 23 parameterized templates, gold-test execution
-  rag/        BM25 (offline) + Chroma (lazy, needs_model) retrieval, citations
-  llm/        Pluggable LLM: mock (deterministic) and ollama (local Qwen2.5-3B)
+  rag/        BM25 (offline) + Chroma/fastembed retrieval, retrieval comparison, citations
+  llm/        Pluggable LLM: mock (deterministic) and ollama (local Qwen2.5-3B); all prompts in llm/prompts.py (frozen at B3 revision 8)
   agent/      LangGraph pipeline (+ plain-Python fallback) over shared node functions
   runner/     Executes test suites on the simulator, records pass/fail + timing
-  eval/       Metrics + report generation (outputs/eval_report.{json,md})
+  eval/       Metrics + report generation (outputs/eval_report.{json,md}), byte-provenance check
   export/     pytest/udsoncan and CAPL exporters
   store/      SQLite audit trail (runs, tests, decisions, results)
   api/        FastAPI service
@@ -173,7 +230,10 @@ data/
 docs/
   behaviour_contract.md   plain-language ECU behaviour spec the simulator is built from
 outputs/
-  eval_report.{json,md}            current (mock, template set v2) evaluation report
+  eval_report.{json,md}            current evaluation report: mock and ollama side by side (report version 2, template set v2)
+  eval_interpretation.md           written interpretation of the comparison
+  ollama_smoke.json                early 5-requirement real-model smoke run (B2, before the plan-context fix)
+  prompt_tuning/                   dev-split-only prompt tuning revisions (B3)
   eval_report_baseline_v1.{json,md} evaluation report from template set v1, for before/after
 tests/      mirrors uds_assistant/ package-for-package
 ```
@@ -264,11 +324,12 @@ circular by construction.
 - [`AGENT.md`](AGENT.md) — the working rules this repo was built under
 - [`PROGRESS.md`](PROGRESS.md) — phase-by-phase build log
 - [`DECISIONS.md`](DECISIONS.md) — every non-obvious decision and deviation
-- [`MODEL_SETUP.md`](MODEL_SETUP.md) — exact steps to enable Ollama + ChromaDB
+- [`MODEL_SETUP.md`](MODEL_SETUP.md) — exact steps to enable Ollama + ChromaDB/fastembed (both verified by running them in Part B)
 - [`docs/CODE_TOUR.md`](docs/CODE_TOUR.md) — guided tour of the code
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — architecture
-- [`docs/RESULTS.md`](docs/RESULTS.md) — results walkthrough
-- [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — demo script (`python scripts/demo.py`)
+- [`docs/RESULTS.md`](docs/RESULTS.md) — results walkthrough, including the mock vs ollama comparison
+- [`outputs/eval_interpretation.md`](outputs/eval_interpretation.md) — where the LLM helped and where it did not
+- [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — demo script (`python scripts/demo.py`), with an optional ollama segment and a recorded fallback
 - [`docs/SWS_DISAGREEMENTS.md`](docs/SWS_DISAGREEMENTS.md) — rules engine vs AUTOSAR Dcm SWS (D1–D9, documented, not fixed)
 - [`docs/RECONCILIATION.md`](docs/RECONCILIATION.md) — search for an older doc set (none found)
-- [`FINAL_REPORT.md`](FINAL_REPORT.md) — honest done/untested/not-done breakdown, test counts, eval numbers, limitations, next steps
+- [`FINAL_REPORT.md`](FINAL_REPORT.md) — honest done/untested/not-done breakdown, Part A and Part B changes, test counts, eval numbers, limitations, next steps

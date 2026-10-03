@@ -136,7 +136,7 @@ Quick glossary:
 **Data in/out.** In: system prompt + JSON context + a pydantic schema. Out: a validated instance of that schema.
 
 **Likely questions**
-1. *Have you run a real model?* No. Everything reported is `mode=mock`; Ollama (Qwen2.5-3B) is pending Part B.
+1. *Have you run a real model?* Yes, in Part B: Qwen2.5-3B (Q4_K_M) via Ollama, compared with the mock on the same inputs. On the held-out test split it did not beat the mock on any headline metric (see `docs/RESULTS.md`); the mock stays the default.
 2. *Can the LLM inject bytes?* No: its output is re-validated against a schema with no byte fields, and plan choices must be registered template ids.
 3. *What if Ollama is down?* The config falls back to mock with a warning.
 
@@ -249,7 +249,7 @@ Quick glossary:
 
 ## config.py
 
-**What it does.** The only runtime switches: `LLM_MODE=mock|ollama` and `RETRIEVER=bm25|chroma`, read from environment variables; invalid values fall back to defaults with a warning.
+**What it does.** The runtime switches: `LLM_MODE=mock|ollama`, `RETRIEVER=bm25|chroma` and `EMBEDDER=fastembed|sentence-transformers`, read from environment variables (the Ollama client also reads `OLLAMA_HOST`, `OLLAMA_MODEL`, `OLLAMA_NUM_CTX`, `OLLAMA_KEEP_ALIVE`); invalid values fall back to defaults with a warning.
 
 **Key code**
 - [config.py](../uds_assistant/config.py): `Config`, `get_config`

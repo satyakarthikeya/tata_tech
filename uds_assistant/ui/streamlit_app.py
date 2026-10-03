@@ -7,7 +7,7 @@ Run with::
 Flow: enter a plain-English requirement -> generate cited, validated test
 cases -> review them (categories, request/response hex, citations, review
 status) -> run them on the ECU simulator, optionally with injected bugs ->
-inspect results -> view the mock-mode evaluation report -> export to
+inspect results -> view the mock vs ollama evaluation report -> export to
 pytest/CAPL.
 
 This module calls the pipeline directly (no network hop to the FastAPI
@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import streamlit as st
@@ -201,6 +202,15 @@ def _run_section(backend: dict[str, object]) -> None:
         )
 
 
+MODES = ("mock", "ollama")
+NA = "n/a"
+HEADLINE_NOTE = (
+    "On the held-out TEST split the local 3B model (ollama) did NOT beat the deterministic "
+    "mock on any headline metric: higher parsed-target recall but much lower precision, "
+    "held-out bug detection equal, and about 120x slower. Mock stays the default."
+)
+
+
 def _pct(rate: object) -> str:
     return f"{rate * 100:.1f}%" if isinstance(rate, (int, float)) else "?"
 
@@ -208,114 +218,263 @@ def _pct(rate: object) -> str:
 def _frac(block: object) -> str:
     """``hit/all (pct)`` from a detection block, ``n/a`` if keys are missing."""
     if not isinstance(block, dict) or "detected" not in block:
-        return "n/a"
+        return NA
     return f"{block['detected']}/{block.get('bugs', '?')} ({_pct(block.get('rate'))})"
 
 
-def _headline_rows(report: dict, block: dict) -> list[dict[str, str]]:
-    """The 7-row headline table, built defensively from whatever the report holds."""
+def _get(obj: object, *path: str, default: object = NA) -> object:
+    """Nested dict lookup that returns ``default`` instead of raising."""
+    cur = obj
+    for key in path:
+        if not isinstance(cur, dict) or key not in cur:
+            return default
+        cur = cur[key]
+    return cur
+
+
+def _mode_blocks(report: dict) -> dict[str, dict]:
+    """Per-mode result blocks (``{}`` for a mode the report does not hold)."""
+    modes = report.get("modes") or {}
+    out: dict[str, dict] = {}
+    for m in MODES:
+        blk = modes.get(m)
+        ok = isinstance(blk, dict) and blk.get("status", "completed") == "completed"
+        out[m] = blk if ok else {}
+    return out
+
+
+def _understanding_text(block: dict) -> str:
+    und = ((block.get("requirement_understanding") or {}).get("splits") or {}).get("test") or {}
+    if not und:
+        return NA
+    n = und.get("requirements", "?")
+    tp, te = und.get("targets_parsed", {}), und.get("targets_exercised", {})
+    cat, pre, fb = und.get("categories", {}), und.get("preconditions", {}), und.get("fallback", {})
+    return (
+        f"test split (n={n}): target exact match parsed {tp.get('exact', '?')}/{n} "
+        f"(F1 {tp.get('f1', '?')}), exercised {te.get('exact', '?')}/{n} (F1 {te.get('f1', '?')}); "
+        f"category recall {_pct(cat.get('micro_recall'))} micro / {_pct(cat.get('macro_recall'))} macro; "
+        f"precondition recall {_pct(pre.get('micro_recall'))} micro / "
+        f"{_pct(pre.get('macro_recall'))} macro; fallback/nothing {fb.get('count', '?')}/{n}"
+    )
+
+
+def _heldout_text(block: dict) -> str:
+    held = block.get("heldout_bug_detection") or {}
+    if not held:
+        return NA
+    return (
+        f"generated {_frac(held.get('generated'))} (HEADLINE) | gold {_frac(held.get('gold'))} | "
+        f"union {_frac(held.get('union'))}"
+    )
+
+
+def _coverage_text(block: dict) -> str:
+    cov = block.get("coverage") or {}
+    cats = cov.get("category_totals") or {}
+    if not cats:
+        return NA
+    return (
+        ", ".join(f"{k} {v}" for k, v in cats.items())
+        + f"; requirements with >=1 test {cov.get('requirements_with_tests', '?')}/"
+        f"{cov.get('requirements', '?')} ({_pct(cov.get('rate'))})"
+    )
+
+
+def _citation_text(block: dict) -> str:
+    cit = block.get("citation_validity") or {}
+    if "valid" not in cit:
+        return NA
+    return f"{cit.get('valid')}/{cit.get('citations')} ({_pct(cit.get('rate'))})"
+
+
+def _headline_rows(report: dict, blocks: dict[str, dict] | None = None) -> list[dict[str, str]]:
+    """The 7-row headline table with one column per mode, built defensively."""
+    blocks = blocks if blocks is not None else _mode_blocks(report)
     agree = report.get("simulator_rules_agreement") or {}
     can = report.get("udsoncan_virtual_can") or {}
-    held = block.get("heldout_bug_detection") or {}
-    und = ((block.get("requirement_understanding") or {}).get("splits") or {}).get("test") or {}
-    cov = block.get("coverage") or {}
-    cit = block.get("citation_validity") or {}
-    cats = cov.get("category_totals") or {}
-    if held:
-        held_txt = (
-            f"generated {_frac(held.get('generated'))} (HEADLINE) | "
-            f"gold {_frac(held.get('gold'))} | union {_frac(held.get('union'))}"
-        )
-    else:
-        held_txt = "n/a (report predates the held-out set)"
-    if und:
-        n = und.get("requirements", "?")
-        tp = und.get("targets_parsed", {})
-        te = und.get("targets_exercised", {})
-        und_txt = (
-            f"test split n={n}: parsed exact {tp.get('exact', '?')}/{n} (F1 {tp.get('f1', '?')}), "
-            f"exercised exact {te.get('exact', '?')}/{n} (F1 {te.get('f1', '?')})"
-        )
-    else:
-        und_txt = "n/a (report predates the natural-requirements set)"
     agree_txt = (
-        f"{agree.get('agreed', 'n/a')}/{agree.get('requests', 'n/a')} ({_pct(agree.get('rate'))})"
+        f"{agree.get('agreed', NA)}/{agree.get('requests', NA)} ({_pct(agree.get('rate'))})"
         if agree
-        else "n/a"
-    )
-    cit_txt = (
-        f"{cit.get('valid', 'n/a')}/{cit.get('citations', 'n/a')} ({_pct(cit.get('rate'))})"
-        if cit
-        else "n/a"
+        else NA
     )
     gold_txt = (
-        f"{report.get('gold_clean_passed', 'n/a')}/{report.get('gold_tests', '?')} "
+        f"{report.get('gold_clean_passed', NA)}/{report.get('gold_tests', '?')} "
         f"({_pct(report.get('gold_clean_pass_rate'))})"
     )
-    return [
-        {"Metric": "1. Simulator <-> rules-engine agreement", "Result": agree_txt},
-        {"Metric": "2. Gold tests passing on bug-free simulator", "Result": gold_txt},
-        {"Metric": "3. udsoncan virtual-CAN sequence", "Result": str(can.get("status", "n/a")).upper()},
-        {"Metric": "4. Held-out bug detection (12 bugs)", "Result": held_txt},
-        {"Metric": "5. Requirement understanding (natural requirements)", "Result": und_txt},
-        {
-            "Metric": "6. Coverage (seed requirements, tests per category)",
-            "Result": ", ".join(f"{k} {v}" for k, v in cats.items()) or "n/a",
-        },
-        {"Metric": "7. Citation validity", "Result": cit_txt},
+    can_txt = str(can.get("status", NA)).upper() if can else NA
+    rows: list[dict[str, str]] = []
+
+    def independent(metric: str, text: str) -> None:
+        r = {"Metric": metric}
+        first = True
+        for m in MODES:
+            if not blocks.get(m):
+                r[m] = NA
+            elif first:
+                r[m] = text
+                first = False
+            else:
+                r[m] = "same (LLM-independent)"
+        rows.append(r)
+
+    def dependent(metric: str, fn: Callable[[dict], str]) -> None:
+        r = {"Metric": metric}
+        for m in MODES:
+            r[m] = fn(blocks[m]) if blocks.get(m) else NA
+        rows.append(r)
+
+    independent("1. Simulator <-> rules-engine agreement", agree_txt)
+    independent("2. Gold tests passing on bug-free simulator", gold_txt)
+    independent("3. udsoncan virtual-CAN sequence", can_txt)
+    dependent("4. Held-out bug detection (12 bugs)", _heldout_text)
+    dependent("5. Requirement understanding (natural requirements)", _understanding_text)
+    dependent("6. Coverage (seed requirements, tests per category)", _coverage_text)
+    dependent("7. Citation validity", _citation_text)
+    return rows
+
+
+def _sum_pipeline(block: dict, key: str) -> object:
+    vals = [_get(block, p, key, default=None) for p in ("pipeline", "pipeline_natural")]
+    if any(not isinstance(v, (int, float)) for v in vals):
+        return NA
+    return int(sum(vals))  # type: ignore[arg-type]
+
+
+def _latency_text(block: dict) -> str:
+    w = _get(block, "latency", "per_requirement_wall_s", "all", default=None)
+    if not isinstance(w, dict):
+        return NA
+    return f"mean {w.get('mean', '?')} s / p95 {w.get('p95', '?')} s (max {w.get('max', '?')} s)"
+
+
+def _provenance_text(block: dict) -> str:
+    prov = block.get("provenance") or {}
+    if "passed" not in prov:
+        return NA
+    return f"{prov.get('passed')}/{prov.get('checked')} passed"
+
+
+def _events_text(block: dict, kind: str) -> str:
+    ev = _get(block, "events", kind, default=None)
+    return str(len(ev)) if isinstance(ev, list) else NA
+
+
+def _comparison_rows(blocks: dict[str, dict]) -> list[dict[str, str]]:
+    """Side-by-side rows for the mock vs ollama comparison."""
+    spec: list[tuple[str, Callable[[dict], str]]] = [
+        ("Requirement understanding, TEST split", _understanding_text),
+        ("Held-out bug detection (12 bugs)", _heldout_text),
+        ("Generated tests (seed requirements)", lambda b: str(_get(b, "generated_tests", "count"))),
+        (
+            "In-sample detection, generated (26 bugs; tuned on)",
+            lambda b: _frac(_get(b, "bug_detection", "generated", default=None)),
+        ),
+        ("Planner choices rejected (35 requirements)", lambda b: str(_sum_pipeline(b, "rejected"))),
+        ("Re-plans / retries", lambda b: str(_sum_pipeline(b, "retries"))),
+        ("Fallback-to-mock events", lambda b: _events_text(b, "fallback")),
+        ("Prompt truncation events", lambda b: _events_text(b, "truncation")),
+        ("Wall-clock per requirement", _latency_text),
+        ("Byte provenance (all generated tests)", _provenance_text),
+        ("Citation validity", _citation_text),
     ]
+    rows = []
+    for label, fn in spec:
+        r = {"Metric": label}
+        for m in MODES:
+            r[m] = fn(blocks[m]) if blocks.get(m) else NA
+        rows.append(r)
+    return rows
 
 
-def _heldout_section(block: dict) -> None:
-    held = block.get("heldout_bug_detection")
-    if not held:
+def _retrieval_rows(report: dict) -> list[dict[str, object]]:
+    backends = _get(report, "retrieval_comparison", "backends", default=None)
+    if not isinstance(backends, dict):
+        return []
+    rows: list[dict[str, object]] = []
+    for split in ("dev", "test", "all"):
+        for name, be in backends.items():
+            sp = _get(be, "splits", split, default=None)
+            if not isinstance(sp, dict):
+                continue
+            rows.append(
+                {
+                    "split": split,
+                    "backend": name,
+                    "queries": sp.get("queries"),
+                    "hit@1": _pct(sp.get("hit_at_1")),
+                    "hit@3": _pct(sp.get("hit_at_3")),
+                    "MRR": sp.get("mrr"),
+                    "citation validity (top 3)": _pct(sp.get("citation_validity")),
+                }
+            )
+    return rows
+
+
+def _heldout_section(blocks: dict[str, dict]) -> None:
+    present = {
+        m: b["heldout_bug_detection"] for m, b in blocks.items() if b.get("heldout_bug_detection")
+    }
+    if not present:
         st.caption("Held-out results not in this report (older report).")
         return
     st.subheader("Held-out bug detection (bugs not seen when templates/gold were written)")
-    st.caption(held.get("scope", ""))
-    gen, gold = held.get("generated", {}), held.get("gold", {})
-    analysis = held.get("analysis", {})
+    first = next(iter(present.values()))
+    st.caption(first.get("scope", ""))
+    analysis = first.get("analysis", {})
     triggers = analysis.get("triggers", {})
-    reasons_gen = {m["bug_id"]: m["reason"] for m in analysis.get("generated", {}).get("missed", [])}
     reasons_gold = {m["bug_id"]: m["reason"] for m in analysis.get("gold", {}).get("missed", [])}
-    gold_by_id = {b["bug_id"]: b for b in gold.get("per_bug", [])}
+    gold_by_id = {b["bug_id"]: b for b in first.get("gold", {}).get("per_bug", [])}
+    per_mode = {
+        m: {b["bug_id"]: b for b in h.get("generated", {}).get("per_bug", [])}
+        for m, h in present.items()
+    }
+    reasons_gen = {
+        m: {
+            x["bug_id"]: x["reason"]
+            for x in h.get("analysis", {}).get("generated", {}).get("missed", [])
+        }
+        for m, h in present.items()
+    }
     rows = []
-    for b in gen.get("per_bug", []):
-        g = gold_by_id.get(b["bug_id"], {})
-        rows.append(
-            {
-                "bug": b["bug_id"],
-                "category": b.get("category", ""),
-                "generated": "yes" if b.get("detected") else "NO",
-                "gold": "yes" if g.get("detected") else "NO",
-                "trigger needed": triggers.get(b["bug_id"], ""),
-                "generated missed because": reasons_gen.get(b["bug_id"], ""),
-                "gold missed because": reasons_gold.get(b["bug_id"], ""),
-            }
-        )
+    for b in first.get("generated", {}).get("per_bug", []):
+        bid = b["bug_id"]
+        row: dict[str, object] = {"bug": bid, "category": b.get("category", "")}
+        for m in MODES:
+            if m in per_mode:
+                row[f"{m} generated"] = "yes" if per_mode[m].get(bid, {}).get("detected") else "NO"
+            else:
+                row[f"{m} generated"] = NA
+        row["gold"] = "yes" if gold_by_id.get(bid, {}).get("detected") else "NO"
+        row["trigger needed"] = triggers.get(bid, "")
+        for m in per_mode:
+            row[f"{m} missed because"] = reasons_gen[m].get(bid, "")
+        row["gold missed because"] = reasons_gold.get(bid, "")
+        rows.append(row)
     st.dataframe(rows, use_container_width=True)
     st.caption(
-        f"generated {_frac(gen)}, gold {_frac(gold)}, union {_frac(held.get('union'))}. "
-        "Reasons come from a static trigger analysis (reporting only)."
+        " ; ".join(
+            f"{m}: generated {_frac(h.get('generated'))}, gold {_frac(h.get('gold'))}, "
+            f"union {_frac(h.get('union'))}"
+            for m, h in present.items()
+        )
+        + ". Reasons come from a static trigger analysis (reporting only)."
     )
 
 
-def _understanding_section(block: dict) -> None:
-    und = block.get("requirement_understanding")
-    if not und:
-        st.caption("Requirement-understanding results not in this report (older report).")
-        return
-    st.subheader("Requirement understanding (natural-language requirements)")
-    st.caption(f"Source: {und.get('source', '?')}. The TEST split is the main number.")
-    split_rows = []
+def _split_rows(und: dict, mode: str) -> list[dict[str, object]]:
+    rows = []
     for name, sp in (und.get("splits") or {}).items():
         tp, te = sp.get("targets_parsed", {}), sp.get("targets_exercised", {})
         cat, pre, fb = sp.get("categories", {}), sp.get("preconditions", {}), sp.get("fallback", {})
-        split_rows.append(
+        rows.append(
             {
+                "mode": mode,
                 "split": name,
                 "n": sp.get("requirements"),
                 "parsed exact": f"{tp.get('exact')}/{sp.get('requirements')}",
+                "parsed P": tp.get("precision"),
+                "parsed R": tp.get("recall"),
                 "parsed F1": tp.get("f1"),
                 "exercised exact": f"{te.get('exact')}/{sp.get('requirements')}",
                 "exercised F1": te.get("f1"),
@@ -324,53 +483,98 @@ def _understanding_section(block: dict) -> None:
                 "fallback / nothing": fb.get("count"),
             }
         )
+    return rows
+
+
+def _understanding_section(blocks: dict[str, dict]) -> None:
+    present = {
+        m: b["requirement_understanding"]
+        for m, b in blocks.items()
+        if b.get("requirement_understanding")
+    }
+    if not present:
+        st.caption("Requirement-understanding results not in this report (older report).")
+        return
+    st.subheader("Requirement understanding (natural-language requirements)")
+    first = next(iter(present.values()))
+    st.caption(f"Source: {first.get('source', '?')}. The TEST split is the main number.")
+    split_rows: list[dict[str, object]] = []
+    for m, und in present.items():
+        split_rows.extend(_split_rows(und, m))
     st.dataframe(split_rows, use_container_width=True)
+    by_mode = {m: {r.get("id"): r for r in u.get("per_requirement", [])} for m, u in present.items()}
     req_rows = []
-    for r in und.get("per_requirement", []):
-        pa, ex = r.get("parsed", {}), r.get("exercised", {})
-        req_rows.append(
-            {
-                "req": r.get("id"),
-                "split": f"{r.get('split')}" + (" (ambiguous)" if r.get("ambiguous") else ""),
-                "tests": r.get("tests"),
-                "label targets": ", ".join(r.get("label_targets", [])),
-                "parsed exact": pa.get("exact"),
-                "parsed missed": ", ".join(pa.get("missed", [])),
-                "parsed extra": ", ".join(pa.get("extra", [])),
-                "exercised exact": ex.get("exact"),
-                "exercised missed": ", ".join(ex.get("missed", [])),
-                "exercised extra (n)": ex.get("fp"),
-                "categories missed": ", ".join(r.get("categories", {}).get("missed", [])),
-                "preconditions missed": ", ".join(r.get("preconditions", {}).get("missed", [])),
-                "fallback": "; ".join(r.get("fallback_reasons", [])),
-            }
-        )
+    for r in first.get("per_requirement", []):
+        rid = r.get("id")
+        row: dict[str, object] = {
+            "req": rid,
+            "split": f"{r.get('split')}" + (" (ambiguous)" if r.get("ambiguous") else ""),
+            "label targets": ", ".join(r.get("label_targets", [])),
+        }
+        for m in present:
+            x = by_mode[m].get(rid, {})
+            pa = x.get("parsed", {})
+            row[f"{m} parsed exact"] = pa.get("exact")
+            row[f"{m} parsed missed"] = ", ".join(pa.get("missed", []))
+            row[f"{m} parsed extra"] = ", ".join(pa.get("extra", []))
+            row[f"{m} tests"] = x.get("tests")
+            row[f"{m} categories missed"] = ", ".join(x.get("categories", {}).get("missed", []))
+        req_rows.append(row)
     st.dataframe(req_rows, use_container_width=True)
 
 
+def _comparison_section(report: dict, blocks: dict[str, dict]) -> None:
+    st.subheader("Mock vs Ollama: side by side")
+    if not blocks.get("ollama") or not blocks.get("mock"):
+        st.caption(
+            "This report does not hold both modes (older report); the comparison is n/a. "
+            "Regenerate with `python -m uds_assistant.eval.run_eval --mode ollama` "
+            "(needs a local Ollama)."
+        )
+    else:
+        st.info(HEADLINE_NOTE)
+    st.table(_comparison_rows(blocks))
+    st.caption(
+        f"Model: {_get(report, 'llm_settings', 'model')}, num_ctx "
+        f"{_get(report, 'llm_settings', 'num_ctx')}. Prompts were tuned on the 8 dev rows only; "
+        "the test split has n=12 and GPU decoding is nondeterministic (about +-0.05 F1), "
+        "so small gaps are within noise."
+    )
+    st.subheader("Retrieval comparison: BM25 vs Chroma (bge-small-en-v1.5 via fastembed)")
+    rrows = _retrieval_rows(report)
+    if rrows:
+        st.dataframe(rrows, use_container_width=True)
+        st.caption(
+            "19 of 20 natural requirements scored. Neither backend is clearly better; "
+            "the default stays BM25."
+        )
+    else:
+        st.caption("Retrieval comparison not in this report (n/a; older report).")
+
+
 def _eval_section() -> None:
-    st.header("4. Evaluation report (mock mode)")
+    st.header("4. Evaluation report (mock vs ollama)")
     path = Path(os.environ.get("UDS_EVAL_REPORT") or REPO_ROOT / "outputs" / "eval_report.json")
     if not path.exists():
         st.caption(f"No report yet at {path}. Run `python -m uds_assistant.eval.run_eval`.")
         return
     report = json.loads(path.read_text(encoding="utf-8"))
-    block = (report.get("modes") or {}).get(report.get("actual_mode"), {})
+    blocks = _mode_blocks(report)
     st.subheader("Headline metrics")
-    st.table(_headline_rows(report, block))
+    st.table(_headline_rows(report, blocks))
     st.caption(
-        "LLM-dependent rows are for mock mode; ollama numbers are pending Part B. "
+        "Both columns come from one invocation on the same inputs, templates and retriever. "
         "The oracle self-consistency check is circular and lives in the report appendix."
     )
-    det = block.get("bug_detection", {})
+    _comparison_section(report, blocks)
+    base = blocks.get("mock") or next((b for b in blocks.values() if b), {})
+    det = base.get("bug_detection", {})
     col1, col2, col3 = st.columns(3)
-    col1.metric("Generated tests", block.get("generated_tests", {}).get("count", "?"))
-    col2.metric(
-        "In-sample bugs (generated; templates tuned on these)", _frac(det.get("generated"))
-    )
+    col1.metric("Generated tests (mock)", base.get("generated_tests", {}).get("count", "?"))
+    col2.metric("In-sample bugs (generated, mock; tuned on)", _frac(det.get("generated")))
     col3.metric("In-sample bugs (gold)", _frac(det.get("gold")))
-    _heldout_section(block)
-    _understanding_section(block)
+    _heldout_section(blocks)
+    _understanding_section(blocks)
     st.caption(f"Report timestamp: {report.get('timestamp')}; spec is synthetic.")
     with st.expander("Full report JSON"):
         st.json(report)

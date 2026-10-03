@@ -8,9 +8,12 @@ Run from the repo root::
     python scripts/demo.py --bug write_length_off_by_one
     python scripts/demo.py --offline            # skip the pipeline, use outputs/generated_tests.yaml
     python scripts/demo.py --full-eval          # also re-run the full evaluation (~35 s)
+    python scripts/demo.py --llm ollama         # local Qwen2.5-3B (~30 s per requirement)
 
-Uses only public APIs. The LLM is always the deterministic mock; nothing is written
-to ``outputs/`` (the optional full evaluation writes to a temporary directory).
+Uses only public APIs. The LLM defaults to the deterministic mock. ``--llm ollama``
+uses ``get_llm``; if Ollama is unreachable it prints a warning and continues with the
+mock. Nothing is written to ``outputs/`` (the optional full evaluation writes to a
+temporary directory and always uses the mock).
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ import json
 import sys
 import tempfile
 import time
+import warnings
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -88,29 +92,59 @@ def show_failure(test: TestCase, spec, bug: str) -> bool:
     return True
 
 
+def _und_line(label: str, ru: dict) -> str:
+    return (
+        f"  {label:<7} parsed exact {ru['target_exact_parsed']}/{ru['requirements']}, "
+        f"P/R/F1 {ru['target_precision_parsed']:.3f}/{ru['target_recall_parsed']:.3f}/"
+        f"{ru['target_f1_parsed']:.3f}"
+    )
+
+
 def headline_lines() -> None:
-    """Print the held-out headline numbers from the committed eval report."""
+    """Print the headline numbers (mock and ollama) from the committed eval report."""
     path = ROOT / "outputs" / "eval_report.json"
     if not path.exists():
         print("outputs/eval_report.json not found (run: python -m uds_assistant.eval.run_eval)")
         return
-    h = json.loads(path.read_text(encoding="utf-8"))["headline"]
+    report = json.loads(path.read_text(encoding="utf-8"))
+    h = report["headline"]
     ho = h["heldout_bug_detection"]
-    ru = h["requirement_understanding"]["mock"]
+    ru = h["requirement_understanding"]
     agr = h["simulator_rules_agreement"]
-    print(f"Mode: {h['mode']} (ollama: {h['other_mode_status']})")
+    by_mode = ho.get("by_mode") or {}
+    modes = [m for m in ("mock", "ollama") if m in by_mode or (m in ru and isinstance(ru[m], dict))]
+    print(f"Modes in this report: {', '.join(modes) or h.get('mode')}")
     print(f"Simulator <-> rules agreement : {agr['agreed']}/{agr['total']}")
     print(f"Gold tests on clean simulator : {h['gold_clean_pass']['passed']}/{h['gold_clean_pass']['total']}")
     print(f"udsoncan virtual-CAN sequence : {h['udsoncan_virtual_can']['status'].upper()}")
-    print(
-        f"HELD-OUT bug detection ({ho['bugs']} bugs): generated "
-        f"{ho['generated']['detected']}/{ho['bugs']} ({ho['generated']['rate']:.1%}), "
-        f"gold {ho['gold']['detected']}/{ho['bugs']}, union {ho['union']['detected']}/{ho['bugs']}"
-    )
-    print(
-        f"Requirement understanding (test split n={ru['requirements']}): parsed exact "
-        f"{ru['target_exact_parsed']}/{ru['requirements']}, F1 {ru['target_f1_parsed']:.3f}"
-    )
+    print(f"HELD-OUT bug detection ({ho['bugs']} bugs):")
+    for m in modes:
+        b = by_mode.get(m) or ho
+        print(
+            f"  {m:<7} generated {b['generated']['detected']}/{ho['bugs']} "
+            f"({b['generated']['rate']:.1%}), gold {b['gold']['detected']}/{ho['bugs']}, "
+            f"union {b['union']['detected']}/{ho['bugs']}"
+        )
+    first = ru.get(modes[0]) if modes else None
+    print(f"Requirement understanding (test split n={first['requirements'] if first else '?'}):")
+    for m in modes:
+        if isinstance(ru.get(m), dict):
+            print(_und_line(m, ru[m]))
+    lat = ((report.get("modes") or {}).get("ollama") or {}).get("latency", {})
+    lat_m = ((report.get("modes") or {}).get("mock") or {}).get("latency", {})
+    w = (lat.get("per_requirement_wall_s") or {}).get("all")
+    wm = (lat_m.get("per_requirement_wall_s") or {}).get("all")
+    if w and wm:
+        print(
+            f"Latency per requirement (mean / p95): mock {wm['mean']:.2f} s / {wm['p95']:.2f} s, "
+            f"ollama {w['mean']:.1f} s / {w['p95']:.1f} s"
+        )
+    if "ollama" in modes:
+        print(
+            "Result: on the held-out TEST split the local 3B model did NOT beat the mock on any "
+            "headline metric (higher parsed recall, much lower precision; held-out detection "
+            "equal; much slower), so mock stays the default."
+        )
     print("Honest note: the held-out number is the real one; in-sample 25/26 was optimistic.")
 
 
@@ -128,6 +162,12 @@ def main(argv: list[str] | None = None) -> int:
         help="use outputs/generated_tests.yaml instead of running the pipeline",
     )
     p.add_argument("--full-eval", action="store_true", help="also re-run the full evaluation")
+    p.add_argument(
+        "--llm",
+        choices=("mock", "ollama"),
+        default="mock",
+        help="LLM backend for section [2] (default mock; ollama falls back to mock with a warning)",
+    )
     args = p.parse_args(argv)
 
     for stream in (sys.stdout, sys.stderr):
@@ -147,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
         f"DIDs {len(spec.dids)}, routines {len(spec.routines)}, DTCs {len(spec.dtcs)}"
     )
 
-    header(2, "Pick a requirement and generate tests (mock LLM)")
+    header(2, f"Pick a requirement and generate tests ({args.llm} LLM)")
     if args.text:
         req_id, req_text = "REQ-FREE", args.text
     else:
@@ -164,9 +204,18 @@ def main(argv: list[str] | None = None) -> int:
         all_tests = load_tests(ROOT / "outputs" / "generated_tests.yaml")
         tests = [t for t in all_tests if req_id in t.requirement_ids]
     else:
-        cfg = Config(llm_mode="mock", retriever="bm25")
+        cfg = Config(llm_mode=args.llm, retriever="bm25")
         retriever = get_retriever(cfg, chunks=build_corpus(ROOT))
-        result = run_pipeline(req_text, req_id, spec, get_llm(cfg), retriever)
+        if args.llm == "ollama":
+            print("(ollama mode: about 30 s per requirement on a 4 GB GPU; please wait)")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            llm = get_llm(cfg)
+        if args.llm == "ollama" and llm.name != "ollama":
+            msgs = [str(w.message) for w in caught] or ["Ollama unavailable"]
+            print(f"WARNING: {msgs[0]}")
+            print("WARNING: continuing with the deterministic mock LLM, NOT ollama.")
+        result = run_pipeline(req_text, req_id, spec, llm, retriever)
         tests = result.tests
         print(
             f"Engine={result.engine} llm={result.llm} plan attempts={result.plan_attempts} "

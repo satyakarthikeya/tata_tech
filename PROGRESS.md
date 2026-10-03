@@ -524,3 +524,14 @@ B4 must not change any of these.
 | Mean latency per requirement | 0.25 s | 30.8 s |
 
 The ollama model did not beat mock on any headline metric. Its parsed-target recall is higher, but its precision is much lower because it invents identifiers.
+
+## B5 — finish (2026-10-03T15:38:27+05:30)
+
+- Updated the docs (RESULTS, DEMO_SCRIPT, CODE_TOUR, README, PROJECT, MODEL_SETUP, FINAL_REPORT) and the Streamlit UI.
+- The UI now shows the mock vs ollama comparison, and the demo has an Ollama segment with a mock fallback.
+- B5 used no GPU and no Ollama.
+- Orchestrator checks:
+  - ruff: clean.
+  - pytest, default: 912 passed, 13 skipped.
+  - needs_model: 13 passed, from the B4 run (not re-run after B5, which only changed docs, UI and demo code).
+  - Frozen trees: llm `3559f7e…`, agent `1d678f0…` and testgen `9a121b2…` are unchanged; `git diff` over the frozen code, data and outputs is empty.

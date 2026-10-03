@@ -146,3 +146,58 @@ def test_app_tolerates_older_report(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     at.run()
     assert not at.exception
     assert any("older report" in c.value for c in at.caption)
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_app_shows_mock_vs_ollama_comparison() -> None:
+    """The committed report (version 2) must render both modes side by side."""
+    import json
+
+    from streamlit.testing.v1 import AppTest
+
+    report = json.loads((REPO_ROOT / "outputs" / "eval_report.json").read_text(encoding="utf-8"))
+    if report.get("report_version", 1) < 2 or "ollama" not in (report.get("modes") or {}):
+        pytest.skip("committed report has no ollama mode")
+    at = AppTest.from_file(str(UI_FILE), default_timeout=60)
+    at.run()
+    assert not at.exception
+    subheaders = [s.value for s in at.subheader]
+    assert any("Mock vs Ollama" in s for s in subheaders)
+    assert any("Retrieval comparison" in s for s in subheaders)
+    headline = next(t.value for t in at.table if "ollama" in t.value.columns)
+    assert list(headline.columns) == ["Metric", "mock", "ollama"]
+    assert len(headline) == 7
+    held = headline[headline["Metric"].str.startswith("4.")].iloc[0]
+    assert "generated 3/12 (25.0%)" in held["mock"]
+    assert "generated 3/12 (25.0%)" in held["ollama"]
+    comparison = next(t.value for t in at.table if t.value["Metric"].str.contains("provenance").any())
+    prov = comparison[comparison["Metric"].str.contains("provenance")].iloc[0]
+    assert prov["mock"] == "343/343 passed"
+    assert prov["ollama"] == "158/158 passed"
+    lat = comparison[comparison["Metric"].str.startswith("Wall-clock")].iloc[0]
+    assert "30.785" in lat["ollama"]
+    assert any("did NOT beat" in i.value for i in at.info)
+    # retrieval table: dev/test/all x bm25/chroma
+    assert any(len(df.value) == 6 and "MRR" in df.value.columns for df in at.dataframe)
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_app_degrades_when_only_mock_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A report with only a mock block shows n/a in the ollama column and no comparison claim."""
+    import json
+
+    from streamlit.testing.v1 import AppTest
+
+    src = json.loads((REPO_ROOT / "outputs" / "eval_report.json").read_text(encoding="utf-8"))
+    mock_only = {k: v for k, v in src.items() if k != "retrieval_comparison"}
+    mock_only["modes"] = {"mock": src["modes"]["mock"]}
+    path = tmp_path / "mock_only.json"
+    path.write_text(json.dumps(mock_only), encoding="utf-8")
+    monkeypatch.setenv("UDS_EVAL_REPORT", str(path))
+    at = AppTest.from_file(str(UI_FILE), default_timeout=60)
+    at.run()
+    assert not at.exception
+    headline = next(t.value for t in at.table if "ollama" in t.value.columns)
+    assert set(headline["ollama"]) == {"n/a"}
+    assert not any("did NOT beat" in i.value for i in at.info)
+    assert any("Retrieval comparison not in this report" in c.value for c in at.caption)
