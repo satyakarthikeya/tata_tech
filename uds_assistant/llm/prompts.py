@@ -34,13 +34,15 @@ PARSE_INSTRUCTION = (
     "add service 0x27 and the level (level 1 -> 0x01, programming-level -> 0x03). "
     "Otherwise leave security_levels empty and do not add 0x27.\n"
     "5. intents from allowed_intents, 2-4 keywords.\n"
-    "Examples (other requirements; never copy their identifiers):\n"
-    "'Vehicle speed shall be readable in every session.' -> services [0x22], dids [0x0140], "
+    "Examples (made-up requirements; <id of X> stands for the key of the spec_index entry "
+    "whose name matches X, never copy an identifier from an example):\n"
+    "'<X> shall be readable in every session.' -> services [0x22], dids [<id of X>], "
     "sessions [0x01,0x02,0x03]\n"
-    "'The door actuator calibration must give results only after it was started.' -> "
-    "services [0x31], routines [0x0202]\n"
-    "'Changing the ambient colour shall need extended mode and a level 1 unlock.' -> "
-    "services [0x10,0x27,0x2E], dids [0x0101], sessions [0x03], security_levels [0x01]"
+    "'<Y> must give results only after it was started.' -> services [0x31], routines "
+    "[<id of Y>]\n"
+    "'Changing <Z> shall need extended mode and a level 1 unlock.' -> services "
+    "[0x10,0x27,0x2E], dids [<id of Z>], sessions [0x03], security_levels [0x01]\n"
+    "If the text names no matching entry for dids, routines or DTCs, leave that list empty."
 )
 
 PLAN_INSTRUCTION = (
@@ -67,10 +69,14 @@ PLAN_COMPACT_TEMPLATE = (
 The option shortlist comes first and the requirement and instruction last, so that even
 an unexpected truncation (which keeps the tail) would cut options rather than the task."""
 
-EXPLAIN_INSTRUCTION = (
-    "Explain in 2-4 sentences, for a test engineer, what this test checks, why it matters "
-    "for the requirement, and what outcome is expected. Do not invent byte values."
+EXPLAIN_BATCH_INSTRUCTION = (
+    "For every test in tests, write 2-3 sentences for a test engineer: what the test "
+    "checks, why it matters for the requirement, and the expected outcome. Answer with "
+    "JSON {\"explanations\": [{\"test_id\": ..., \"explanation\": ...}]} containing "
+    "exactly one entry per test, using the given test_id values. Plain prose only; do "
+    "not write byte values."
 )
+"""One call explains every kept test of a requirement (see ``nodes.explain``)."""
 
 SCHEMA_RETRY_INSTRUCTION = (
     "Your previous reply was not valid JSON for the required schema. "
@@ -79,7 +85,7 @@ SCHEMA_RETRY_INSTRUCTION = (
 """Re-prompt sent by :class:`~uds_assistant.llm.client.OllamaClient` after an invalid reply."""
 
 __all__ = [
-    "EXPLAIN_INSTRUCTION",
+    "EXPLAIN_BATCH_INSTRUCTION",
     "PARSE_INSTRUCTION",
     "PLAN_COMPACT_TEMPLATE",
     "PLAN_INSTRUCTION",

@@ -40,8 +40,13 @@ NODE_FUNCTIONS: dict[str, NodeFn] = {
 def run_node(name: str, state: PipelineState, deps: PipelineDeps) -> PipelineState:
     """Run one node and persist the decisions it added to the audit store."""
     before = len(state.decisions)
+    stats = getattr(deps.llm, "stats", None)
+    calls_before = int(stats.calls) if stats is not None else 0
     start = time.perf_counter()
     new_state = NODE_FUNCTIONS[name](state, deps)
+    if stats is not None:
+        made = int(stats.calls) - calls_before
+        new_state.node_llm_calls[name] = new_state.node_llm_calls.get(name, 0) + made
     elapsed_ms = (time.perf_counter() - start) * 1000
     new_state.node_timings[name] = round(
         new_state.node_timings.get(name, 0.0) + elapsed_ms, 1
@@ -150,6 +155,7 @@ def run_pipeline(
         plan_attempts=final.plan_attempts,
         node_timings=final.node_timings,
         node_calls=final.node_calls,
+        node_llm_calls=final.node_llm_calls,
         llm_stats=(
             stats_delta(llm_stats.snapshot(), stats_before) if llm_stats is not None else {}
         ),

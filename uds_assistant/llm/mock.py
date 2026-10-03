@@ -19,10 +19,12 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from uds_assistant.llm.base import (
+    ExplanationBatch,
     LLMError,
     LLMStats,
     ParsedRequirement,
     PlannedTest,
+    TestExplanation,
     TestPlan,
     extract_context,
 )
@@ -122,6 +124,10 @@ class MockLLM:
     """Deterministic keyword/regex "LLM" used in mock mode and in tests."""
 
     name = "mock"
+    applies_grounding = False
+    """The mock only emits identifiers written in the text or matched by name phrase, so
+    the agent's identifier-grounding check (for hallucinating models) is skipped; this
+    keeps mock parse output identical by construction (see DECISIONS / partC equivalence)."""
 
     def __init__(self, fallback_events: list[str] | None = None) -> None:
         self.stats = LLMStats()
@@ -137,6 +143,8 @@ class MockLLM:
             return schema.model_validate(_parse(ctx).model_dump())
         if issubclass(schema, TestPlan):
             return schema.model_validate(_plan(ctx).model_dump())
+        if issubclass(schema, ExplanationBatch):
+            return schema.model_validate(_explain_batch(ctx).model_dump())
         self.stats.errors += 1
         raise LLMError(f"MockLLM has no rule for schema {schema.__name__}")
 
@@ -426,3 +434,29 @@ def _explain(ctx: dict[str, Any]) -> str:
         f"Evidence: {', '.join(refs)}." if refs else "",
     ]
     return " ".join(p for p in parts if p)
+
+
+def _explain_batch(ctx: dict[str, Any]) -> ExplanationBatch:
+    """One templated explanation per test summary in ``ctx["tests"]`` (batched interface)."""
+    req_id = ctx.get("requirement_id", "")
+    items = []
+    for test in ctx.get("tests", []) or []:
+        refs = test.get("citation_refs", []) or []
+        rationale = str(test.get("rationale", "")).strip()
+        parts = [
+            (
+                f"{test.get('title', 'this test')}. This {test.get('category', '')} test "
+                f"supports requirement {req_id}."
+            ),
+            f"Why it was chosen: {rationale}" if rationale else "",
+            f"Steps: {test.get('steps', '')}." if test.get("steps") else "",
+            "Expected responses come from the rules engine.",
+            f"Evidence: {', '.join(refs)}." if refs else "",
+        ]
+        items.append(
+            TestExplanation(
+                test_id=str(test.get("test_id", "")),
+                explanation=" ".join(p for p in parts if p),
+            )
+        )
+    return ExplanationBatch(explanations=items)

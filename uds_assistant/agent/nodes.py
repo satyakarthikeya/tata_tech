@@ -12,6 +12,10 @@ re-derives the steps the same way and rejects any test whose steps differ.
 
 from __future__ import annotations
 
+import re
+import string
+
+from uds_assistant.agent.grounding import ground_identifiers
 from uds_assistant.agent.options import (
     OptionRefs,
     ShortlistEntry,
@@ -32,6 +36,7 @@ from uds_assistant.agent.state import (
 )
 from uds_assistant.llm.base import (
     ALL_INTENTS,
+    ExplanationBatch,
     LLMError,
     ParsedRequirement,
     PlannedTest,
@@ -43,7 +48,7 @@ from uds_assistant.llm.base import (
     truncation_mark,
 )
 from uds_assistant.llm.prompts import (
-    EXPLAIN_INSTRUCTION,
+    EXPLAIN_BATCH_INSTRUCTION,
     PARSE_INSTRUCTION,
     PLAN_COMPACT_TEMPLATE,
     PLAN_INSTRUCTION,
@@ -61,6 +66,24 @@ PLAN_PROMPT_BUDGET = 0.6
 rest is left for the JSON answer."""
 PLAN_SHORTLIST_MAX = 24
 """Upper bound on options in a compact plan prompt (cut further to fit the budget)."""
+EXPLAIN_TOKENS_PER_TEST = 90
+"""Estimated answer tokens for one explanation (2-3 sentences plus JSON framing). A batch is
+sized so that prompt tokens + this * tests stays inside the context window; with num_ctx
+4096 a requirement's tests fit in one or two calls instead of one call per test."""
+EXPLAIN_STEP_CHARS = 140
+"""Characters of the one-line step summary sent per test."""
+
+_TRAILING_GROUP_RE = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+def normalise_template_id(raw: str) -> str:
+    """Canonical form of a planner ``template_id``: trailing ``(category)`` group removed,
+    whitespace and quote characters trimmed, lower-cased. Never maps to a *different*
+    template: the caller accepts the result only if it is an exact catalog id."""
+    junk = string.whitespace + "\"'`"
+    text = raw.strip(junk)
+    text = _TRAILING_GROUP_RE.sub("", text).strip(junk)
+    return text.lower()
 
 
 def _record_truncations(s: PipelineState, deps: PipelineDeps, node: str, mark: int) -> None:
@@ -115,6 +138,16 @@ def parse(state: PipelineState, deps: PipelineDeps) -> PipelineState:
                 note = f"Dropped unknown {field_name[:-1]} identifier {v} (not in spec)."
                 s.notes.append(note)
                 s.log("parse", note)
+    if getattr(deps.llm, "applies_grounding", True):
+        # Grounding is for models that hallucinate identifiers. The mock sets
+        # applies_grounding = False: it only emits ids written in the text or matched by a
+        # name phrase, so the check is a no-op there and is skipped to keep its output
+        # identical by construction.
+        kept, drops = ground_identifiers(kept, s.requirement_text, index, deps.retriever)
+        for drop in drops:
+            note = f"Dropped ungrounded {drop.field[:-1]} identifier {drop.identifier}: {drop.reason}."
+            s.notes.append(note)
+            s.log("parse", note)
     s.parsed = parsed.model_copy(update=kept)
     p = s.parsed
     s.log(
@@ -284,7 +317,16 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
     offered = {t.template_id: len(t.options) for t in catalog}
     accepted: list[PlannedTest] = []
     accepted_keys: set[tuple[str, int]] = set()
+    choices: list[PlannedTest] = []
     for choice in test_plan.tests:
+        norm = normalise_template_id(choice.template_id)
+        if norm != choice.template_id and norm in offered:
+            note = f"Normalised planner template_id {choice.template_id!r} -> {norm!r}."
+            s.notes.append(note)
+            s.log("plan", note)
+            choice = choice.model_copy(update={"template_id": norm})
+        choices.append(choice)
+    for choice in choices:
         key = _choice_key(choice.template_id, choice.option_index)
         reason: str | None = None
         if choice.template_id not in TEMPLATES or choice.template_id not in offered:
@@ -563,41 +605,112 @@ def route_after_validate(state: PipelineState) -> str:
 # ------------------------------------------------------------------------------ explain
 
 
+def _test_summary(inst: PlannedInstance) -> dict[str, object]:
+    """Compact per-test facts for the batched explain prompt (no byte values)."""
+    test = inst.test
+    steps = "; ".join(st.description for st in test.steps)
+    if len(steps) > EXPLAIN_STEP_CHARS:
+        steps = steps[: EXPLAIN_STEP_CHARS - 3].rstrip() + "..."
+    return {
+        "test_id": test.id,
+        "title": test.title,
+        "category": test.category,
+        "rationale": inst.choice.rationale[:160],
+        "steps": f"{len(test.steps)} steps: {steps}",
+        "citation_refs": [f"{c.source}#{c.ref}" for c in test.citations[:3]],
+    }
+
+
+def _explain_prompt(s: PipelineState, summaries: list[dict[str, object]]) -> str:
+    return build_prompt(
+        EXPLAIN_BATCH_INSTRUCTION,
+        {
+            "task": "explain_batch",
+            "requirement_id": s.requirement_id,
+            "requirement_text": s.requirement_text,
+            "tests": summaries,
+        },
+    )
+
+
+def explain_batches(
+    s: PipelineState, summaries: list[dict[str, object]], budget: int | None
+) -> list[list[dict[str, object]]]:
+    """Split ``summaries`` into as few batches as fit the context window.
+
+    No limit (mock) -> one batch. Otherwise tests are added greedily while
+    ``estimate_tokens(system, prompt) + EXPLAIN_TOKENS_PER_TEST * tests <= budget``; a batch
+    always holds at least one test.
+    """
+    if budget is None or not summaries:
+        return [summaries] if summaries else []
+    batches: list[list[dict[str, object]]] = []
+    current: list[dict[str, object]] = []
+    for item in summaries:
+        trial = current + [item]
+        need = (
+            estimate_tokens(SYSTEM_PROMPT, _explain_prompt(s, trial))
+            + EXPLAIN_TOKENS_PER_TEST * len(trial)
+        )
+        if current and need > budget:
+            batches.append(current)
+            current = [item]
+        else:
+            current = trial
+    batches.append(current)
+    return batches
+
+
+def fallback_explanation(inst: PlannedInstance) -> str:
+    """Deterministic short explanation from the test title, category and template."""
+    tpl = TEMPLATES[inst.choice.template_id]
+    test = inst.test
+    return (
+        f"{test.title} ({test.category} test, template {tpl.id}). "
+        f"{tpl.description.rstrip('.')}. Expected responses come from the rules engine."
+    )
+
+
 def explain(state: PipelineState, deps: PipelineDeps) -> PipelineState:
-    """LLM prose per kept test; mark kept tests ``validated`` (never ``human_reviewed``)."""
+    """LLM prose for all kept tests in one batched call; mark kept tests ``validated``.
+
+    One call returns ``{explanations: [{test_id, explanation}]}`` for the whole requirement
+    (several calls only if the prompt would not fit the context window, see
+    :func:`explain_batches`). A test the reply omits, or a batch that fails after the
+    client's retries, gets :func:`fallback_explanation` and a trace entry. Explanations are
+    prose stored in ``TestCase.explanation`` only; test steps are never touched here.
+    """
     s = state.model_copy(deep=True)
+    summaries = [_test_summary(inst) for inst in s.validated]
+    batches = explain_batches(s, summaries, context_budget(deps.llm))
+    texts: dict[str, str] = {}
+    for n, batch in enumerate(batches, start=1):
+        ids = [str(item["test_id"]) for item in batch]
+        mark = truncation_mark(deps.llm)
+        try:
+            raw = deps.llm.complete_json(SYSTEM_PROMPT, _explain_prompt(s, batch), ExplanationBatch)
+            result = ExplanationBatch.model_validate(raw.model_dump())
+        except (LLMError, ValueError) as exc:
+            s.log("explain", f"batch {n}/{len(batches)} failed ({exc}); using fallback text.")
+            s.fallback_events.append(
+                f"explain: batch {n}/{len(batches)} LLM call failed ({exc}); used fallback text"
+            )
+            result = ExplanationBatch()
+        _record_truncations(s, deps, "explain", mark)
+        for item in result.explanations:
+            text = item.explanation.strip()
+            if item.test_id in ids and text and item.test_id not in texts:
+                texts[item.test_id] = text
+    if len(batches) > 1:
+        s.log("explain", f"{len(summaries)} tests explained in {len(batches)} batched LLM calls.")
     out: list[PlannedInstance] = []
     for inst in s.validated:
         test = inst.test
-        tpl = TEMPLATES[inst.choice.template_id]
-        prompt = build_prompt(
-            EXPLAIN_INSTRUCTION,
-            {
-                "task": "explain",
-                "test": {
-                    "title": test.title,
-                    "category": test.category,
-                    "template_id": tpl.id,
-                    "template_description": tpl.description,
-                    "rationale": inst.choice.rationale,
-                    "requirement_id": s.requirement_id,
-                    "requirement_text": s.requirement_text,
-                    "step_descriptions": [st.description for st in test.steps],
-                    "citation_refs": [f"{c.source}#{c.ref}" for c in test.citations],
-                },
-            },
-        )
-        mark = truncation_mark(deps.llm)
-        try:
-            text = deps.llm.complete_text(SYSTEM_PROMPT, prompt).strip()
-            _record_truncations(s, deps, "explain", mark)
-        except LLMError as exc:
-            s.log("explain", f"{test.id}: LLM explanation failed ({exc}); kept template text.")
-            s.fallback_events.append(
-                f"explain: {test.id}: LLM call failed ({exc}); kept template text"
-            )
-            text = ""
-        explanation = text or test.explanation
+        explanation = texts.get(test.id)
+        if explanation is None:
+            explanation = fallback_explanation(inst)
+            s.log("explain", f"{test.id}: no explanation from the LLM; used deterministic text.")
+            s.fallback_events.append(f"explain: {test.id}: missing in LLM reply; used fallback text")
         out.append(
             PlannedInstance(
                 choice=inst.choice,

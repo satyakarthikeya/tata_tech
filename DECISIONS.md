@@ -258,3 +258,31 @@ This subagent was interrupted when the session ended before it could report back
 - **[PB-SMOKE-FALLBACK]** `outputs/ollama_smoke.json` is the early B2 run, from before the plan-context fix. The demo uses it only as an offline fallback, and the docs say so.
 - **[PB-STALE-DOCS]** `MODEL_SETUP.md` and `docs/CODE_TOUR.md` were edited because they still described sentence-transformers and torch, and said no real model had been run.
 - **[PB-DEFAULT-MOCK]** Mock stays the default LLM. On the held-out test split the 3B model did not beat it on any headline metric.
+
+## Part C
+
+### C1 (LLM pipeline fixes)
+
+- **[PC-NORM]** Planner `template_id`s are normalised before validation:
+  - one trailing `(...)` group removed, whitespace and quotes trimmed, lowercased;
+  - the result is accepted only if it exactly matches a catalog id, with no fuzzy matching, so `read_did` does not match `read_did_positive`;
+  - each normalisation is recorded in `notes` and in the plan trace.
+- **[PC-GROUND]** DIDs, routines and DTCs from a real model survive parsing only if one of two things holds:
+  - the requirement writes them out (`0x0100`, `0100` or `f190`, any case);
+  - a search of the `ecu_spec` collection returns their chunk and a distinctive word of its name appears in the requirement.
+
+  Services, sessions and security levels are not checked. Every drop is recorded in `notes` and the parse trace.
+  - The mock is exempt through `applies_grounding = False`. Forcing grounding on the mock's parses would drop 0 identifiers on all 15 seed requirements, so the gate hides no difference.
+  - Known risk: a real DID that the requirement refers to only by an abbreviation could be dropped. This has not been measured against the real model.
+- **[PC-PROMPT]** The parse prompt examples use `<id of X>` placeholders. The old examples used the real spec ids 0x0140, 0x0202 and 0x0101, which is how they leaked into unrelated requirements.
+- **[PC-EXPLAIN]** Explain makes one batched JSON call per requirement.
+  - Tests are sent as compact summaries with no hex.
+  - It splits into more calls only when the estimated prompt would exceed `num_ctx`.
+  - A test missing from the reply, or a failed batch, gets a deterministic fallback text and a trace entry.
+  - The mock's explanation wording changed; nothing else did.
+  - `node_llm_calls` now shows calls per node.
+- **[PC-MOCK-EQ]** Mock output is unchanged.
+  - The agent compared 30 runs (15 seed requirements, two engines) before and after: identical in everything except explanation text and call counts.
+  - I separately compared the current mock tests with those committed before Part C: 171 of 171 have identical steps.
+  - Evidence: `outputs/partC/mock_equivalence.json`.
+- **[PC-FLAKE]** One earlier full run had a single failure: `tests/protocol/test_codec.py::test_request_roundtrip_with_subfunction`, a hypothesis `too_slow` health check. It passed in isolation and in the final full run, so it looks load-related rather than a code problem.

@@ -75,6 +75,8 @@ class PipelineState(BaseModel):
     """Accumulated wall-clock milliseconds per node (re-plan rounds add up)."""
     node_calls: dict[str, int] = Field(default_factory=dict)
     """How many times each node ran."""
+    node_llm_calls: dict[str, int] = Field(default_factory=dict)
+    """LLM calls (``complete_json``/``complete_text``) made by each node, re-plans summed."""
     fallback_events: list[str] = Field(default_factory=list)
     """Per-call fallbacks: an LLM call failed and the node continued without it."""
 
@@ -113,6 +115,8 @@ class PipelineResult(BaseModel):
     node_timings: dict[str, float] = Field(default_factory=dict)
     """Per-node latency in ms (parse/retrieve/plan/instantiate/validate/explain)."""
     node_calls: dict[str, int] = Field(default_factory=dict)
+    node_llm_calls: dict[str, int] = Field(default_factory=dict)
+    """LLM calls per node (explain = batched calls per requirement, not one per test)."""
     llm_stats: dict[str, float] = Field(default_factory=dict)
     """LLM call counters for this run (calls, http_requests, json_failures, retries, ...)."""
     fallback_events: list[str] = Field(default_factory=list)

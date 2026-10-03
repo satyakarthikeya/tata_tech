@@ -24,8 +24,10 @@ def test_node_timings_and_llm_stats_recorded(
     assert all(ms >= 0 for ms in result.node_timings.values())
     assert set(result.node_calls) == NODE_NAMES
     assert result.node_calls["plan"] == result.plan_attempts
-    # parse + one plan call per attempt + one explain call per kept test
-    assert result.llm_stats["calls"] == 1 + result.plan_attempts + len(result.tests)
+    # parse + one plan call per attempt + ONE batched explain call per requirement
+    assert result.llm_stats["calls"] == 1 + result.plan_attempts + 1
+    assert result.node_llm_calls == {"parse": 1, "plan": result.plan_attempts, "explain": 1,
+                                     "retrieve": 0, "instantiate": 0, "validate": 0}
     assert result.llm_stats["json_failures"] == 0
     assert result.llm_stats["retries"] == 0
     assert result.fallback_events == []

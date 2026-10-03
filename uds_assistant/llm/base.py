@@ -143,6 +143,21 @@ class TestPlan(_Schema):
     tests: list[PlannedTest] = Field(default_factory=list)
 
 
+class TestExplanation(_Schema):
+    """Prose for one kept test, keyed by the test id the agent showed the LLM."""
+
+    __test__ = False
+
+    test_id: str
+    explanation: str = ""
+
+
+class ExplanationBatch(_Schema):
+    """The explainer's output for one batch of tests: ``{explanations: [{test_id, explanation}]}``."""
+
+    explanations: list[TestExplanation] = Field(default_factory=list)
+
+
 @dataclass
 class LLMStats:
     """Counters an LLM backend accumulates; read with :meth:`snapshot`."""
