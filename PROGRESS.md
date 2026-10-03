@@ -323,3 +323,27 @@ Table of check → SWS IDs cited (with your one-line paraphrase), count of citat
 | Simulator ↔ rules agreement | 5000/5000 |
 | Gold tests on the clean simulator | 60/60 |
 | udsoncan virtual-CAN sequence | PASS |
+
+## A3 completion audit (2026-10-03T11:30:29+05:30)
+
+The owner pointed out that the A3 subagent never finished. The orchestrator then audited every A3 item in the brief against the repo instead of relying on the earlier spot-check.
+
+**Present and tested**
+- Held-out bug detection for the generated suite, gold suite and union, with a one-line reason for each missed bug.
+- The in-sample section, labelled "in-sample (templates tuned on these)".
+- Requirement understanding, per split:
+  - target accuracy, scored as parsed and as exercised
+  - category recall
+  - precondition recall
+  - fallback count
+- Unit tests for the scoring, including the NAT-020-style empty-label case.
+- The 7-row headline table in `outputs/eval_report.md`, `docs/RESULTS.md`, and the `headline` key of `eval_report.json`.
+- The "accuracy vs oracle" row removed from the headline, with a test checking this.
+- The appendix titled "Self-consistency check (circular by construction)".
+- Agreement and the udsoncan CAN sequence computed live in the eval, plus `--skip-can`.
+
+**Gap found and closed:** the committed report had been generated mid-run, against the old commit with uncommitted changes. It was regenerated from the committed code (`9df10d8`). Every value under `headline` and `modes` is identical; only timestamps and the git hash changed.
+
+**Spot-check of a missed-bug reason:** `read_did_session_restriction_ignored` is missed because `read_did_wrong_session_or_unknown` was only ever instantiated with the unknown DID 0xDEAD. No generated test reads 0x0150 outside its read sessions, so the reason given in the report is accurate. This is reported only; templates stay frozen.
+
+**Freeze:** the testgen tree hash is still `9a121b2742c5f85fa48fd4f5340caf3b85979c67`.

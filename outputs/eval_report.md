@@ -1,6 +1,6 @@
 # Evaluation report — UDS test generation assistant
 
-- **Generated:** 2026-10-03T05:33:24.789329+00:00 (git `d4f06b0b3f652d071732624e8b15d8babe5b5013`, uncommitted changes present)
+- **Generated:** 2026-10-03T05:59:54.756907+00:00 (git `9df10d868049da1556bdf73aaf7180332ac28237`)
 - **LLM mode used:** `mock` (requested `mock`)
 - **Agent engine:** `langgraph` · **Retriever:** `Bm25Retriever`
 - **Template set:** `v2` (23 templates)
@@ -250,23 +250,23 @@ Totals: 171 kept, 0 dropped, 0 rejected, 0 re-plans, 0 failed runs.
 - `exports/gold_tests_test.py`
 - `exports/generated_tests.can`
 - `exports/gold_tests.can`
-- Ran `generated_tests_test.py` (transport `inprocess`) with pytest in a subprocess: **PASSED** — `171 passed in 1.11s` (4.03 s).
+- Ran `generated_tests_test.py` (transport `inprocess`) with pytest in a subprocess: **PASSED** — `171 passed in 0.69s` (3.51 s).
 - CAPL files (`*.can`) are **UNVERIFIED TEMPLATES — not compiled or run in CANoe**.
 
 ## Runtime
 
 | Phase | seconds |
 |---|---|
-| setup | 2.168 |
-| generation | 5.18 |
-| requirement_understanding | 5.464 |
-| execution_and_bug_matrix | 24.896 |
-| heldout_bug_matrix | 0.52 |
-| simulator_rules_agreement | 0.515 |
-| udsoncan_virtual_can | 0.408 |
-| metrics | 0.232 |
-| exports | 4.82 |
-| total | 44.204 |
+| setup | 2.01 |
+| generation | 5.279 |
+| requirement_understanding | 5.616 |
+| execution_and_bug_matrix | 24.631 |
+| heldout_bug_matrix | 0.631 |
+| simulator_rules_agreement | 0.703 |
+| udsoncan_virtual_can | 0.442 |
+| metrics | 0.263 |
+| exports | 4.447 |
+| total | 44.021 |
 
 ## Appendix: Self-consistency check (circular by construction)
 
