@@ -9,7 +9,7 @@
 - `EcuSpec` cross-reference validation (sessions referenced by security levels/DIDs/routines, security levels referenced by DIDs/routines, SIDs referenced by sessions) is enforced in one `model_validator(mode="after")` so a malformed spec fails fast at `load_spec()` time rather than later in the rules engine.
 - SecurityAccess seed/key subfunctions are constrained odd=seed / even=key via field validators, matching the udsoncan `Mode.RequestSeed`/`Mode.SendKey` convention used for cross-checking.
 - `tester_present()` defaults `suppress_positive=True` since that is how it is used operationally (periodic keep-alive with no need for a response); callers that want a response pass `suppress_positive=False`.
-- [R-SWS] No AUTOSAR Dcm SWS document available offline, so rules/nrc_order.py cites no SWS_Dcm IDs (to avoid fabricating requirement numbers); each check cites "udsoncan behaviour" or "design decision — see DECISIONS.md [tag]".
+- [R-SWS] (superseded in Part A — see [PA-SWS] below) Originally: no AUTOSAR Dcm SWS document available offline, so no SWS_Dcm IDs were cited; each check cited "udsoncan behaviour" or "design decision — see DECISIONS.md [tag]".
 - [R-ORDER] Generic NRC order follows PROJECT.md §5 exactly: supported service (0x11; supported = listed in any session) → service in session (0x7F) → length (0x13) → subfunction supported (0x12) → subfunction in session (0x7E) → service-specific → response length (0x14) → response pending (0x78).
 - [R-EMPTY] An empty request (no SID byte) gets no response at all and does not restart the S3 timer.
 - [R-LEN] Length checked in two stages: generic min/exact length per service at step 3, then subfunction/identifier-specific exact length (0x19/02 = 3 bytes, 0x27 seed = 2, key = 2+seed_length, 0x2E data = DID length, 0x31 start = 4+option_record_length, stop/results = 4) right after the identifier/subfunction is known; 0x2E length precedes security.
@@ -82,3 +82,60 @@
 - [API-DB] The module-level `app = create_app()` uses `outputs/api_audit.sqlite` (git-ignored by the existing `*.sqlite` pattern); the Streamlit UI uses a separate `outputs/ui_audit.sqlite` so the two front-ends don't contend for the same SQLite file under concurrent dev use. Tests always pass an explicit `db_path=tmp_path/...`.
 - [UI-NO-HTTP] The Streamlit UI calls `agent.run_pipeline`/`runner.run_suite`/`export.render_*` directly rather than going over HTTP to the FastAPI service, to avoid requiring both processes to be running for the UI to work; it shares the same `AuditStore` class (different file) so both front-ends keep an audit trail.
 - [UI-STREAMLIT-INSTALL] `pip install streamlit` was attempted once (no retry loop, per AGENT.md) and succeeded (1.64.0). It is declared as an optional extra (`uds-assistant[ui]`) rather than a hard dependency, and `uds_assistant/ui/__init__.py` imports nothing from `streamlit_app.py`, so the rest of the package stays importable without it (verified by a subprocess test that blocks the `streamlit` import and still imports `uds_assistant` and `uds_assistant.api.app`).
+
+## Part A
+
+### Step 0 and A2 (natural-language requirements)
+
+- **[PA-OLDDOCS]** No older 18-file doc set was found; the search is recorded in `docs/RECONCILIATION.md`. The current spec and requirements stay the source of truth, and nothing was ported.
+- **[PA-SWS-FILE]** The Dcm SWS PDF is named `AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf`. That doesn't match the brief's glob `*Dcm*`, but it is that document, so A4 was run.
+- **[PA-A2-SPLIT]** The A2 subagent chose the dev/test split to balance topics:
+  - dev: NAT-001, 003, 005, 007, 009, 011, 013, 015
+  - test: the other 12
+- **[PA-A2-LOCKOUT]** The labels for NAT-010 (lockout) list `extended_session` only. `lockout_active` is the state being tested, not a precondition for running the test.
+- **[PA-A2-NAT017]** NAT-017 (DTC clear) has the precondition `none`, because the label format has no way to say "default or extended session". The note on the row explains this.
+- **[PA-A2-AMBIG]** Three rows are deliberately ambiguous: NAT-004, NAT-006 and NAT-017.
+- **[PA-A2-UNSUP]** NAT-020 (firmware rollback) is deliberately unsupported by the spec, so all its target columns are empty.
+- **[PA-A2-HEX]** 5 of the 20 rows contain a literal hex ID: NAT-005, 010, 013, 016 and 019.
+
+### A1 (held-out bugs)
+
+- **[PA-A1-IDS]** The 12 held-out bugs are kept in a separate `HELDOUT_BUG_IDS` set, not in `IMPLEMENTED_BUG_IDS`.
+  - `SimulatedEcu` accepts any id in `ALL_BUG_IDS`, which is the union of the two sets; unknown ids still raise `ValueError`.
+  - Code that loops over the original catalog is unchanged.
+- **[PA-A1-SCHEMA]** `BugDef` gained an optional `heldout: bool = False`, so the original catalog loads unchanged.
+  - `HELDOUT_BUG_CATALOG_PATH` points to `data/bugs/heldout_catalog.yaml`.
+  - No new category values were added. Bugs about state after reset or S3 are filed under security or timing, and suppress-bit bugs under format.
+- **[PA-A1-AUTHOR]** The held-out bugs were written by a subagent under the read restrictions recorded in PROGRESS.md. It could not see testgen, gold, eval, llm or agent code.
+
+### A4 (AUTOSAR SWS citations)
+
+- **[PA-SWS]** `rules/nrc_order.py` and `rules/engine.py` now cite 38 distinct AUTOSAR CP R24-11 Dcm SWS IDs.
+  - An ID is cited only where the requirement text states the same behaviour, and each comes with a one-line paraphrase.
+  - The existing DECISIONS.md tags are kept alongside.
+  - The PDF and its extracted-text cache are git-ignored for licensing reasons.
+  - `tests/rules/test_sws_citations.py` checks every cited ID against the local PDF and is skipped if the PDF is absent.
+- **[PA-SWS-DIFF]** Nine differences from the SWS (D1–D9) are documented in `docs/SWS_DISAGREEMENTS.md`, not fixed.
+  - Fixing them needs coordinated changes to the simulator, the behaviour contract and the gold tests and templates, which are frozen during Part A.
+  - The high-impact ones are D2, D5, D6 and D7.
+- **[PA-RESPOND-ALL]** SIDs in 0x40–0x7F and 0xC0–0xFF are answered with 0x11. In SWS terms this matches DcmRespondAllRequest = TRUE (SWS_Dcm_00084).
+
+### A3 (evaluation extension)
+
+This subagent was interrupted when the session ended before it could report back. The orchestrator reviewed its on-disk work instead: 830 tests passed, ruff was clean, and the freeze diff was empty.
+
+- **[PA-A3-HEADLINE]** The headline table in `outputs/eval_report.md` has 7 rows, in the order the brief sets.
+  - The headline bug-detection number is the generated suite's held-out detection.
+  - The in-sample 26-bug numbers are a secondary section, labelled "in-sample (templates tuned on these)".
+  - "Expected-response accuracy vs oracle" moved to an appendix titled "Self-consistency check (circular by construction)".
+- **[PA-A3-AGREE]** Simulator ↔ rules-engine agreement is computed live in the eval by `uds_assistant/eval/agreement.py`.
+  - It uses a deterministic seeded random sample of 5000 requests and does not import from `tests/`.
+- **[PA-A3-CAN]** The udsoncan virtual-CAN sequence runs live in the eval (`uds_assistant/eval/can_check.py`). `--skip-can` exists for fast tests only.
+- **[PA-A3-HELDOUT]** `runner.run_bug_matrix` gained an optional `catalog=` parameter, so it can run against the held-out catalog. The default behaviour is unchanged.
+  - The reason given for each missed held-out bug comes from a static "trigger" check in `uds_assistant/eval/heldout.py`: does any test apply the stimulus the bug needs?
+  - That analysis is for reporting only and changes nothing.
+- **[PA-A3-UNDERSTAND]** Requirement understanding is scored in `uds_assistant/eval/understanding.py`, with the TEST split as the main number. Targets are scored two ways:
+  - "parsed": the identifiers in `ParsedRequirement`
+  - "exercised": the identifiers the generated tests actually send
+
+  Precondition recall uses preconditions worked out from concrete test steps (`uds_assistant/eval/trace.py`); the mapping is documented in the report.

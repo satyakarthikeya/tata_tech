@@ -67,7 +67,7 @@ class SimulatedEcu:
 
     def enable_bug(self, bug_id: str) -> None:
         """Inject a bug by id; raises ``ValueError`` for unknown ids."""
-        if bug_id not in B.IMPLEMENTED_BUG_IDS:
+        if bug_id not in B.ALL_BUG_IDS:
             raise ValueError(f"Unknown bug id {bug_id!r}.")
         self._bugs.add(bug_id)
 
@@ -138,7 +138,8 @@ class SimulatedEcu:
             self._tick()
             if not req:
                 return []
-            self.mem.last_request_ms = self.now_ms
+            if not (self.bug(B.S3_NOT_REFRESHED_BY_TESTER_PRESENT) and req[0] == 0x3E):
+                self.mem.last_request_ms = self.now_ms
             return self._respond(req)
 
     def _tick(self) -> None:
@@ -155,6 +156,8 @@ class SimulatedEcu:
             expired = idle >= s3 if self.bug(B.S3_TIMEOUT_OFF_BY_ONE) else idle > s3
             if expired:
                 mem.drop_volatile(DEFAULT_SESSION)
+                if self.bug(B.S3_TIMEOUT_REVERTS_WRITTEN_DIDS):
+                    mem.did_store = EcuMemory.power_on(self.spec).did_store
         if not self.bug(B.LOCKOUT_DELAY_NEVER_EXPIRES):
             for lock in mem.lockouts.values():
                 if lock.deadline_ms is not None and self.now_ms >= lock.deadline_ms:
@@ -186,6 +189,13 @@ class SimulatedEcu:
             and self.spec.get_did(int.from_bytes(req[1:3], "big")) is None
         ):
             raise Reject(NRC_OUT_OF_RANGE)
+        if (
+            self.bug(B.READ_DID_ODD_LENGTH_TRUNCATED)
+            and sid == 0x22
+            and len(req) > 3
+            and (len(req) - 1) % 2
+        ):
+            req = req[:-1]
         if handler is None or sid not in self._supported_sids:
             raise Reject(NRC_SERVICE_NOT_SUPPORTED)
         session = self.spec.get_session(self.mem.session)
@@ -196,6 +206,8 @@ class SimulatedEcu:
         sub: int | None = None
         if handler.uses_subfunction:
             sub = req[1] & 0x7F if handler.suppress_bit else req[1]
+            if sid == 0x10 and self.bug(B.SESSION_SUPPRESS_BIT_NOT_MASKED):
+                sub = req[1]
             if sub not in handler.subfunctions(self):
                 bad = self.bug(B.GENERAL_REJECT_INSTEAD_OF_0X12)
                 raise Reject(NRC_GENERAL_REJECT if bad else NRC_SUBFUNCTION_NOT_SUPPORTED)

@@ -199,15 +199,20 @@ def _eval_section() -> None:
     report = json.loads(path.read_text(encoding="utf-8"))
     block = report["modes"].get(report["actual_mode"], {})
     det = block.get("bug_detection", {})
-    col1, col2, col3 = st.columns(3)
+    held = block.get("heldout_bug_detection", {})
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("Generated tests", block.get("generated_tests", {}).get("count", "?"))
-    gen_det = det.get("generated", {})
+    h_gen, h_gold = held.get("generated", {}), held.get("gold", {})
     col2.metric(
-        "Bug detection (generated)",
+        "Held-out bugs (generated)",
+        f"{h_gen.get('detected', '?')}/{h_gen.get('bugs', '?')}",
+    )
+    col3.metric("Held-out bugs (gold)", f"{h_gold.get('detected', '?')}/{h_gold.get('bugs', '?')}")
+    gen_det = det.get("generated", {})
+    col4.metric(
+        "In-sample bugs (generated; templates tuned on these)",
         f"{gen_det.get('detected', '?')}/{gen_det.get('bugs', '?')}",
     )
-    gold_det = det.get("gold", {})
-    col3.metric("Bug detection (gold)", f"{gold_det.get('detected', '?')}/{gold_det.get('bugs', '?')}")
     st.caption(f"Report timestamp: {report.get('timestamp')}; spec is synthetic.")
     with st.expander("Full report JSON"):
         st.json(report)

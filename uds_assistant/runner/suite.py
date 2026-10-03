@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from uds_assistant.simulator import SimulatedEcu, load_bug_catalog
+from uds_assistant.simulator import BugCatalog, SimulatedEcu, load_bug_catalog
 from uds_assistant.spec.schema import EcuSpec
 from uds_assistant.store.audit import AuditStore
 from uds_assistant.testgen.execute import TestOutcome, run_test_on_simulator
@@ -287,14 +287,17 @@ def run_bug_matrix(
     bug_ids: Iterable[str] | None = None,
     store: AuditStore | None = None,
     run_id: int | None = None,
+    catalog: BugCatalog | None = None,
 ) -> BugMatrix:
     """Enable each bug alone and record which tests fail.
 
-    ``bug_ids`` defaults to every bug in the catalog (catalog order). A bug is
+    ``catalog`` (default: the original catalog) supplies titles/categories, e.g.
+    the held-out catalog. ``bug_ids`` defaults to every bug in that catalog
+    (catalog order). A bug is
     detected if at least one test that passes on the clean simulator fails with
     the bug enabled. Tests failing on the clean simulator are listed as invalid.
     """
-    catalog = load_bug_catalog()
+    catalog = catalog if catalog is not None else load_bug_catalog()
     ids = list(bug_ids) if bug_ids is not None else catalog.ids
     start = time.perf_counter()
     clean = run_suite(tests, spec, None, store, run_id)

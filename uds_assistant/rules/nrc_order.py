@@ -2,10 +2,13 @@
 
 :func:`evaluate_nrc` is deliberately the *only* function in this module (and in
 the rules package) that names an NRC. Every check carries a ``Source:`` comment.
-No AUTOSAR Dcm SWS document was available offline, so no SWS requirement IDs
-are cited (to avoid inventing numbers); checks cite either "udsoncan behaviour"
-or "design decision — see DECISIONS.md [tag]", where ``[tag]`` is the bracketed
-label of the matching DECISIONS.md line. Generic order = PROJECT.md §5.
+Every check cites "design decision — see DECISIONS.md [tag]" (``[tag]`` is the
+bracketed label of the matching DECISIONS.md line) and/or "udsoncan behaviour".
+Where the AUTOSAR CP R24-11 Dcm SWS states the same behaviour, the requirement
+ID is cited too, with a one-line paraphrase (never SWS text); IDs are checked
+against the locally extracted SWS by tests/rules/test_sws_citations.py. Places
+where the SWS differs are listed in docs/SWS_DISAGREEMENTS.md, not cited here.
+Generic order = PROJECT.md §5.
 
 The function assumes the engine has already applied clock effects (S3 timeout,
 expired-lockout clearing) to ``state`` and set ``state.now_ms``.
@@ -112,6 +115,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
 
     # Step 1 — service supported (any session lists it) else 0x11.
     # Source: design decision — see DECISIONS.md [R-ORDER] (PROJECT.md §5 step 1)
+    # + SWS_Dcm_00197 (an unknown SID is answered with 0x11).
     supported_sids = {s for sess in spec.sessions for s in sess.allowed_services}
     if sid not in supported_sids:
         trace.append(f"Step 1: SID 0x{sid:02X} is not implemented by this ECU -> NRC 0x11.")
@@ -120,6 +124,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
 
     # Step 2 — service allowed in the active session else 0x7F.
     # Source: design decision — see DECISIONS.md [R-ORDER] (PROJECT.md §5 step 2)
+    # + SWS_Dcm_00211 (SID not enabled for the active session gives 0x7F).
     session = spec.get_session(state.active_session) or spec.get_session(DEFAULT_SESSION_ID)
     assert session is not None
     if sid not in session.allowed_services:
@@ -132,6 +137,8 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
 
     # Step 3 — generic message length / format else 0x13.
     # Source: design decision — see DECISIONS.md [R-LEN] (PROJECT.md §5 step 3)
+    # + SWS_Dcm_00696 (shorter than the service minimum gives 0x13) and SWS_Dcm_00272
+    # (any length/format error found while parsing the request gives 0x13).
     min_len = _MIN_LENGTH[sid]
     exact_len = _EXACT_LENGTH.get(sid)
     if request.length < min_len or (exact_len is not None and request.length != exact_len):
@@ -143,6 +150,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
             sid=sid, nrc=Nrc.INCORRECT_MESSAGE_LENGTH_OR_INVALID_FORMAT, trace=trace
         )
     # Source: design decision — see DECISIONS.md [R-LEN] (DID list must be whole 2-byte ids)
+    # + SWS_Dcm_00272 (a malformed request gives 0x13).
     if sid == ServiceId.READ_DATA_BY_IDENTIFIER and (request.length - 1) % 2 != 0:
         trace.append("Step 3: 0x22 DID list is not a whole number of 2-byte DIDs -> NRC 0x13.")
         return NrcDecision(
@@ -157,6 +165,11 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
         # Step 4 — subfunction supported else 0x12.
         # Source: design decision — see DECISIONS.md [R-ORDER] (PROJECT.md §5 step 4);
         # bit 7 is stripped only for services with a suppress bit [R-SPRMIB].
+        # + SWS_Dcm_00273 (subfunction without a configured sub-service gives 0x12),
+        # SWS_Dcm_00307 (0x10: unconfigured session type gives 0x12), SWS_Dcm_00321
+        # (0x27: unconfigured access type gives 0x12), SWS_Dcm_00251 (0x3E only
+        # supports zeroSubFunction). The SWS defers this check for 0x31 and masks
+        # bit 7 for 0x19/0x27 too — see docs/SWS_DISAGREEMENTS.md D2, D6.
         if sid == ServiceId.DIAGNOSTIC_SESSION_CONTROL:
             supported_subs = {s.id for s in spec.sessions}
         elif sid == ServiceId.ECU_RESET:
@@ -180,6 +193,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
 
         # Step 5 — subfunction allowed in the active session else 0x7E.
         # Source: design decision — see DECISIONS.md [R-SUB-SESSION] (PROJECT.md §5 step 5)
+        # + SWS_Dcm_00616 (sub-service not enabled for the active session gives 0x7E).
         if sid == ServiceId.SECURITY_ACCESS:
             for lvl in spec.security_levels:
                 if sub in (lvl.seed_subfunction, lvl.key_subfunction):
@@ -198,6 +212,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
 
         # Step 5b — subfunction-specific exact length else 0x13.
         # Source: design decision — see DECISIONS.md [R-LEN]
+        # + SWS_Dcm_00272 (wrong length for the parsed request gives 0x13).
         sub_len: int | None = None
         if sid == ServiceId.READ_DTC_INFORMATION and sub == DTC_BY_STATUS_MASK:
             sub_len = 3
@@ -218,12 +233,14 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
         known = {dtc_code_to_int(d.code) for d in spec.dtcs}
         # Step 6a — group identifier supported else 0x31.
         # Source: design decision — see DECISIONS.md [R-CLEAR]
+        # + SWS_Dcm_01265 (a groupOfDTC the DTC memory cannot select gives 0x31).
         if group != CLEAR_ALL_DTC_GROUP and group not in known:
             trace.append(f"Step 6a: DTC group 0x{group:06X} unknown -> NRC 0x31.")
             return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
         trace.append(f"Step 6a: DTC group 0x{group:06X} accepted.")
         # Step 6f — NVM failure while clearing else 0x72.
         # Source: design decision — see DECISIONS.md [R-0x72]
+        # + SWS_Dcm_01060 (a memory error while clearing DTCs gives 0x72).
         if state.environment.nvm_write_fault:
             trace.append("Step 6f: NVM write fault active; clearing DTC memory fails -> NRC 0x72.")
             return NrcDecision(sid=sid, nrc=Nrc.GENERAL_PROGRAMMING_FAILURE, trace=trace)
@@ -237,6 +254,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
         response_len = 3 + 4 * count
         # Step 7 — positive response fits the transport else 0x14.
         # Source: design decision — see DECISIONS.md [R-0x14]
+        # + SWS_Dcm_01059 (response longer than the response buffer gives 0x14).
         if response_len > spec.max_response_length:
             trace.append(
                 f"Step 7: response of {response_len} bytes exceeds "
@@ -267,6 +285,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
         trace.append(f"Step 6a/6b: {len(dids)} DID(s) supported and readable.")
         # Step 7 — positive response fits the transport else 0x14.
         # Source: design decision — see DECISIONS.md [R-0x14]
+        # + SWS_Dcm_01059 (response longer than the response buffer gives 0x14).
         if response_len > spec.max_response_length:
             trace.append(
                 f"Step 7: response of {response_len} bytes exceeds "
@@ -280,6 +299,8 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
         lockout = state.lockouts.get(level)
         # Step 6d — lockout delay still running else continue; 0x37.
         # Source: design decision — see DECISIONS.md [R-SEC-LOCKOUT]
+        # + SWS_Dcm_01350 (requestSeed while the level's delay timer runs gives 0x37);
+        # applying it to sendKey as well is ours — see docs/SWS_DISAGREEMENTS.md D5.
         if lockout is not None and is_delay_active(lockout, state.now_ms):
             trace.append(
                 f"Step 6d: level 0x{level:02X} lockout delay active until "
@@ -293,12 +314,17 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
             # Step 6e — key requires an outstanding seed for this level else 0x24.
             # Source: udsoncan behaviour (client always sends requestSeed before sendKey)
             # + design decision — see DECISIONS.md [R-SEC-SEQ]
+            # + SWS_Dcm_00863 (a key is only compared after a successful seed request
+            # for that level; the SWS names 0x24 only in an informative list).
             if pending is None:
                 trace.append(f"Step 6e: no seed pending for level 0x{level:02X} -> NRC 0x24.")
                 return NrcDecision(sid=sid, nrc=Nrc.REQUEST_SEQUENCE_ERROR, trace=trace)
             key = raw[2:]
             # Step 6g — key verification: 0x35, or 0x36 on the attempt reaching the limit.
             # Source: design decision — see DECISIONS.md [R-SEC-LOCKOUT] (Phase 1 lockout model)
+            # + SWS_Dcm_01397 (a failed key increments the level's attempt counter),
+            # SWS_Dcm_00660 (counter below the limit gives 0x35), SWS_Dcm_01349 (counter
+            # at/above the limit starts the delay timer and gives 0x36).
             if compute_key(pending, level) != key:
                 current = lockout if lockout is not None else SecurityLockoutState()
                 _, triggered = record_failed_attempt(
@@ -331,16 +357,19 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
         did_def = spec.get_did(did)
         # Step 6a — DID supported else 0x31.
         # Source: design decision — see DECISIONS.md [R-ORDER] (PROJECT.md §5 step 6)
+        # + SWS_Dcm_00467 (0x2E: unsupported DID gives 0x31).
         if did_def is None:
             trace.append(f"Step 6a: DID 0x{did:04X} not supported -> NRC 0x31.")
             return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
         # Step 6a' — DID writable at all else 0x31 (read-only DID).
         # Source: design decision — see DECISIONS.md [R-READONLY]
+        # + SWS_Dcm_00468 (0x2E: DID without write access gives 0x31).
         if not did_def.is_writable:
             trace.append(f"Step 6a': DID 0x{did:04X} is read-only -> NRC 0x31.")
             return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
         # Step 6b — DID writable in active session else 0x31.
         # Source: design decision — see DECISIONS.md [R-ORDER] (PROJECT.md §5 step 6)
+        # + SWS_Dcm_00469 (0x2E: DID not writable in the active session gives 0x31).
         if state.active_session not in did_def.write_sessions:
             trace.append(
                 f"Step 6b: DID 0x{did:04X} not writable in session "
@@ -349,6 +378,8 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
             return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
         # Step 6b' — data record length must equal the DID length else 0x13.
         # Source: design decision — see DECISIONS.md [R-LEN]
+        # + SWS_Dcm_00473 (fixed-length DID: data length must match the DID size) with
+        # SWS_Dcm_00272 (0x13); the SWS lists it after security — SWS_DISAGREEMENTS D3.
         if len(data) != did_def.length:
             trace.append(
                 f"Step 6b': DID 0x{did:04X} needs {did_def.length} data byte(s), "
@@ -359,6 +390,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
             )
         # Step 6c — security level unlocked (exact level match) else 0x33.
         # Source: design decision — see DECISIONS.md [R-SEC-EXACT]
+        # + SWS_Dcm_00470 (0x2E: DID not writable at the current security level: 0x33).
         needed = did_def.write_security_level
         if needed is not None and state.unlocked_level != needed:
             trace.append(
@@ -368,6 +400,8 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
             return NrcDecision(sid=sid, nrc=Nrc.SECURITY_ACCESS_DENIED, trace=trace)
         # Step 6d — preconditions met else 0x22.
         # Source: design decision — see DECISIONS.md [R-COND]
+        # + SWS_Dcm_00822 (0x2E: DID write gated by a mode rule) with SWS_Dcm_00815
+        # (a failed mode rule without an explicit NRC gives 0x22).
         for cond in did_def.conditions.requires:
             if not state.environment.is_met(cond):
                 trace.append(f"Step 6d: condition '{cond}' not met -> NRC 0x22.")
@@ -395,11 +429,13 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
         routine = spec.get_routine(rid)
         # Step 6a — routine identifier supported else 0x31.
         # Source: design decision — see DECISIONS.md [R-ORDER] (PROJECT.md §5 step 6)
+        # + SWS_Dcm_00568 (unsupported routine identifier gives 0x31).
         if routine is None:
             trace.append(f"Step 6a: routine 0x{rid:04X} not supported -> NRC 0x31.")
             return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
         # Step 6b — routine allowed in active session else 0x31.
         # Source: design decision — see DECISIONS.md [R-ORDER] (PROJECT.md §5 step 6)
+        # + SWS_Dcm_00570 (routine not executable in the active session gives 0x31).
         if state.active_session not in routine.sessions:
             trace.append(
                 f"Step 6b: routine 0x{rid:04X} not allowed in session "
@@ -408,6 +444,8 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
             return NrcDecision(sid=sid, nrc=Nrc.REQUEST_OUT_OF_RANGE, trace=trace)
         # Step 6b' — control type supported by this routine else 0x12.
         # Source: design decision — see DECISIONS.md [R-ROUTINE-SUB]
+        # + SWS_Dcm_00869 (control type not configured for this routine gives 0x12);
+        # the SWS lists it after the security check — see SWS_DISAGREEMENTS D4.
         if sub not in routine.allowed_subfunctions:
             trace.append(
                 f"Step 6b': routine 0x{rid:04X} does not support control type 0x{sub:02X} "
@@ -416,6 +454,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
             return NrcDecision(sid=sid, nrc=Nrc.SUB_FUNCTION_NOT_SUPPORTED, trace=trace)
         # Step 6b'' — option record length else 0x13.
         # Source: design decision — see DECISIONS.md [R-LEN]
+        # + SWS_Dcm_01140 (0x31: wrong overall request length gives 0x13).
         expected_len = 4 + (routine.option_record_length if sub == ROUTINE_START else 0)
         if request.length != expected_len:
             trace.append(
@@ -427,6 +466,7 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
             )
         # Step 6c — security level unlocked (exact match) else 0x33.
         # Source: design decision — see DECISIONS.md [R-SEC-EXACT]
+        # + SWS_Dcm_00571 (routine not executable at the current security level: 0x33).
         if routine.security_level is not None and state.unlocked_level != routine.security_level:
             trace.append(
                 f"Step 6c: routine 0x{rid:04X} needs security level "
@@ -435,6 +475,8 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
             return NrcDecision(sid=sid, nrc=Nrc.SECURITY_ACCESS_DENIED, trace=trace)
         # Step 6d — preconditions (checked on start only) else 0x22.
         # Source: design decision — see DECISIONS.md [R-COND]
+        # + SWS_Dcm_01169 (startRoutine gated by a mode rule) with SWS_Dcm_00815
+        # (a failed mode rule without an explicit NRC gives 0x22).
         if sub == ROUTINE_START:
             for cond in routine.conditions.requires:
                 if not state.environment.is_met(cond):
@@ -462,6 +504,8 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
         # Step 8 — long-running routine start answered with 0x78 first.
         # Source: udsoncan behaviour (client waits up to P2* after 0x78 for the final
         # response) + design decision — see DECISIONS.md [R-0x78]
+        # + SWS_Dcm_00024 (send 0x78 when the task needs longer than P2) and
+        # SWS_Dcm_00203 (after a pending response the final one is never suppressed).
         if sub == ROUTINE_START and routine.long_running:
             trace.append("Step 8: long-running routine -> interim NRC 0x78, then final positive.")
             return NrcDecision(
@@ -473,5 +517,9 @@ def evaluate_nrc(spec: EcuSpec, state: EcuState, request: ParsedRequest) -> NrcD
 
     # 0x10, 0x11, 0x3E have no service-specific negative checks in this spec.
     # Source: design decision — see DECISIONS.md [R-NO-0x10]
+    # Positive response suppressed on request: SWS_Dcm_00200 (suppress bit set means
+    # no positive response). Negatives are always sent [R-SUPPRESS-NEG]:
+    # SWS_Dcm_00001 suppresses some NRCs only under functional addressing, which
+    # this ECU model does not use.
     trace.append("Result: positive response.")
     return NrcDecision(sid=sid, suppress_positive=sup, trace=trace)

@@ -88,6 +88,8 @@ def _apply_clock(spec: EcuSpec, state: EcuState, now_ms: int, trace: list[str]) 
     """Advance the clock: S3 timeout and lockout-delay expiry, before evaluation."""
     st = state.model_copy(update={"now_ms": now_ms})
     session = spec.get_session(st.active_session)
+    # [R-S3] + SWS_Dcm_01670 (S3Server expiry returns to the default session) and
+    # SWS_Dcm_00139 (leaving a non-default session, incl. via S3 timeout, locks security).
     if (
         st.active_session != DEFAULT_SESSION_ID
         and st.last_request_ms is not None
@@ -113,6 +115,7 @@ def _did_value(spec: EcuSpec, state: EcuState, did: int) -> bytes:
     """Current value of ``did``; a few DIDs are derived live from the state."""
     did_def = spec.get_did(did)
     assert did_def is not None
+    # [R-DYN-DID] + SWS_Dcm_00085 (the Dcm itself serves reads of DID 0xF186).
     if did_def.name == DYNAMIC_DID_ACTIVE_SESSION:
         return bytes([state.active_session]).rjust(did_def.length, b"\x00")
     if did_def.name == DYNAMIC_DID_VEHICLE_SPEED:
@@ -188,6 +191,7 @@ def _positive(
         )
         level = level_def.level
         if sub == level_def.seed_subfunction:
+            # [R-SEED] + SWS_Dcm_00323 (seed for an already-active level is all zeros).
             if state.unlocked_level == level:
                 trace.append(f"Effect: level 0x{level:02X} already unlocked -> all-zero seed.")
                 return state, head + bytes([sub]) + bytes(level_def.seed_length)

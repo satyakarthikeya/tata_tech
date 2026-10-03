@@ -10,3 +10,7 @@ outputs/audit.sqlite
 outputs/chroma/
 chroma/
 outputs/**/__pycache__/
+
+# AUTOSAR SWS: not redistributable; the owner downloads the PDF locally
+data/sources/*.pdf
+data/sources/.cache/

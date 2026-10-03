@@ -38,7 +38,8 @@ METRIC_DEFINITIONS: dict[str, str] = {
         "rate (no intent exemption) is reported alongside."
     ),
     "expected_response_accuracy": (
-        "oracle: share of generated send steps whose expected response frames equal a fresh "
+        "SELF-CONSISTENCY CHECK, circular by construction (expected bytes are produced by "
+        "the same oracle; reported in an appendix, not a headline). oracle: share of generated send steps whose expected response frames equal a fresh "
         "rules-engine re-run of the test (and share of whole tests with zero mismatches). "
         "simulator: share of generated tests passing on the bug-free independent simulator. "
         "gold: (1) exact overlap = generated tests whose full step sequence (requests and "
@@ -67,9 +68,31 @@ METRIC_DEFINITIONS: dict[str, str] = {
         "Each catalog bug is enabled alone in a fresh simulator per test. A bug is detected if "
         ">= 1 test that passes on the clean simulator fails with the bug enabled. Tests failing "
         "on the clean simulator are reported as invalid and get no credit. rate = detected bugs "
-        "/ catalog bugs. Reported for the generated suite (headline), the hand-written gold "
-        "suite (baseline) and their union."
+        "/ catalog bugs. Reported for the generated suite, the hand-written gold suite "
+        "(baseline) and their union. The 26-bug catalog (data/bugs/bug_catalog.yaml) is "
+        "IN-SAMPLE: templates v2 were added after inspecting which of these bugs v1 missed."
     ),
+    "heldout_bug_detection_rate": (
+        "Same procedure as bug_detection_rate on the 12 held-out bugs in "
+        "data/bugs/heldout_catalog.yaml, written by a subagent that could not see templates, "
+        "gold tests, eval, LLM or agent code. HEADLINE = held-out generated-suite detection. "
+        "Missed-bug reasons come from a static trigger analysis (eval/heldout.py): whether "
+        "any test applies the stimulus the bug description needs; reporting only."
+    ),
+    "simulator_rules_agreement": (
+        "A deterministic seeded random sample (eval/agreement.py; >= 5000 requests over "
+        "60-step walks with clock advances, environment/DTC changes and computed seed/key "
+        "handshakes) is sent to a bug-free SimulatedEcu and a RulesSession in lockstep. "
+        "agreed = requests with byte-identical response frames; a walk stops at its first "
+        "disagreement."
+    ),
+    "udsoncan_virtual_can": (
+        "udsoncan.Client over ISO-TP on a python-can virtual bus against the simulator: "
+        "10 03 -> 27 01 seed -> 27 02 key -> 22 0100 -> 2E 0100 50 -> 22 0100 read-back == "
+        "0x50. pass/fail (fail includes any exception, with its text); 'skipped' with "
+        "--skip-can."
+    ),
+    "gold_clean_pass": "Gold tests passing on the bug-free simulator / gold tests.",
     "pipeline_stats": (
         "Per requirement: kept tests, dropped tests (failed validation), rejected planner "
         "choices, plan attempts (retries = attempts - 1), run status."

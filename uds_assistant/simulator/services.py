@@ -21,6 +21,7 @@ from uds_assistant.simulator.memory import (
     ROUTINE_RUNNING,
     ROUTINE_STOPPED,
     EcuMemory,
+    LevelLockout,
     dtc_number,
 )
 from uds_assistant.spec.schema import DidDef, EcuSpec, RoutineDef, SecurityLevelDef
@@ -137,7 +138,10 @@ class SessionControl(ServiceHandler):
         assert sub is not None
         target = ctx.spec.get_session(sub)
         assert target is not None
+        kept_routines = dict(ctx.mem.routine_status)
         ctx.mem.drop_volatile(sub, keep_security=ctx.bug(B.SECURITY_NOT_RESET_ON_SESSION_CHANGE))
+        if ctx.bug(B.ROUTINE_STATE_SURVIVES_SESSION_CHANGE):
+            ctx.mem.routine_status.update(kept_routines)
         frame = bytes([self.positive_sid(), sub])
         if not ctx.bug(B.SESSION_RESPONSE_MISSING_TIMING):
             p2 = target.timing.p2_ms & 0xFFFF
@@ -162,6 +166,9 @@ class EcuReset(ServiceHandler):
     def execute(self, ctx: EcuContext, req: bytes, sub: int | None) -> Outcome:
         assert sub is not None
         ctx.mem.drop_volatile(DEFAULT_SESSION)
+        if ctx.bug(B.ECU_RESET_CLEARS_SECURITY_LOCKOUT):
+            for level in ctx.mem.lockouts:
+                ctx.mem.lockouts[level] = LevelLockout()
         return Outcome([bytes([self.positive_sid(), sub])])
 
 
@@ -241,7 +248,11 @@ class ReadDataById(ServiceHandler):
         defs: list[DidDef] = []
         for did_id in requested:
             did = ctx.spec.get_did(did_id)
-            if did is None or ctx.mem.session not in did.read_sessions:
+            if did is None:
+                raise Reject(NRC_OUT_OF_RANGE)
+            if ctx.mem.session not in did.read_sessions and not ctx.bug(
+                B.READ_DID_SESSION_RESTRICTION_IGNORED
+            ):
                 raise Reject(NRC_OUT_OF_RANGE)
             defs.append(did)
         size = 1 + sum(2 + d.length for d in defs)
@@ -303,12 +314,14 @@ class SecurityAccess(ServiceHandler):
         return self._key(ctx, lvl, sub, req[2:])
 
     def _seed(self, ctx: EcuContext, lvl: SecurityLevelDef, sub: int) -> Outcome:
-        if ctx.mem.unlocked_level == lvl.level:
+        if ctx.mem.unlocked_level == lvl.level and not ctx.bug(B.SEED_RETURNED_WHILE_UNLOCKED):
             return Outcome([bytes([self.positive_sid(), sub]) + bytes(lvl.seed_length)])
         seed = derive_seed(lvl.level, ctx.mem.seed_counter, lvl.seed_length)
         if not ctx.bug(B.STATIC_SEED):
             ctx.mem.seed_counter += 1
         ctx.mem.pending_seeds[lvl.level] = seed
+        if ctx.bug(B.FAILED_ATTEMPTS_RESET_BY_SEED_REQUEST):
+            ctx.mem.lockouts[lvl.level].failures = 0
         return Outcome([bytes([self.positive_sid(), sub]) + seed])
 
     def _key(self, ctx: EcuContext, lvl: SecurityLevelDef, sub: int, key: bytes) -> Outcome:
@@ -370,7 +383,10 @@ class WriteDataById(ServiceHandler):
                 raise Reject(NRC_OUT_OF_RANGE)
         if ctx.mem.nvm_write_fault:
             raise Reject(NRC_NVM_FAILURE)
-        ctx.mem.did_store[did.id] = bytes(data[: did.length])
+        stored = bytes(data[: did.length])
+        if ctx.bug(B.UINT16_DID_STORED_BYTE_SWAPPED) and did.encoding == "uint16":
+            stored = stored[::-1]
+        ctx.mem.did_store[did.id] = stored
         sid = 0x6F if ctx.bug(B.WRITE_POSITIVE_SID_WRONG) else 0x6E
         return Outcome([bytes([sid]) + did.id.to_bytes(2, "big")])
 
@@ -410,12 +426,16 @@ class RoutineControl(ServiceHandler):
         expected_len = 4 + routine.option_record_length if sub == self.START else 4
         if len(req) != expected_len:
             raise Reject(NRC_BAD_LENGTH)
+        conditions_first = ctx.bug(B.NRC_ORDER_CONDITION_BEFORE_SECURITY) and sub == self.START
+        if conditions_first and not conditions_ok(ctx, routine.conditions.requires):
+            raise Reject(NRC_CONDITIONS)
         if routine.security_level is not None and ctx.mem.unlocked_level != routine.security_level:
             raise Reject(NRC_SECURITY_DENIED)
         if sub == self.START and not conditions_ok(ctx, routine.conditions.requires):
             raise Reject(NRC_CONDITIONS)
         status = ctx.mem.routine_status.get(rid)
-        head = bytes([self.positive_sid(), sub]) + rid.to_bytes(2, "big")
+        echo = req[1] if ctx.bug(B.SUPPRESS_BIT_ECHOED_IN_RESPONSE) else sub
+        head = bytes([self.positive_sid(), echo]) + rid.to_bytes(2, "big")
         if sub == self.START:
             return self._start(ctx, routine, status, head)
         if sub == self.STOP:

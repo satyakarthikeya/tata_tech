@@ -32,6 +32,10 @@ from uds_assistant.agent import resolve_engine, run_pipeline
 from uds_assistant.agent.state import PipelineResult
 from uds_assistant.config import Config, get_config
 from uds_assistant.eval import metrics as m
+from uds_assistant.eval import understanding as u
+from uds_assistant.eval.agreement import DEFAULT_REQUESTS, simulator_rules_agreement
+from uds_assistant.eval.can_check import run_udsoncan_sequence
+from uds_assistant.eval.heldout import heldout_analysis
 from uds_assistant.eval.report_md import render_markdown
 from uds_assistant.export import to_capl, to_pytest
 from uds_assistant.llm.client import OllamaClient
@@ -39,7 +43,7 @@ from uds_assistant.llm.factory import get_llm
 from uds_assistant.rag.factory import get_retriever
 from uds_assistant.rag.ingest import build_corpus
 from uds_assistant.runner import run_bug_matrix, run_suite
-from uds_assistant.simulator import load_bug_catalog
+from uds_assistant.simulator import HELDOUT_BUG_CATALOG_PATH, load_bug_catalog
 from uds_assistant.spec.schema import load_spec
 from uds_assistant.store.audit import AuditStore
 from uds_assistant.testgen.model import TestCase, dump_tests, load_tests
@@ -48,6 +52,20 @@ from uds_assistant.testgen.templates import TEMPLATE_SET_NOTES, TEMPLATE_SET_VER
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LLM_MODES = ("mock", "ollama")
 BASELINE_FILENAME = "eval_report_baseline_v1.json"
+IN_SAMPLE_LABEL = "in-sample (templates tuned on these)"
+HELDOUT_LABEL = (
+    "held-out (bugs written by an independent subagent that could not see templates, gold "
+    "tests, eval, LLM or agent code; nothing was changed after seeing these results)"
+)
+HEADLINE_ORDER = (
+    "simulator_rules_agreement",
+    "gold_clean_pass",
+    "udsoncan_virtual_can",
+    "heldout_bug_detection",
+    "requirement_understanding",
+    "coverage",
+    "citation_validity",
+)
 
 
 def load_requirements(path: Path) -> list[dict[str, str]]:
@@ -163,6 +181,77 @@ def _baseline_comparison(out_dir: Path, current: dict[str, Any]) -> dict[str, An
     }
 
 
+def build_headline(report: dict[str, Any]) -> dict[str, Any]:
+    """Headline metrics (rows in :data:`HEADLINE_ORDER`) from the finished report.
+
+    Rows 1-3 and the gold half of row 4 do not depend on the LLM; the rest are for
+    ``report["actual_mode"]``. The other LLM mode is marked pending / not run.
+    """
+    mode = report["actual_mode"]
+    blk = report["modes"][mode]
+    agr = report["simulator_rules_agreement"]
+    held = blk["heldout_bug_detection"]
+    cov = blk["coverage"]
+    cv = blk["citation_validity"]
+    ru = blk["requirement_understanding"]
+    if "splits" in ru:
+        tsplit = ru["splits"]["test"]
+        ru_value: dict[str, Any] = {
+            "split": "test",
+            "requirements": tsplit["requirements"],
+            "target_exact_parsed": tsplit["targets_parsed"]["exact"],
+            "target_exact_parsed_rate": tsplit["targets_parsed"]["exact_rate"],
+            "target_f1_parsed": tsplit["targets_parsed"]["f1"],
+            "target_exact_exercised": tsplit["targets_exercised"]["exact"],
+            "target_exact_exercised_rate": tsplit["targets_exercised"]["exact_rate"],
+            "target_f1_exercised": tsplit["targets_exercised"]["f1"],
+            "category_recall_micro": tsplit["categories"]["micro_recall"],
+            "category_recall_macro": tsplit["categories"]["macro_recall"],
+            "precondition_recall_micro": tsplit["preconditions"]["micro_recall"],
+            "precondition_recall_macro": tsplit["preconditions"]["macro_recall"],
+            "fallback": tsplit["fallback"]["count"],
+            "fallback_unexpected": tsplit["fallback"]["unexpected_count"],
+        }
+    else:
+        ru_value = {"status": "not run"}
+    other = "ollama" if mode == "mock" else "mock"
+    pending = "pending Part B" if other == "ollama" else "not run in this invocation"
+    gold_total = report["gold_tests"]
+    rows: dict[str, Any] = {
+        "simulator_rules_agreement": {
+            "llm_dependent": False, "agreed": agr["agreed"], "total": agr["requests"],
+            "rate": agr["rate"], "seed": agr["seed"],
+        },
+        "gold_clean_pass": {
+            "llm_dependent": False, "passed": report["gold_clean_passed"], "total": gold_total,
+            "rate": report["gold_clean_pass_rate"],
+        },
+        "udsoncan_virtual_can": {
+            "llm_dependent": False, "status": report["udsoncan_virtual_can"]["status"],
+            "error": report["udsoncan_virtual_can"].get("error"),
+        },
+        "heldout_bug_detection": {
+            "llm_dependent": True, "bugs": held["generated"]["bugs"],
+            "generated": {"detected": held["generated"]["detected"],
+                          "rate": held["generated"]["rate"]},
+            "gold": {"detected": held["gold"]["detected"], "rate": held["gold"]["rate"]},
+            "union": {"detected": held["union"]["detected"], "rate": held["union"]["rate"]},
+        },
+        "requirement_understanding": {"llm_dependent": True, mode: ru_value, other: pending},
+        "coverage": {
+            "llm_dependent": True, "category_totals": cov["category_totals"],
+            "requirements_with_tests": cov["requirements_with_tests"],
+            "requirements": cov["requirements"], "rate": cov["rate"],
+        },
+        "citation_validity": {
+            "llm_dependent": True, "valid": cv["valid"], "citations": cv["citations"],
+            "rate": cv["rate"],
+        },
+    }
+    return {"mode": mode, "other_mode": other, "other_mode_status": pending,
+            "order": list(HEADLINE_ORDER), **{k: rows[k] for k in HEADLINE_ORDER}}
+
+
 def run_evaluation(
     mode: str = "mock",
     out_dir: str | Path = "outputs",
@@ -172,11 +261,17 @@ def run_evaluation(
     requirement_ids: list[str] | None = None,
     write_exports: bool = True,
     run_exported: bool = True,
+    run_can: bool = True,
+    natural: bool = True,
+    agreement_requests: int = DEFAULT_REQUESTS,
 ) -> dict[str, Any]:
     """Run the full evaluation and write ``eval_report.{json,md}`` into ``out_dir``.
 
     Returns the report as a dict (the same content as the JSON file).
-    ``requirement_ids`` restricts the run to a subset of seed requirements.
+    ``requirement_ids`` restricts the run to a subset of seed requirements (the
+    natural-requirement section always uses all of ``requirements_natural.csv``
+    unless ``natural`` is False). ``run_can=False`` skips the udsoncan
+    virtual-CAN check (reported as "skipped").
     """
     if mode not in LLM_MODES:
         raise ValueError(f"mode must be one of {LLM_MODES}, got {mode!r}")
@@ -207,6 +302,10 @@ def run_evaluation(
         requirements = [r for r in requirements if r["id"] in wanted]
     gold = load_tests(root / "data" / "gold" / "gold_tests.yaml")
     catalog = load_bug_catalog()
+    heldout_catalog = load_bug_catalog(HELDOUT_BUG_CATALOG_PATH)
+    natural_reqs = (
+        u.load_natural_requirements(root / "data" / "requirements_natural.csv") if natural else []
+    )
     chosen_engine = resolve_engine(engine)
     timings["setup"] = time.perf_counter() - t
 
@@ -221,6 +320,14 @@ def run_evaluation(
     generated = [test for r in results for test in r.tests]
     timings["generation"] = time.perf_counter() - t
 
+    # --- requirement understanding (natural requirements) -----------------------------
+    t = time.perf_counter()
+    nat_rows: list[dict[str, Any]] = []
+    for nreq in natural_reqs:
+        res = run_pipeline(nreq.text, nreq.id, spec, llm, retriever, store, engine=chosen_engine)
+        nat_rows.append(u.score_requirement(spec, nreq, res.parsed, res.tests, res.status))
+    timings["requirement_understanding"] = time.perf_counter() - t
+
     # --- execution + bug matrices -----------------------------------------------------
     t = time.perf_counter()
     eval_run = store.start_run("EVAL", f"evaluation run mode={actual_mode}", llm.name,
@@ -232,8 +339,36 @@ def run_evaluation(
     store.finish_run(eval_run, "completed")
     timings["execution_and_bug_matrix"] = time.perf_counter() - t
 
+    t = time.perf_counter()
+    gen_heldout = run_bug_matrix(generated, spec, heldout_catalog.ids, catalog=heldout_catalog)
+    gold_heldout = run_bug_matrix(gold, spec, heldout_catalog.ids, catalog=heldout_catalog)
+    timings["heldout_bug_matrix"] = time.perf_counter() - t
+
+    # --- LLM-independent checks ---------------------------------------------------------
+    t = time.perf_counter()
+    agreement = simulator_rules_agreement(spec, agreement_requests)
+    timings["simulator_rules_agreement"] = time.perf_counter() - t
+    if run_can:
+        t = time.perf_counter()
+        can_result = run_udsoncan_sequence(spec)
+        timings["udsoncan_virtual_can"] = time.perf_counter() - t
+    else:
+        can_result = {"status": "skipped", "error": None, "steps": [],
+                      "reason": "--skip-can given"}
+
     # --- metrics ----------------------------------------------------------------------
     t = time.perf_counter()
+    heldout_block: dict[str, Any] = {
+        "scope": HELDOUT_LABEL,
+        "catalog": "data/bugs/heldout_catalog.yaml",
+        "generated": m.bug_detection(gen_heldout),
+        "gold": m.bug_detection(gold_heldout),
+        "union": m.union_detection(gen_heldout, gold_heldout),
+    }
+    heldout_block["analysis"] = heldout_analysis(
+        spec, {"generated": generated, "gold": gold},
+        {"generated": heldout_block["generated"], "gold": heldout_block["gold"]},
+    )
     req_ids = [r["id"] for r in requirements]
     metrics_block: dict[str, Any] = {
         "generated_tests": {
@@ -251,10 +386,17 @@ def run_evaluation(
         "template_reuse": m.template_reuse(spec, generated),
         "citation_validity": m.citation_validity(generated, corpus),
         "bug_detection": {
+            "scope": IN_SAMPLE_LABEL,
             "generated": m.bug_detection(gen_matrix),
             "gold": m.bug_detection(gold_matrix),
             "union": m.union_detection(gen_matrix, gold_matrix),
         },
+        "heldout_bug_detection": heldout_block,
+        "requirement_understanding": {
+            "source": "data/requirements_natural.csv",
+            "per_requirement": nat_rows,
+            "splits": u.aggregate_by_split(nat_rows),
+        } if natural else {"status": "not run"},
         "pipeline": _pipeline_stats(results),
     }
     timings["metrics"] = time.perf_counter() - t
@@ -302,13 +444,20 @@ def run_evaluation(
         "requirements": len(requirements),
         "gold_tests": len(gold),
         "gold_clean_pass_rate": round(gold_clean.pass_rate, 4),
+        "gold_clean_passed": gold_clean.passed_count,
         "bug_catalog_size": len(catalog.ids),
-        "metric_definitions": m.METRIC_DEFINITIONS,
+        "heldout_catalog_size": len(heldout_catalog.ids),
+        "natural_requirements": len(natural_reqs),
+        "simulator_rules_agreement": agreement,
+        "udsoncan_virtual_can": can_result,
+        "metric_definitions": {**m.METRIC_DEFINITIONS, **u.UNDERSTANDING_DEFINITIONS},
+        "precondition_mapping": u.PRECONDITION_MAPPING,
         "modes": modes,
         "exports": export_info,
         "runtime_seconds": {k: round(v, 3) for k, v in timings.items()},
         "audit_db": "audit.sqlite",
     }
+    report["headline"] = build_headline(report)
     report["baseline_comparison"] = _baseline_comparison(
         out,
         {**mode_block, "template_set_version": TEMPLATE_SET_VERSION,
@@ -331,6 +480,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--engine", choices=("auto", "plain", "langgraph"), default="auto")
     parser.add_argument("--no-export-run", action="store_true",
                         help="write exports but do not run the exported pytest file")
+    parser.add_argument("--skip-can", action="store_true",
+                        help="skip the udsoncan virtual-CAN check (for fast test runs)")
     return parser
 
 
@@ -338,14 +489,20 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entry point; returns the process exit code."""
     args = build_parser().parse_args(argv)
     report = run_evaluation(
-        args.mode, args.out, args.engine, run_exported=not args.no_export_run
+        args.mode, args.out, args.engine, run_exported=not args.no_export_run,
+        run_can=not args.skip_can,
     )
     block = report["modes"][report["actual_mode"]]
     det = block["bug_detection"]
+    held = block["heldout_bug_detection"]
     print(
         f"mode={report['actual_mode']} (requested {report['requested_mode']}) "
         f"tests={block['generated_tests']['count']} "
-        f"bug detection: generated {det['generated']['detected']}/{det['generated']['bugs']}, "
+        f"HELD-OUT bug detection: generated {held['generated']['detected']}/"
+        f"{held['generated']['bugs']}, gold {held['gold']['detected']}/{held['gold']['bugs']}, "
+        f"union {held['union']['detected']}/{held['union']['bugs']}; "
+        f"in-sample (templates tuned on these): generated "
+        f"{det['generated']['detected']}/{det['generated']['bugs']}, "
         f"gold {det['gold']['detected']}/{det['gold']['bugs']}, "
         f"union {det['union']['detected']}/{det['union']['bugs']}"
     )

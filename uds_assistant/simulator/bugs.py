@@ -5,6 +5,11 @@ service handlers (search for the constant name). The catalog in
 ``data/bugs/bug_catalog.yaml`` documents every bug for humans and for the
 evaluation report; a test checks the catalog and :data:`IMPLEMENTED_BUG_IDS`
 stay in sync.
+
+A second, *held-out* set of faults (:data:`HELDOUT_BUG_IDS`, documented in
+``data/bugs/heldout_catalog.yaml``) uses the same hook mechanism but is kept
+out of :data:`IMPLEMENTED_BUG_IDS`, so anything iterating the original catalog
+is unaffected. :data:`ALL_BUG_IDS` is the union accepted by the simulator.
 """
 
 from __future__ import annotations
@@ -18,7 +23,9 @@ from pydantic import BaseModel, Field, model_validator
 BugCategory = Literal["nrc_order", "session", "security", "timing", "data", "format", "sequence"]
 TestCategory = Literal["positive", "negative", "session", "security", "timing"]
 
-DEFAULT_BUG_CATALOG_PATH = Path(__file__).resolve().parents[2] / "data" / "bugs" / "bug_catalog.yaml"
+_BUGS_DIR = Path(__file__).resolve().parents[2] / "data" / "bugs"
+DEFAULT_BUG_CATALOG_PATH = _BUGS_DIR / "bug_catalog.yaml"
+HELDOUT_BUG_CATALOG_PATH = _BUGS_DIR / "heldout_catalog.yaml"
 
 # --- bug ids (one constant per hook) ---------------------------------------------------------
 NRC_ORDER_DID_BEFORE_SESSION = "nrc_order_did_before_session"
@@ -79,6 +86,39 @@ IMPLEMENTED_BUG_IDS: frozenset[str] = frozenset(
     }
 )
 
+# --- held-out bug ids (separate catalog, same hook mechanism) --------------------------------
+ROUTINE_STATE_SURVIVES_SESSION_CHANGE = "routine_state_survives_session_change"
+FAILED_ATTEMPTS_RESET_BY_SEED_REQUEST = "failed_attempts_reset_by_seed_request"
+SEED_RETURNED_WHILE_UNLOCKED = "seed_returned_while_unlocked"
+NRC_ORDER_CONDITION_BEFORE_SECURITY = "nrc_order_condition_before_security"
+READ_DID_ODD_LENGTH_TRUNCATED = "read_did_odd_length_truncated"
+READ_DID_SESSION_RESTRICTION_IGNORED = "read_did_session_restriction_ignored"
+UINT16_DID_STORED_BYTE_SWAPPED = "uint16_did_stored_byte_swapped"
+S3_NOT_REFRESHED_BY_TESTER_PRESENT = "s3_not_refreshed_by_tester_present"
+ECU_RESET_CLEARS_SECURITY_LOCKOUT = "ecu_reset_clears_security_lockout"
+S3_TIMEOUT_REVERTS_WRITTEN_DIDS = "s3_timeout_reverts_written_dids"
+SESSION_SUPPRESS_BIT_NOT_MASKED = "session_suppress_bit_not_masked"
+SUPPRESS_BIT_ECHOED_IN_RESPONSE = "suppress_bit_echoed_in_response"
+
+HELDOUT_BUG_IDS: frozenset[str] = frozenset(
+    {
+        ROUTINE_STATE_SURVIVES_SESSION_CHANGE,
+        FAILED_ATTEMPTS_RESET_BY_SEED_REQUEST,
+        SEED_RETURNED_WHILE_UNLOCKED,
+        NRC_ORDER_CONDITION_BEFORE_SECURITY,
+        READ_DID_ODD_LENGTH_TRUNCATED,
+        READ_DID_SESSION_RESTRICTION_IGNORED,
+        UINT16_DID_STORED_BYTE_SWAPPED,
+        S3_NOT_REFRESHED_BY_TESTER_PRESENT,
+        ECU_RESET_CLEARS_SECURITY_LOCKOUT,
+        S3_TIMEOUT_REVERTS_WRITTEN_DIDS,
+        SESSION_SUPPRESS_BIT_NOT_MASKED,
+        SUPPRESS_BIT_ECHOED_IN_RESPONSE,
+    }
+)
+
+ALL_BUG_IDS: frozenset[str] = IMPLEMENTED_BUG_IDS | HELDOUT_BUG_IDS
+
 
 class BugDef(BaseModel):
     """One injectable simulator fault."""
@@ -88,6 +128,7 @@ class BugDef(BaseModel):
     description: str
     category: BugCategory
     expected_detection: list[TestCategory] = Field(min_length=1)
+    heldout: bool = False
 
 
 class BugCatalog(BaseModel):

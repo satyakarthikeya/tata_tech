@@ -1,9 +1,9 @@
 {
   "report_version": 1,
-  "timestamp": "2026-10-02T21:50:46.917317+00:00",
+  "timestamp": "2026-10-03T05:33:24.789329+00:00",
   "git": {
-    "commit": "f3c643c40c15ee4ecbc7e7de2c440904b6a07e57",
-    "dirty": false,
+    "commit": "d4f06b0b3f652d071732624e8b15d8babe5b5013",
+    "dirty": true,
     "note": "commit = HEAD when the evaluation ran; dirty=true means uncommitted changes were present (e.g. the phase being evaluated before its commit)."
   },
   "requested_mode": "mock",
@@ -22,16 +22,62 @@
   "requirements": 15,
   "gold_tests": 60,
   "gold_clean_pass_rate": 1.0,
+  "gold_clean_passed": 60,
   "bug_catalog_size": 26,
+  "heldout_catalog_size": 12,
+  "natural_requirements": 20,
+  "simulator_rules_agreement": {
+    "seed": 20261003,
+    "walks": 89,
+    "requests": 5000,
+    "agreed": 5000,
+    "rate": 1.0,
+    "mismatch_examples": []
+  },
+  "udsoncan_virtual_can": {
+    "status": "pass",
+    "error": null,
+    "steps": [
+      "10 03 extended session: positive",
+      "27 01 seed: 950677e8",
+      "27 02 key: positive (unlocked)",
+      "22 0100 read: 0x32",
+      "2E 0100 write 0x50: positive",
+      "22 0100 read-back: 0x50"
+    ],
+    "seconds": 0.408,
+    "transport": "udsoncan.Client over ISO-TP on python-can virtual bus"
+  },
   "metric_definitions": {
     "request_validity": "Over every send step of every generated test: the request is replayed through the rules-engine oracle in sequence (same set-up and time steps). A request counts as well-formed if (a) protocol.codec.decode_request decodes it and (b) the oracle does not reject it with a format NRC (0x11 serviceNotSupported, 0x12 subFunctionNotSupported, 0x13 incorrectMessageLengthOrInvalidFormat), unless that NRC is listed in the template's declared intended_nrcs (a deliberate malformed-request probe such as write_did_invalid_length -> 0x13). rate = well-formed / send steps. The unadjusted rate (no intent exemption) is reported alongside.",
-    "expected_response_accuracy": "oracle: share of generated send steps whose expected response frames equal a fresh rules-engine re-run of the test (and share of whole tests with zero mismatches). simulator: share of generated tests passing on the bug-free independent simulator. gold: (1) exact overlap = generated tests whose full step sequence (requests and set-up/time steps, ignoring expected responses) is identical to a gold test; agreement = identical expected responses on every step. (2) shared-prefix overlap = every distinct send step reached by an identical step prefix from power-on in both a generated and a gold test (deduplicated by prefix); agreement = identical expected frames for that step.",
+    "expected_response_accuracy": "SELF-CONSISTENCY CHECK, circular by construction (expected bytes are produced by the same oracle; reported in an appendix, not a headline). oracle: share of generated send steps whose expected response frames equal a fresh rules-engine re-run of the test (and share of whole tests with zero mismatches). simulator: share of generated tests passing on the bug-free independent simulator. gold: (1) exact overlap = generated tests whose full step sequence (requests and set-up/time steps, ignoring expected responses) is identical to a gold test; agreement = identical expected responses on every step. (2) shared-prefix overlap = every distinct send step reached by an identical step prefix from power-on in both a generated and a gold test (deduplicated by prefix); agreement = identical expected frames for that step.",
     "coverage": "Number of generated tests per category (positive/negative/session/security/timing) per requirement. rate = requirements with >= 1 generated test / requirements; category_presence = categories with >= 1 test across the suite / 5.",
     "template_reuse_rate": "Share of generated tests whose template_id is a registered template AND whose steps are byte-identical to a fresh instantiation of that template with the test's stored parameters (independent re-check of byte provenance).",
     "citation_validity": "Share of all citations attached to generated tests for which rag.citations.citation_is_valid is true against the evaluation corpus (source+ref exists; a quote must appear verbatim and its hex identifiers must belong to the chunk).",
-    "bug_detection_rate": "Each catalog bug is enabled alone in a fresh simulator per test. A bug is detected if >= 1 test that passes on the clean simulator fails with the bug enabled. Tests failing on the clean simulator are reported as invalid and get no credit. rate = detected bugs / catalog bugs. Reported for the generated suite (headline), the hand-written gold suite (baseline) and their union.",
+    "bug_detection_rate": "Each catalog bug is enabled alone in a fresh simulator per test. A bug is detected if >= 1 test that passes on the clean simulator fails with the bug enabled. Tests failing on the clean simulator are reported as invalid and get no credit. rate = detected bugs / catalog bugs. Reported for the generated suite, the hand-written gold suite (baseline) and their union. The 26-bug catalog (data/bugs/bug_catalog.yaml) is IN-SAMPLE: templates v2 were added after inspecting which of these bugs v1 missed.",
+    "heldout_bug_detection_rate": "Same procedure as bug_detection_rate on the 12 held-out bugs in data/bugs/heldout_catalog.yaml, written by a subagent that could not see templates, gold tests, eval, LLM or agent code. HEADLINE = held-out generated-suite detection. Missed-bug reasons come from a static trigger analysis (eval/heldout.py): whether any test applies the stimulus the bug description needs; reporting only.",
+    "simulator_rules_agreement": "A deterministic seeded random sample (eval/agreement.py; >= 5000 requests over 60-step walks with clock advances, environment/DTC changes and computed seed/key handshakes) is sent to a bug-free SimulatedEcu and a RulesSession in lockstep. agreed = requests with byte-identical response frames; a walk stops at its first disagreement.",
+    "udsoncan_virtual_can": "udsoncan.Client over ISO-TP on a python-can virtual bus against the simulator: 10 03 -> 27 01 seed -> 27 02 key -> 22 0100 -> 2E 0100 50 -> 22 0100 read-back == 0x50. pass/fail (fail includes any exception, with its text); 'skipped' with --skip-can.",
+    "gold_clean_pass": "Gold tests passing on the bug-free simulator / gold tests.",
     "pipeline_stats": "Per requirement: kept tests, dropped tests (failed validation), rejected planner choices, plan attempts (retries = attempts - 1), run status.",
-    "runtime": "Wall-clock seconds per evaluation phase and in total (machine dependent)."
+    "runtime": "Wall-clock seconds per evaluation phase and in total (machine dependent).",
+    "target_identification": "Label set = target_services U target_dids U target_routines (typed, so service 0x22 and DID 0x0022 differ). Two predicted sets: (a) 'parsed' = services U dids U routines of the ParsedRequirement returned by the pipeline; (b) 'exercised' = every SID of every send step in the requirement's generated tests, every DID named by a 0x22 (all complete pairs) or 0x2E (first pair) request, and every routine id of a 0x31 request. Exact match = predicted set equals label set; for a requirement with an empty label set (NAT-020, unsupported) exact match additionally requires zero generated tests. Micro precision / recall / F1 sum TP / FP / FN over requirements.",
+    "category_recall": "|required_categories n categories of the requirement's generated tests| / |required_categories|. Micro = summed numerators / summed denominators; macro = mean over requirements with >= 1 required category (NAT-020 has none and is excluded).",
+    "precondition_recall": "|required_preconditions n preconditions established by >= 1 generated test| / |required_preconditions|, `none` skipped (requirements whose label is `none` are excluded). 'Established' is derived statically from each test's concrete steps and oracle-expected responses (mapping below). Micro and macro as for categories.",
+    "fallback": "A requirement counts as fallback / produced-nothing if the pipeline status is not 'completed', or the parsed requirement has no services, DIDs or routines, or it kept zero tests. Reported with the list of ids (for NAT-020 producing nothing is the correct outcome)."
+  },
+  "precondition_mapping": {
+    "default_session": "a request other than 0x10 is sent while the tracked session is the default session (no session change before it, or after a reset / S3 timeout), or a positive 10 01",
+    "extended_session": "a 0x10 request with sub-function 0x03 (suppress bit masked) whose expected outcome is positive",
+    "programming_session": "a 0x10 request with sub-function 0x02 whose expected outcome is positive",
+    "security_level_N": "a sendKey (0x27, the level's key sub-function from the spec) whose expected outcome is positive; level 0x01 -> security_level_1, 0x03 -> security_level_3",
+    "vehicle_moving": "a set_environment step with vehicle_speed_kph > 0",
+    "vehicle_stationary": "a set_environment step with vehicle_speed_kph == 0, or a positive 0x2E write / 0x31 start of a DID / routine whose spec conditions require vehicle_stationary",
+    "nvm_fault": "a set_environment step with nvm_write_fault = true",
+    "dtc_status_set": "a set_dtc_status step",
+    "routine_started": "a positive 0x31 startRoutine (sub-function 0x01) followed by at least one later send step",
+    "s3_elapsed": "clock advanced by more than the active session's S3 time between two send steps",
+    "lockout_active": "an expected 7F 27 36 (exceededNumberOfAttempts) or 7F 27 37 (requiredTimeDelayNotExpired) response"
   },
   "modes": {
     "mock": {
@@ -293,6 +339,7 @@
         "invalid_examples": []
       },
       "bug_detection": {
+        "scope": "in-sample (templates tuned on these)",
         "generated": {
           "bugs": 26,
           "detected": 25,
@@ -1174,6 +1221,1775 @@
           ]
         }
       },
+      "heldout_bug_detection": {
+        "scope": "held-out (bugs written by an independent subagent that could not see templates, gold tests, eval, LLM or agent code; nothing was changed after seeing these results)",
+        "catalog": "data/bugs/heldout_catalog.yaml",
+        "generated": {
+          "bugs": 12,
+          "detected": 3,
+          "rate": 0.25,
+          "tests": 171,
+          "valid_tests": 171,
+          "invalid_tests": [],
+          "undetected": [
+            "routine_state_survives_session_change",
+            "seed_returned_while_unlocked",
+            "nrc_order_condition_before_security",
+            "read_did_odd_length_truncated",
+            "read_did_session_restriction_ignored",
+            "uint16_did_stored_byte_swapped",
+            "ecu_reset_clears_security_lockout",
+            "s3_timeout_reverts_written_dids",
+            "suppress_bit_echoed_in_response"
+          ],
+          "per_bug": [
+            {
+              "bug_id": "routine_state_survives_session_change",
+              "title": "Routine state survives a session change",
+              "category": "session",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "failed_attempts_reset_by_seed_request",
+              "title": "Failed-key counter reset by every requestSeed",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "req_005__tpl_security_lockout_01",
+                "req_006__tpl_security_lockout_01",
+                "req_007__tpl_security_lockout_01",
+                "req_008__tpl_security_lockout_01",
+                "req_009__tpl_security_lockout_03",
+                "req_010__tpl_security_lockout_01"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "seed_returned_while_unlocked",
+              "title": "Non-zero seed returned while the level is already unlocked",
+              "category": "security",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "nrc_order_condition_before_security",
+              "title": "Wrong NRC priority: 0x22 before 0x33 on RoutineControl start",
+              "category": "nrc_order",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "read_did_odd_length_truncated",
+              "title": "0x22 silently drops a trailing odd byte",
+              "category": "format",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "read_did_session_restriction_ignored",
+              "title": "DID read-session restriction ignored",
+              "category": "data",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "uint16_did_stored_byte_swapped",
+              "title": "uint16 DID stored little-endian",
+              "category": "data",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "s3_not_refreshed_by_tester_present",
+              "title": "TesterPresent does not restart the S3 timer",
+              "category": "timing",
+              "detected": true,
+              "detecting_tests": [
+                "req_001__tpl_s3_keepalive_02",
+                "req_001__tpl_s3_keepalive_03",
+                "req_002__tpl_s3_keepalive_02",
+                "req_002__tpl_s3_keepalive_03",
+                "req_003__tpl_s3_keepalive_03",
+                "req_004__tpl_s3_keepalive_02",
+                "req_005__tpl_s3_keepalive_03",
+                "req_006__tpl_s3_keepalive_03",
+                "req_007__tpl_s3_keepalive_03",
+                "req_008__tpl_s3_keepalive_03",
+                "req_009__tpl_s3_keepalive_02",
+                "req_015__tpl_s3_keepalive_02",
+                "req_015__tpl_s3_keepalive_03"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "ecu_reset_clears_security_lockout",
+              "title": "ECUReset clears the security lockout",
+              "category": "security",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "s3_timeout_reverts_written_dids",
+              "title": "S3 timeout reverts written DIDs to defaults",
+              "category": "timing",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "session_suppress_bit_not_masked",
+              "title": "Session control does not mask the suppress bit",
+              "category": "format",
+              "detected": true,
+              "detecting_tests": [
+                "req_003__tpl_suppress_positive_10_01",
+                "req_003__tpl_suppress_positive_10_03",
+                "req_004__tpl_suppress_positive_10_02"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "suppress_bit_echoed_in_response",
+              "title": "Suppress bit echoed in RoutineControl response",
+              "category": "format",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            }
+          ]
+        },
+        "gold": {
+          "bugs": 12,
+          "detected": 3,
+          "rate": 0.25,
+          "tests": 60,
+          "valid_tests": 60,
+          "invalid_tests": [],
+          "undetected": [
+            "routine_state_survives_session_change",
+            "nrc_order_condition_before_security",
+            "read_did_odd_length_truncated",
+            "read_did_session_restriction_ignored",
+            "s3_not_refreshed_by_tester_present",
+            "ecu_reset_clears_security_lockout",
+            "s3_timeout_reverts_written_dids",
+            "session_suppress_bit_not_masked",
+            "suppress_bit_echoed_in_response"
+          ],
+          "per_bug": [
+            {
+              "bug_id": "routine_state_survives_session_change",
+              "title": "Routine state survives a session change",
+              "category": "session",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "failed_attempts_reset_by_seed_request",
+              "title": "Failed-key counter reset by every requestSeed",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "gold_security_lockout_after_3"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "seed_returned_while_unlocked",
+              "title": "Non-zero seed returned while the level is already unlocked",
+              "category": "security",
+              "detected": true,
+              "detecting_tests": [
+                "gold_security_already_unlocked_seed"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "nrc_order_condition_before_security",
+              "title": "Wrong NRC priority: 0x22 before 0x33 on RoutineControl start",
+              "category": "nrc_order",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "read_did_odd_length_truncated",
+              "title": "0x22 silently drops a trailing odd byte",
+              "category": "format",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "read_did_session_restriction_ignored",
+              "title": "DID read-session restriction ignored",
+              "category": "data",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "uint16_did_stored_byte_swapped",
+              "title": "uint16 DID stored little-endian",
+              "category": "data",
+              "detected": true,
+              "detecting_tests": [
+                "gold_write_coding_variant"
+              ],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "s3_not_refreshed_by_tester_present",
+              "title": "TesterPresent does not restart the S3 timer",
+              "category": "timing",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "ecu_reset_clears_security_lockout",
+              "title": "ECUReset clears the security lockout",
+              "category": "security",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "s3_timeout_reverts_written_dids",
+              "title": "S3 timeout reverts written DIDs to defaults",
+              "category": "timing",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "session_suppress_bit_not_masked",
+              "title": "Session control does not mask the suppress bit",
+              "category": "format",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            },
+            {
+              "bug_id": "suppress_bit_echoed_in_response",
+              "title": "Suppress bit echoed in RoutineControl response",
+              "category": "format",
+              "detected": false,
+              "detecting_tests": [],
+              "failing_invalid_tests": []
+            }
+          ]
+        },
+        "union": {
+          "bugs": 12,
+          "detected": 5,
+          "rate": 0.4167,
+          "undetected": [
+            "routine_state_survives_session_change",
+            "nrc_order_condition_before_security",
+            "read_did_odd_length_truncated",
+            "read_did_session_restriction_ignored",
+            "ecu_reset_clears_security_lockout",
+            "s3_timeout_reverts_written_dids",
+            "suppress_bit_echoed_in_response"
+          ],
+          "only_generated": [
+            "s3_not_refreshed_by_tester_present",
+            "session_suppress_bit_not_masked"
+          ],
+          "only_gold": [
+            "seed_returned_while_unlocked",
+            "uint16_did_stored_byte_swapped"
+          ]
+        },
+        "analysis": {
+          "triggers": {
+            "routine_state_survives_session_change": "starts a routine, changes session, then asks for that routine's results",
+            "failed_attempts_reset_by_seed_request": "requests a new seed between failed keys up to the attempt limit",
+            "seed_returned_while_unlocked": "requests a seed for a level that is already unlocked",
+            "nrc_order_condition_before_security": "starts a vehicle_stationary-gated routine while moving AND still locked",
+            "read_did_odd_length_truncated": "sends 0x22 with an odd number (>= 3) of DID bytes",
+            "read_did_session_restriction_ignored": "reads a DID outside its read_sessions",
+            "uint16_did_stored_byte_swapped": "writes a uint16 DID and reads it back",
+            "s3_not_refreshed_by_tester_present": "keeps a non-default session alive with TesterPresent across idle time",
+            "ecu_reset_clears_security_lockout": "resets the ECU after a security lockout and then requests a seed",
+            "s3_timeout_reverts_written_dids": "writes a DID, lets S3 expire, then reads the DID back",
+            "session_suppress_bit_not_masked": "sends DiagnosticSessionControl with the suppress bit set",
+            "suppress_bit_echoed_in_response": "sends RoutineControl with the suppress bit where a positive response is still expected (e.g. after 0x78)"
+          },
+          "generated": {
+            "trigger_counts": {
+              "routine_state_survives_session_change": 0,
+              "failed_attempts_reset_by_seed_request": 6,
+              "seed_returned_while_unlocked": 0,
+              "nrc_order_condition_before_security": 0,
+              "read_did_odd_length_truncated": 0,
+              "read_did_session_restriction_ignored": 0,
+              "uint16_did_stored_byte_swapped": 0,
+              "s3_not_refreshed_by_tester_present": 13,
+              "ecu_reset_clears_security_lockout": 0,
+              "s3_timeout_reverts_written_dids": 0,
+              "session_suppress_bit_not_masked": 6,
+              "suppress_bit_echoed_in_response": 0
+            },
+            "missed": [
+              {
+                "bug_id": "routine_state_survives_session_change",
+                "reason": "no generated test starts a routine, changes session, then asks for that routine's results"
+              },
+              {
+                "bug_id": "seed_returned_while_unlocked",
+                "reason": "no generated test requests a seed for a level that is already unlocked"
+              },
+              {
+                "bug_id": "nrc_order_condition_before_security",
+                "reason": "no generated test starts a vehicle_stationary-gated routine while moving AND still locked"
+              },
+              {
+                "bug_id": "read_did_odd_length_truncated",
+                "reason": "no generated test sends 0x22 with an odd number (>= 3) of DID bytes"
+              },
+              {
+                "bug_id": "read_did_session_restriction_ignored",
+                "reason": "no generated test reads a DID outside its read_sessions"
+              },
+              {
+                "bug_id": "uint16_did_stored_byte_swapped",
+                "reason": "no generated test writes a uint16 DID and reads it back"
+              },
+              {
+                "bug_id": "ecu_reset_clears_security_lockout",
+                "reason": "no generated test resets the ECU after a security lockout and then requests a seed"
+              },
+              {
+                "bug_id": "s3_timeout_reverts_written_dids",
+                "reason": "no generated test writes a DID, lets S3 expire, then reads the DID back"
+              },
+              {
+                "bug_id": "suppress_bit_echoed_in_response",
+                "reason": "no generated test sends RoutineControl with the suppress bit where a positive response is still expected (e.g. after 0x78)"
+              }
+            ]
+          },
+          "gold": {
+            "trigger_counts": {
+              "routine_state_survives_session_change": 0,
+              "failed_attempts_reset_by_seed_request": 1,
+              "seed_returned_while_unlocked": 1,
+              "nrc_order_condition_before_security": 0,
+              "read_did_odd_length_truncated": 0,
+              "read_did_session_restriction_ignored": 0,
+              "uint16_did_stored_byte_swapped": 1,
+              "s3_not_refreshed_by_tester_present": 0,
+              "ecu_reset_clears_security_lockout": 0,
+              "s3_timeout_reverts_written_dids": 0,
+              "session_suppress_bit_not_masked": 0,
+              "suppress_bit_echoed_in_response": 0
+            },
+            "missed": [
+              {
+                "bug_id": "routine_state_survives_session_change",
+                "reason": "no gold test starts a routine, changes session, then asks for that routine's results"
+              },
+              {
+                "bug_id": "nrc_order_condition_before_security",
+                "reason": "no gold test starts a vehicle_stationary-gated routine while moving AND still locked"
+              },
+              {
+                "bug_id": "read_did_odd_length_truncated",
+                "reason": "no gold test sends 0x22 with an odd number (>= 3) of DID bytes"
+              },
+              {
+                "bug_id": "read_did_session_restriction_ignored",
+                "reason": "no gold test reads a DID outside its read_sessions"
+              },
+              {
+                "bug_id": "s3_not_refreshed_by_tester_present",
+                "reason": "no gold test keeps a non-default session alive with TesterPresent across idle time"
+              },
+              {
+                "bug_id": "ecu_reset_clears_security_lockout",
+                "reason": "no gold test resets the ECU after a security lockout and then requests a seed"
+              },
+              {
+                "bug_id": "s3_timeout_reverts_written_dids",
+                "reason": "no gold test writes a DID, lets S3 expire, then reads the DID back"
+              },
+              {
+                "bug_id": "session_suppress_bit_not_masked",
+                "reason": "no gold test sends DiagnosticSessionControl with the suppress bit set"
+              },
+              {
+                "bug_id": "suppress_bit_echoed_in_response",
+                "reason": "no gold test sends RoutineControl with the suppress bit where a positive response is still expected (e.g. after 0x78)"
+              }
+            ]
+          }
+        }
+      },
+      "requirement_understanding": {
+        "source": "data/requirements_natural.csv",
+        "per_requirement": [
+          {
+            "id": "NAT-001",
+            "split": "dev",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 17,
+            "label_targets": [
+              "did:0xF190",
+              "service:0x22"
+            ],
+            "parsed": {
+              "exact": true,
+              "tp": 2,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 2,
+              "fp": 9,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "did:0x0100",
+                "did:0x0101",
+                "did:0xDEAD",
+                "did:0xF186",
+                "did:0xF187",
+                "did:0xF18C",
+                "service:0x10",
+                "service:0x2E",
+                "service:0x3E"
+              ]
+            },
+            "categories": {
+              "required": 1,
+              "hit": 1,
+              "recall": 1.0,
+              "missed": []
+            },
+            "produced_categories": [
+              "negative",
+              "positive",
+              "session",
+              "timing"
+            ],
+            "preconditions": {
+              "required": 0,
+              "hit": 0,
+              "recall": null,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "programming_session",
+              "s3_elapsed"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-002",
+            "split": "test",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 13,
+            "label_targets": [
+              "did:0xF187",
+              "did:0xF18C",
+              "service:0x22"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "missed": [
+                "did:0xF18C"
+              ],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 2,
+              "fp": 7,
+              "fn": 1,
+              "missed": [
+                "did:0xF18C"
+              ],
+              "extra": [
+                "did:0x0100",
+                "did:0xDEAD",
+                "did:0xF186",
+                "did:0xF190",
+                "service:0x10",
+                "service:0x2E",
+                "service:0x3E"
+              ]
+            },
+            "categories": {
+              "required": 1,
+              "hit": 1,
+              "recall": 1.0,
+              "missed": []
+            },
+            "produced_categories": [
+              "negative",
+              "positive",
+              "session",
+              "timing"
+            ],
+            "preconditions": {
+              "required": 0,
+              "hit": 0,
+              "recall": null,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "programming_session",
+              "s3_elapsed"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-003",
+            "split": "dev",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 0,
+            "label_targets": [
+              "service:0x10"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "missed": [
+                "service:0x10"
+              ],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "missed": [
+                "service:0x10"
+              ],
+              "extra": []
+            },
+            "categories": {
+              "required": 2,
+              "hit": 0,
+              "recall": 0.0,
+              "missed": [
+                "positive",
+                "session"
+              ]
+            },
+            "produced_categories": [],
+            "preconditions": {
+              "required": 0,
+              "hit": 0,
+              "recall": null,
+              "missed": []
+            },
+            "established_preconditions": [],
+            "fallback": true,
+            "fallback_reasons": [
+              "no parsed services/DIDs/routines",
+              "zero tests"
+            ]
+          },
+          {
+            "id": "NAT-004",
+            "split": "test",
+            "ambiguous": true,
+            "status": "completed",
+            "tests": 9,
+            "label_targets": [
+              "service:0x10"
+            ],
+            "parsed": {
+              "exact": true,
+              "tp": 1,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "exercised": {
+              "exact": true,
+              "tp": 1,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "categories": {
+              "required": 3,
+              "hit": 2,
+              "recall": 0.6667,
+              "missed": [
+                "session"
+              ]
+            },
+            "produced_categories": [
+              "negative",
+              "positive"
+            ],
+            "preconditions": {
+              "required": 1,
+              "hit": 0,
+              "recall": 0.0,
+              "missed": [
+                "vehicle_stationary"
+              ]
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "programming_session"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-005",
+            "split": "dev",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 14,
+            "label_targets": [
+              "did:0x0100",
+              "service:0x10",
+              "service:0x27",
+              "service:0x2E"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 3,
+              "fp": 0,
+              "fn": 1,
+              "missed": [
+                "service:0x10"
+              ],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 4,
+              "fp": 4,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "did:0xDEAD",
+                "did:0xF186",
+                "service:0x22",
+                "service:0x3E"
+              ]
+            },
+            "categories": {
+              "required": 4,
+              "hit": 4,
+              "recall": 1.0,
+              "missed": []
+            },
+            "produced_categories": [
+              "negative",
+              "positive",
+              "security",
+              "session",
+              "timing"
+            ],
+            "preconditions": {
+              "required": 2,
+              "hit": 2,
+              "recall": 1.0,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "lockout_active",
+              "programming_session",
+              "s3_elapsed",
+              "security_level_1"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-006",
+            "split": "test",
+            "ambiguous": true,
+            "status": "completed",
+            "tests": 12,
+            "label_targets": [
+              "did:0x0101",
+              "service:0x10",
+              "service:0x27",
+              "service:0x2E"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 1,
+              "fp": 0,
+              "fn": 3,
+              "missed": [
+                "service:0x10",
+                "service:0x27",
+                "service:0x2E"
+              ],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 4,
+              "fp": 5,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "did:0x0100",
+                "did:0xDEAD",
+                "did:0xF186",
+                "service:0x22",
+                "service:0x3E"
+              ]
+            },
+            "categories": {
+              "required": 3,
+              "hit": 3,
+              "recall": 1.0,
+              "missed": []
+            },
+            "produced_categories": [
+              "negative",
+              "positive",
+              "security",
+              "session",
+              "timing"
+            ],
+            "preconditions": {
+              "required": 2,
+              "hit": 2,
+              "recall": 1.0,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "lockout_active",
+              "s3_elapsed",
+              "security_level_1"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-007",
+            "split": "dev",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 7,
+            "label_targets": [
+              "did:0x0130",
+              "service:0x2E"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 1,
+              "fp": 0,
+              "fn": 1,
+              "missed": [
+                "service:0x2E"
+              ],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 2,
+              "fp": 5,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "did:0x0100",
+                "did:0xDEAD",
+                "service:0x10",
+                "service:0x22",
+                "service:0x27"
+              ]
+            },
+            "categories": {
+              "required": 2,
+              "hit": 1,
+              "recall": 0.5,
+              "missed": [
+                "security"
+              ]
+            },
+            "produced_categories": [
+              "negative",
+              "positive",
+              "session"
+            ],
+            "preconditions": {
+              "required": 2,
+              "hit": 2,
+              "recall": 1.0,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "security_level_1"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-008",
+            "split": "test",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 0,
+            "label_targets": [
+              "did:0x0131",
+              "service:0x2E"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 1,
+              "fp": 0,
+              "fn": 1,
+              "missed": [
+                "service:0x2E"
+              ],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 0,
+              "fp": 0,
+              "fn": 2,
+              "missed": [
+                "did:0x0131",
+                "service:0x2E"
+              ],
+              "extra": []
+            },
+            "categories": {
+              "required": 2,
+              "hit": 0,
+              "recall": 0.0,
+              "missed": [
+                "negative",
+                "security"
+              ]
+            },
+            "produced_categories": [],
+            "preconditions": {
+              "required": 2,
+              "hit": 0,
+              "recall": 0.0,
+              "missed": [
+                "extended_session",
+                "security_level_1"
+              ]
+            },
+            "established_preconditions": [],
+            "fallback": true,
+            "fallback_reasons": [
+              "zero tests"
+            ]
+          },
+          {
+            "id": "NAT-009",
+            "split": "dev",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 13,
+            "label_targets": [
+              "did:0x0150",
+              "service:0x10",
+              "service:0x27",
+              "service:0x2E"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 2,
+              "fp": 0,
+              "fn": 2,
+              "missed": [
+                "service:0x10",
+                "service:0x27"
+              ],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 4,
+              "fp": 9,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "did:0x0100",
+                "did:0x0160",
+                "did:0xDEAD",
+                "did:0xF186",
+                "routine:0x0201",
+                "routine:0xDEAD",
+                "service:0x22",
+                "service:0x31",
+                "service:0x3E"
+              ]
+            },
+            "categories": {
+              "required": 4,
+              "hit": 3,
+              "recall": 0.75,
+              "missed": [
+                "positive"
+              ]
+            },
+            "produced_categories": [
+              "negative",
+              "security",
+              "session",
+              "timing"
+            ],
+            "preconditions": {
+              "required": 3,
+              "hit": 3,
+              "recall": 1.0,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "lockout_active",
+              "programming_session",
+              "s3_elapsed",
+              "security_level_3",
+              "vehicle_moving",
+              "vehicle_stationary"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-010",
+            "split": "test",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 3,
+            "label_targets": [
+              "service:0x27"
+            ],
+            "parsed": {
+              "exact": true,
+              "tp": 1,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 1,
+              "fp": 1,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "service:0x10"
+              ]
+            },
+            "categories": {
+              "required": 3,
+              "hit": 1,
+              "recall": 0.3333,
+              "missed": [
+                "security",
+                "timing"
+              ]
+            },
+            "produced_categories": [
+              "negative",
+              "session"
+            ],
+            "preconditions": {
+              "required": 1,
+              "hit": 1,
+              "recall": 1.0,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "programming_session"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-011",
+            "split": "dev",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 9,
+            "label_targets": [
+              "routine:0x0201",
+              "service:0x31"
+            ],
+            "parsed": {
+              "exact": true,
+              "tp": 2,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 2,
+              "fp": 3,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "routine:0xDEAD",
+                "service:0x10",
+                "service:0x27"
+              ]
+            },
+            "categories": {
+              "required": 4,
+              "hit": 3,
+              "recall": 0.75,
+              "missed": [
+                "security"
+              ]
+            },
+            "produced_categories": [
+              "negative",
+              "positive",
+              "session"
+            ],
+            "preconditions": {
+              "required": 2,
+              "hit": 2,
+              "recall": 1.0,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "programming_session",
+              "routine_started",
+              "security_level_1"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-012",
+            "split": "test",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 12,
+            "label_targets": [
+              "routine:0x0202",
+              "service:0x31"
+            ],
+            "parsed": {
+              "exact": true,
+              "tp": 2,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 2,
+              "fp": 7,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "did:0x0100",
+                "did:0xDEAD",
+                "routine:0x0201",
+                "routine:0xDEAD",
+                "service:0x10",
+                "service:0x27",
+                "service:0x2E"
+              ]
+            },
+            "categories": {
+              "required": 2,
+              "hit": 2,
+              "recall": 1.0,
+              "missed": []
+            },
+            "produced_categories": [
+              "negative",
+              "positive",
+              "session"
+            ],
+            "preconditions": {
+              "required": 3,
+              "hit": 3,
+              "recall": 1.0,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "programming_session",
+              "routine_started",
+              "security_level_1",
+              "vehicle_moving",
+              "vehicle_stationary"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-013",
+            "split": "dev",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 6,
+            "label_targets": [
+              "service:0x11"
+            ],
+            "parsed": {
+              "exact": true,
+              "tp": 1,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 1,
+              "fp": 1,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "service:0x10"
+              ]
+            },
+            "categories": {
+              "required": 2,
+              "hit": 1,
+              "recall": 0.5,
+              "missed": [
+                "positive"
+              ]
+            },
+            "produced_categories": [
+              "negative"
+            ],
+            "preconditions": {
+              "required": 0,
+              "hit": 0,
+              "recall": null,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "programming_session"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-014",
+            "split": "test",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 11,
+            "label_targets": [
+              "service:0x19"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 1,
+              "fp": 1,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "service:0x22"
+              ]
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 1,
+              "fp": 4,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "did:0xDEAD",
+                "service:0x10",
+                "service:0x14",
+                "service:0x22"
+              ]
+            },
+            "categories": {
+              "required": 2,
+              "hit": 2,
+              "recall": 1.0,
+              "missed": []
+            },
+            "produced_categories": [
+              "negative",
+              "positive",
+              "session"
+            ],
+            "preconditions": {
+              "required": 0,
+              "hit": 0,
+              "recall": null,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "dtc_status_set",
+              "extended_session",
+              "programming_session"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-015",
+            "split": "dev",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 9,
+            "label_targets": [
+              "service:0x3E"
+            ],
+            "parsed": {
+              "exact": true,
+              "tp": 1,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 1,
+              "fp": 1,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "service:0x10"
+              ]
+            },
+            "categories": {
+              "required": 3,
+              "hit": 1,
+              "recall": 0.3333,
+              "missed": [
+                "session",
+                "timing"
+              ]
+            },
+            "produced_categories": [
+              "negative",
+              "positive"
+            ],
+            "preconditions": {
+              "required": 0,
+              "hit": 0,
+              "recall": null,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "programming_session"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-016",
+            "split": "test",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 11,
+            "label_targets": [
+              "did:0x0160",
+              "service:0x10",
+              "service:0x27",
+              "service:0x2E"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 1,
+              "fp": 0,
+              "fn": 3,
+              "missed": [
+                "service:0x10",
+                "service:0x27",
+                "service:0x2E"
+              ],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 4,
+              "fp": 5,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "did:0x0100",
+                "did:0xDEAD",
+                "did:0xF186",
+                "service:0x22",
+                "service:0x3E"
+              ]
+            },
+            "categories": {
+              "required": 4,
+              "hit": 4,
+              "recall": 1.0,
+              "missed": []
+            },
+            "produced_categories": [
+              "negative",
+              "positive",
+              "security",
+              "session",
+              "timing"
+            ],
+            "preconditions": {
+              "required": 2,
+              "hit": 2,
+              "recall": 1.0,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "lockout_active",
+              "programming_session",
+              "s3_elapsed",
+              "security_level_3"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-017",
+            "split": "test",
+            "ambiguous": true,
+            "status": "completed",
+            "tests": 0,
+            "label_targets": [
+              "service:0x14",
+              "service:0x19"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 0,
+              "fp": 0,
+              "fn": 2,
+              "missed": [
+                "service:0x14",
+                "service:0x19"
+              ],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 0,
+              "fp": 0,
+              "fn": 2,
+              "missed": [
+                "service:0x14",
+                "service:0x19"
+              ],
+              "extra": []
+            },
+            "categories": {
+              "required": 3,
+              "hit": 0,
+              "recall": 0.0,
+              "missed": [
+                "negative",
+                "positive",
+                "session"
+              ]
+            },
+            "produced_categories": [],
+            "preconditions": {
+              "required": 0,
+              "hit": 0,
+              "recall": null,
+              "missed": []
+            },
+            "established_preconditions": [],
+            "fallback": true,
+            "fallback_reasons": [
+              "no parsed services/DIDs/routines",
+              "zero tests"
+            ]
+          },
+          {
+            "id": "NAT-018",
+            "split": "test",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 12,
+            "label_targets": [
+              "did:0x0120",
+              "service:0x27",
+              "service:0x2E"
+            ],
+            "parsed": {
+              "exact": false,
+              "tp": 2,
+              "fp": 0,
+              "fn": 1,
+              "missed": [
+                "service:0x27"
+              ],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 3,
+              "fp": 6,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "did:0x0100",
+                "did:0xDEAD",
+                "did:0xF186",
+                "service:0x10",
+                "service:0x22",
+                "service:0x3E"
+              ]
+            },
+            "categories": {
+              "required": 2,
+              "hit": 2,
+              "recall": 1.0,
+              "missed": []
+            },
+            "produced_categories": [
+              "negative",
+              "positive",
+              "security",
+              "session",
+              "timing"
+            ],
+            "preconditions": {
+              "required": 2,
+              "hit": 2,
+              "recall": 1.0,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "lockout_active",
+              "s3_elapsed",
+              "security_level_1"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-019",
+            "split": "test",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 14,
+            "label_targets": [
+              "routine:0x0203",
+              "service:0x31"
+            ],
+            "parsed": {
+              "exact": true,
+              "tp": 2,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "exercised": {
+              "exact": false,
+              "tp": 2,
+              "fp": 9,
+              "fn": 0,
+              "missed": [],
+              "extra": [
+                "did:0x0160",
+                "did:0xF186",
+                "routine:0x0201",
+                "routine:0xDEAD",
+                "service:0x10",
+                "service:0x22",
+                "service:0x27",
+                "service:0x2E",
+                "service:0x3E"
+              ]
+            },
+            "categories": {
+              "required": 3,
+              "hit": 2,
+              "recall": 0.6667,
+              "missed": [
+                "positive"
+              ]
+            },
+            "produced_categories": [
+              "negative",
+              "security",
+              "session",
+              "timing"
+            ],
+            "preconditions": {
+              "required": 2,
+              "hit": 2,
+              "recall": 1.0,
+              "missed": []
+            },
+            "established_preconditions": [
+              "default_session",
+              "extended_session",
+              "lockout_active",
+              "programming_session",
+              "routine_started",
+              "s3_elapsed",
+              "security_level_3"
+            ],
+            "fallback": false,
+            "fallback_reasons": []
+          },
+          {
+            "id": "NAT-020",
+            "split": "test",
+            "ambiguous": false,
+            "status": "completed",
+            "tests": 0,
+            "label_targets": [],
+            "parsed": {
+              "exact": true,
+              "tp": 0,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "exercised": {
+              "exact": true,
+              "tp": 0,
+              "fp": 0,
+              "fn": 0,
+              "missed": [],
+              "extra": []
+            },
+            "categories": {
+              "required": 0,
+              "hit": 0,
+              "recall": null,
+              "missed": []
+            },
+            "produced_categories": [],
+            "preconditions": {
+              "required": 0,
+              "hit": 0,
+              "recall": null,
+              "missed": []
+            },
+            "established_preconditions": [],
+            "fallback": true,
+            "fallback_reasons": [
+              "no parsed services/DIDs/routines",
+              "zero tests"
+            ]
+          }
+        ],
+        "splits": {
+          "test": {
+            "requirements": 12,
+            "targets_parsed": {
+              "exact": 5,
+              "exact_rate": 0.4167,
+              "tp": 14,
+              "fp": 1,
+              "fn": 11,
+              "precision": 0.9333,
+              "recall": 0.56,
+              "f1": 0.7
+            },
+            "targets_exercised": {
+              "exact": 2,
+              "exact_rate": 0.1667,
+              "tp": 20,
+              "fp": 44,
+              "fn": 5,
+              "precision": 0.3125,
+              "recall": 0.8,
+              "f1": 0.4494
+            },
+            "categories": {
+              "scored_requirements": 11,
+              "hit": 19,
+              "required": 28,
+              "micro_recall": 0.6786,
+              "macro_recall": 0.697
+            },
+            "preconditions": {
+              "scored_requirements": 8,
+              "hit": 12,
+              "required": 15,
+              "micro_recall": 0.8,
+              "macro_recall": 0.75
+            },
+            "fallback": {
+              "count": 3,
+              "ids": [
+                "NAT-008",
+                "NAT-017",
+                "NAT-020"
+              ],
+              "unexpected_count": 2,
+              "unexpected_ids": [
+                "NAT-008",
+                "NAT-017"
+              ],
+              "note": "unexpected = excluding requirements with an empty label set (e.g. NAT-020), for which producing nothing is correct"
+            }
+          },
+          "dev": {
+            "requirements": 8,
+            "targets_parsed": {
+              "exact": 4,
+              "exact_rate": 0.5,
+              "tp": 12,
+              "fp": 0,
+              "fn": 5,
+              "precision": 1.0,
+              "recall": 0.7059,
+              "f1": 0.8276
+            },
+            "targets_exercised": {
+              "exact": 0,
+              "exact_rate": 0.0,
+              "tp": 16,
+              "fp": 32,
+              "fn": 1,
+              "precision": 0.3333,
+              "recall": 0.9412,
+              "f1": 0.4923
+            },
+            "categories": {
+              "scored_requirements": 8,
+              "hit": 14,
+              "required": 22,
+              "micro_recall": 0.6364,
+              "macro_recall": 0.6042
+            },
+            "preconditions": {
+              "scored_requirements": 4,
+              "hit": 9,
+              "required": 9,
+              "micro_recall": 1.0,
+              "macro_recall": 1.0
+            },
+            "fallback": {
+              "count": 1,
+              "ids": [
+                "NAT-003"
+              ],
+              "unexpected_count": 1,
+              "unexpected_ids": [
+                "NAT-003"
+              ],
+              "note": "unexpected = excluding requirements with an empty label set (e.g. NAT-020), for which producing nothing is correct"
+            }
+          },
+          "all": {
+            "requirements": 20,
+            "targets_parsed": {
+              "exact": 9,
+              "exact_rate": 0.45,
+              "tp": 26,
+              "fp": 1,
+              "fn": 16,
+              "precision": 0.963,
+              "recall": 0.619,
+              "f1": 0.7536
+            },
+            "targets_exercised": {
+              "exact": 2,
+              "exact_rate": 0.1,
+              "tp": 36,
+              "fp": 76,
+              "fn": 6,
+              "precision": 0.3214,
+              "recall": 0.8571,
+              "f1": 0.4675
+            },
+            "categories": {
+              "scored_requirements": 19,
+              "hit": 33,
+              "required": 50,
+              "micro_recall": 0.66,
+              "macro_recall": 0.6579
+            },
+            "preconditions": {
+              "scored_requirements": 12,
+              "hit": 21,
+              "required": 24,
+              "micro_recall": 0.875,
+              "macro_recall": 0.8333
+            },
+            "fallback": {
+              "count": 4,
+              "ids": [
+                "NAT-003",
+                "NAT-008",
+                "NAT-017",
+                "NAT-020"
+              ],
+              "unexpected_count": 3,
+              "unexpected_ids": [
+                "NAT-003",
+                "NAT-008",
+                "NAT-017"
+              ],
+              "note": "unexpected = excluding requirements with an empty label set (e.g. NAT-020), for which producing nothing is correct"
+            }
+          }
+        }
+      },
       "pipeline": {
         "per_requirement": [
           {
@@ -1185,7 +3001,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 49
+            "run_id": 65
           },
           {
             "requirement_id": "REQ-002",
@@ -1196,7 +3012,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 50
+            "run_id": 66
           },
           {
             "requirement_id": "REQ-003",
@@ -1207,7 +3023,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 51
+            "run_id": 67
           },
           {
             "requirement_id": "REQ-004",
@@ -1218,7 +3034,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 52
+            "run_id": 68
           },
           {
             "requirement_id": "REQ-005",
@@ -1229,7 +3045,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 53
+            "run_id": 69
           },
           {
             "requirement_id": "REQ-006",
@@ -1240,7 +3056,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 54
+            "run_id": 70
           },
           {
             "requirement_id": "REQ-007",
@@ -1251,7 +3067,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 55
+            "run_id": 71
           },
           {
             "requirement_id": "REQ-008",
@@ -1262,7 +3078,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 56
+            "run_id": 72
           },
           {
             "requirement_id": "REQ-009",
@@ -1273,7 +3089,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 57
+            "run_id": 73
           },
           {
             "requirement_id": "REQ-010",
@@ -1284,7 +3100,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 58
+            "run_id": 74
           },
           {
             "requirement_id": "REQ-011",
@@ -1295,7 +3111,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 59
+            "run_id": 75
           },
           {
             "requirement_id": "REQ-012",
@@ -1306,7 +3122,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 60
+            "run_id": 76
           },
           {
             "requirement_id": "REQ-013",
@@ -1317,7 +3133,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 61
+            "run_id": 77
           },
           {
             "requirement_id": "REQ-014",
@@ -1328,7 +3144,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 62
+            "run_id": 78
           },
           {
             "requirement_id": "REQ-015",
@@ -1339,7 +3155,7 @@
             "retries": 0,
             "status": "completed",
             "engine": "langgraph",
-            "run_id": 63
+            "run_id": 79
           }
         ],
         "requirements": 15,
@@ -1368,19 +3184,110 @@
       "transport": "inprocess",
       "returncode": 0,
       "passed": true,
-      "summary": "171 passed in 0.97s",
-      "seconds": 3.51
+      "summary": "171 passed in 1.11s",
+      "seconds": 4.03
     }
   },
   "runtime_seconds": {
-    "setup": 1.658,
-    "generation": 3.55,
-    "execution_and_bug_matrix": 19.263,
-    "metrics": 0.215,
-    "exports": 4.314,
-    "total": 29.001
+    "setup": 2.168,
+    "generation": 5.18,
+    "requirement_understanding": 5.464,
+    "execution_and_bug_matrix": 24.896,
+    "heldout_bug_matrix": 0.52,
+    "simulator_rules_agreement": 0.515,
+    "udsoncan_virtual_can": 0.408,
+    "metrics": 0.232,
+    "exports": 4.82,
+    "total": 44.204
   },
   "audit_db": "audit.sqlite",
+  "headline": {
+    "mode": "mock",
+    "other_mode": "ollama",
+    "other_mode_status": "pending Part B",
+    "order": [
+      "simulator_rules_agreement",
+      "gold_clean_pass",
+      "udsoncan_virtual_can",
+      "heldout_bug_detection",
+      "requirement_understanding",
+      "coverage",
+      "citation_validity"
+    ],
+    "simulator_rules_agreement": {
+      "llm_dependent": false,
+      "agreed": 5000,
+      "total": 5000,
+      "rate": 1.0,
+      "seed": 20261003
+    },
+    "gold_clean_pass": {
+      "llm_dependent": false,
+      "passed": 60,
+      "total": 60,
+      "rate": 1.0
+    },
+    "udsoncan_virtual_can": {
+      "llm_dependent": false,
+      "status": "pass",
+      "error": null
+    },
+    "heldout_bug_detection": {
+      "llm_dependent": true,
+      "bugs": 12,
+      "generated": {
+        "detected": 3,
+        "rate": 0.25
+      },
+      "gold": {
+        "detected": 3,
+        "rate": 0.25
+      },
+      "union": {
+        "detected": 5,
+        "rate": 0.4167
+      }
+    },
+    "requirement_understanding": {
+      "llm_dependent": true,
+      "mock": {
+        "split": "test",
+        "requirements": 12,
+        "target_exact_parsed": 5,
+        "target_exact_parsed_rate": 0.4167,
+        "target_f1_parsed": 0.7,
+        "target_exact_exercised": 2,
+        "target_exact_exercised_rate": 0.1667,
+        "target_f1_exercised": 0.4494,
+        "category_recall_micro": 0.6786,
+        "category_recall_macro": 0.697,
+        "precondition_recall_micro": 0.8,
+        "precondition_recall_macro": 0.75,
+        "fallback": 3,
+        "fallback_unexpected": 2
+      },
+      "ollama": "pending Part B"
+    },
+    "coverage": {
+      "llm_dependent": true,
+      "category_totals": {
+        "positive": 36,
+        "negative": 70,
+        "session": 21,
+        "security": 18,
+        "timing": 26
+      },
+      "requirements_with_tests": 15,
+      "requirements": 15,
+      "rate": 1.0
+    },
+    "citation_validity": {
+      "llm_dependent": true,
+      "valid": 774,
+      "citations": 774,
+      "rate": 1.0
+    }
+  },
   "baseline_comparison": {
     "baseline_file": "eval_report_baseline_v1.json",
     "baseline_timestamp": "2026-10-02T21:21:46.279995+00:00",

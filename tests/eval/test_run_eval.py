@@ -32,7 +32,7 @@ def gold() -> list[TestCase]:
 @pytest.fixture(scope="module")
 def full_report(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, dict[str, Any]]:
     out = tmp_path_factory.mktemp("eval_out")
-    code = run_eval.main(["--mode", "mock", "--out", str(out), "--engine", "plain"])
+    code = run_eval.main(["--mode", "mock", "--out", str(out), "--engine", "plain", "--skip-can"])
     assert code == 0
     return out, json.loads((out / "eval_report.json").read_text(encoding="utf-8"))
 
@@ -52,6 +52,13 @@ RATE_PATHS = [
     ("bug_detection", "generated", "rate"),
     ("bug_detection", "gold", "rate"),
     ("bug_detection", "union", "rate"),
+    ("heldout_bug_detection", "generated", "rate"),
+    ("heldout_bug_detection", "gold", "rate"),
+    ("heldout_bug_detection", "union", "rate"),
+    ("requirement_understanding", "splits", "test", "targets_parsed", "exact_rate"),
+    ("requirement_understanding", "splits", "test", "targets_exercised", "exact_rate"),
+    ("requirement_understanding", "splits", "test", "categories", "micro_recall"),
+    ("requirement_understanding", "splits", "test", "preconditions", "micro_recall"),
 ]
 
 
@@ -105,8 +112,19 @@ def test_markdown_states_synthetic_spec_and_mode(full_report: tuple[Path, dict[s
     text = (full_report[0] / "eval_report.md").read_text(encoding="utf-8")
     assert "The ECU spec is synthetic" in text
     assert "mode=mock" in text and "not run" in text
-    assert "Bug detection per injected bug" in text
+    assert "Bug detection per injected bug (in-sample)" in text
+    assert "in-sample (templates tuned on these)" in text
+    assert "## Held-out bug detection" in text
+    assert "## Requirement understanding (natural requirements)" in text
+    assert "pending Part B" in text
+    assert "## Appendix: Self-consistency check (circular by construction)" in text
     assert "UNVERIFIED TEMPLATES" in text
+    headline = text.split("## Headline metrics", 1)[1].split("\n## ", 1)[0]
+    assert "accuracy vs oracle" not in headline
+    order = ["1. Simulator", "2. Gold tests", "3. udsoncan", "4. Held-out", "5. Requirement",
+             "6. Coverage", "7. Citation"]
+    positions = [headline.index(label) for label in order]
+    assert positions == sorted(positions)
 
 
 def test_ollama_mode_falls_back_and_records_actual_mode(
@@ -198,3 +216,66 @@ def test_coverage_table() -> None:
     assert result["per_requirement"]["R1"]["negative"] == 1
     assert result["rate"] == 0.5
     assert result["category_presence"] == pytest.approx(2 / 5)
+
+
+# ----------------------------------------------------------------------------- new sections
+
+
+def test_headline_keys_and_values(full_report: tuple[Path, dict[str, Any]]) -> None:
+    report = full_report[1]
+    head = report["headline"]
+    block = report["modes"]["mock"]
+    assert head["order"] == list(run_eval.HEADLINE_ORDER)
+    assert [k for k in head if k in run_eval.HEADLINE_ORDER] == list(run_eval.HEADLINE_ORDER)
+    agr = head["simulator_rules_agreement"]
+    assert agr["total"] >= 2000 and agr["agreed"] == report["simulator_rules_agreement"]["agreed"]
+    assert agr["agreed"] <= agr["total"]
+    gold = head["gold_clean_pass"]
+    assert gold["total"] == report["gold_tests"] == 60
+    assert gold["passed"] == report["gold_clean_passed"]
+    assert head["udsoncan_virtual_can"]["status"] == "skipped"  # fixture passes --skip-can
+    held = head["heldout_bug_detection"]
+    assert held["bugs"] == 12
+    assert held["generated"]["detected"] == block["heldout_bug_detection"]["generated"]["detected"]
+    ru = head["requirement_understanding"]
+    assert ru["ollama"] == "pending Part B"
+    assert ru["mock"]["split"] == "test" and ru["mock"]["requirements"] == 12
+    tsplit = block["requirement_understanding"]["splits"]["test"]
+    assert ru["mock"]["target_exact_parsed"] == tsplit["targets_parsed"]["exact"]
+    assert head["citation_validity"]["valid"] == block["citation_validity"]["valid"]
+    assert head["coverage"]["category_totals"] == block["coverage"]["category_totals"]
+
+
+def test_heldout_section_uses_the_12_heldout_bugs(full_report: tuple[Path, dict[str, Any]]) -> None:
+    from uds_assistant.simulator import HELDOUT_BUG_IDS, IMPLEMENTED_BUG_IDS
+
+    report = full_report[1]
+    held = report["modes"]["mock"]["heldout_bug_detection"]
+    assert report["heldout_catalog_size"] == 12
+    for suite in ("generated", "gold"):
+        ids = [b["bug_id"] for b in held[suite]["per_bug"]]
+        assert len(ids) == 12 and set(ids) == set(HELDOUT_BUG_IDS)
+        assert not set(ids) & set(IMPLEMENTED_BUG_IDS)
+        assert held[suite]["detected"] == sum(1 for b in held[suite]["per_bug"] if b["detected"])
+        missed = {m["bug_id"] for m in held["analysis"][suite]["missed"]}
+        assert missed == set(held[suite]["undetected"])
+        assert all(m["reason"] for m in held["analysis"][suite]["missed"])
+    assert held["union"]["detected"] >= max(held["generated"]["detected"], held["gold"]["detected"])
+    in_sample = report["modes"]["mock"]["bug_detection"]
+    assert in_sample["scope"] == run_eval.IN_SAMPLE_LABEL
+    assert in_sample["generated"]["bugs"] == 26
+
+
+def test_requirement_understanding_section(full_report: tuple[Path, dict[str, Any]]) -> None:
+    ru = full_report[1]["modes"]["mock"]["requirement_understanding"]
+    rows = ru["per_requirement"]
+    assert len(rows) == 20
+    assert ru["splits"]["test"]["requirements"] == 12
+    assert ru["splits"]["dev"]["requirements"] == 8
+    assert ru["splits"]["all"]["requirements"] == 20
+    nat20 = next(r for r in rows if r["id"] == "NAT-020")
+    assert nat20["label_targets"] == []
+    exact = sum(1 for r in rows if r["split"] == "test" and r["parsed"]["exact"])
+    assert ru["splits"]["test"]["targets_parsed"]["exact"] == exact
+    fb = ru["splits"]["all"]["fallback"]
+    assert fb["count"] == sum(1 for r in rows if r["fallback"])

@@ -1,0 +1,123 @@
+# HELD-OUT injectable faults for the simulated BCM (uds_assistant/simulator).
+# Same schema as bug_catalog.yaml plus `heldout: true`. These ids live in
+# uds_assistant.simulator.bugs.HELDOUT_BUG_IDS (not IMPLEMENTED_BUG_IDS) and are
+# implemented by explicit hooks in uds_assistant/simulator/{ecu,services}.py.
+# category: nrc_order | session | security | timing | data | format | sequence
+# expected_detection: test categories (positive | negative | session | security | timing)
+
+bugs:
+  - id: routine_state_survives_session_change
+    title: "Routine state survives a session change"
+    description: >
+      A positive DiagnosticSessionControl re-locks security but keeps the routine status
+      table, so after re-entering the extended session and unlocking again, requestResults
+      for a routine started before the session change reports it running instead of 0x24.
+    category: session
+    expected_detection: [session, negative]
+    heldout: true
+
+  - id: failed_attempts_reset_by_seed_request
+    title: "Failed-key counter reset by every requestSeed"
+    description: >
+      Each new requestSeed clears the invalid-key counter of its level, so a tester that
+      asks for a fresh seed before every guess is never locked out (third bad key answers
+      0x35 instead of 0x36).
+    category: security
+    expected_detection: [security, negative]
+    heldout: true
+
+  - id: seed_returned_while_unlocked
+    title: "Non-zero seed returned while the level is already unlocked"
+    description: >
+      requestSeed for a level that is already unlocked generates and returns a fresh seed
+      instead of the all-zero seed that signals "already unlocked".
+    category: security
+    expected_detection: [security, positive]
+    heldout: true
+
+  - id: nrc_order_condition_before_security
+    title: "Wrong NRC priority: 0x22 before 0x33 on RoutineControl start"
+    description: >
+      RoutineControl start evaluates the routine preconditions (vehicle_stationary) before
+      the security check, so starting door_actuator_calibration while locked and moving
+      answers 0x22 instead of 0x33.
+    category: nrc_order
+    expected_detection: [negative, security]
+    heldout: true
+
+  - id: read_did_odd_length_truncated
+    title: "0x22 silently drops a trailing odd byte"
+    description: >
+      ReadDataByIdentifier with an odd number of DID bytes (e.g. `22 F1 86 00`) truncates
+      the dangling byte and answers positively instead of 0x13.
+    category: format
+    expected_detection: [negative]
+    heldout: true
+
+  - id: read_did_session_restriction_ignored
+    title: "DID read-session restriction ignored"
+    description: >
+      0x22 never checks the DID's read_sessions, so factory_reset_flag (0x0150, extended
+      only) can be read in the default session instead of answering 0x31.
+    category: data
+    expected_detection: [negative, session]
+    heldout: true
+
+  - id: uint16_did_stored_byte_swapped
+    title: "uint16 DID stored little-endian"
+    description: >
+      Writes to uint16 DIDs (coding_variant_id 0x0160) are acknowledged but stored with the
+      two bytes swapped, so reading the DID back returns 34 12 after writing 12 34.
+    category: data
+    expected_detection: [positive]
+    heldout: true
+
+  - id: s3_not_refreshed_by_tester_present
+    title: "TesterPresent does not restart the S3 timer"
+    description: >
+      0x3E is answered but does not refresh the session idle timer; only other services
+      do, so a tester keeping the session alive with TesterPresent alone falls back to the
+      default session after s3_ms.
+    category: timing
+    expected_detection: [timing, session]
+    heldout: true
+
+  - id: ecu_reset_clears_security_lockout
+    title: "ECUReset clears the security lockout"
+    description: >
+      ECUReset wipes the failed-attempt counters and the running lockout delay, so resetting
+      the ECU right after a lockout lets the tester request seeds again immediately instead
+      of 0x37 (brute-force bypass).
+    category: security
+    expected_detection: [security, timing]
+    heldout: true
+
+  - id: s3_timeout_reverts_written_dids
+    title: "S3 timeout reverts written DIDs to defaults"
+    description: >
+      When the S3 timeout drops the ECU back to the default session, every DID value is
+      reloaded from its default (writes were only kept in a volatile shadow), so a value
+      written in the extended session is lost.
+    category: timing
+    expected_detection: [timing, positive]
+    heldout: true
+
+  - id: session_suppress_bit_not_masked
+    title: "Session control does not mask the suppress bit"
+    description: >
+      DiagnosticSessionControl uses the raw subfunction byte, so `10 83` is treated as the
+      unknown session 0x83 and answers 0x12 instead of switching silently to the extended
+      session.
+    category: format
+    expected_detection: [positive, session]
+    heldout: true
+
+  - id: suppress_bit_echoed_in_response
+    title: "Suppress bit echoed in RoutineControl response"
+    description: >
+      RoutineControl echoes the raw subfunction byte, so a response that must still be sent
+      despite the suppress bit (long-running start after 0x78) starts `71 81` instead of
+      `71 01`.
+    category: format
+    expected_detection: [positive]
+    heldout: true

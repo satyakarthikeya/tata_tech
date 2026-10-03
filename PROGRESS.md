@@ -170,3 +170,121 @@ Heavy packages (torch, transformers, sentence-transformers, chromadb, onnxruntim
 **Test status:** `python -m pytest -q` -> 753 passed, 2 skipped (83.28s). `python -m ruff check .` -> All checks passed.
 
 **Commit:** phase 9: docs, model setup guide, final report
+
+---
+
+# Part A (2026-10-03T10:34:30+05:30)
+
+## Step 0 — Orientation
+
+- **Frozen state:** HEAD = `d4f06b0b3f652d071732624e8b15d8babe5b5013`. **templates frozen at `9a121b2742c5f85fa48fd4f5340caf3b85979c67`**, the tree hash from `git rev-parse HEAD:uds_assistant/testgen`.
+- **Older doc set:** not found. Details are in `docs/RECONCILIATION.md`. The current spec and requirements stay the source of truth.
+- **AUTOSAR Dcm SWS:** present as `data/sources/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf` (R24-11, 835 pages). The filename does not match the glob `*Dcm*`, but it is the Dcm SWS, so A4 runs. pypdf was already installed.
+
+## Part A plan
+
+| Step | What | Who | Context limits |
+|---|---|---|---|
+| A1 | Held-out bug set | Subagent | Restricted |
+| A2 | Natural-language requirements | Subagent | Restricted |
+| A4 | SWS citations | Subagent | Normal |
+| A3 | Evaluation extension and metrics cleanup | Orchestrator or subagent | Normal |
+| A5 | Docs pack | Subagent | Normal |
+| A6 | PROJECT/UI/FINAL_REPORT, ruff, pytest, commit | Orchestrator or subagent | Normal |
+
+- **Parallel work:** A1, A2 and A4 touch disjoint files and run in parallel. They do not commit and do not edit PROGRESS.md or DECISIONS.md; they report decisions to the orchestrator, who logs them.
+- **A3 starts only after A1, A2 and A4 finish.** It adds the held-out, gold and union columns and requirement understanding (mock). The "vs oracle" metric moves to an appendix.
+- **Freeze rule:** after held-out results are seen, nothing in `uds_assistant/testgen/` or `data/gold/` changes, and nothing in the mock or planner changes in response to the results. The testgen tree hash is checked again before the final commit.
+- **The exact prompts given to each subagent are recorded below.**
+
+### Subagent prompt A1 (model: opus, given verbatim)
+
+````text
+You are authoring a HELD-OUT bug set for an ECU simulator in the Python repo C:\Users\pasar\Desktop\tata_tech (Windows; Bash tool is Git Bash; `python` = 3.13.6, code must stay 3.11-compatible). Work fully autonomously; never ask questions. Do not pip install anything.
+
+## Strict context limits (MANDATORY — this is an independence experiment)
+You may read ONLY:
+- data/bcm_spec.yaml
+- uds_assistant/spec/ (any file)
+- uds_assistant/protocol/ (any file)
+- uds_assistant/simulator/ (any file; needed to implement bug hooks)
+- data/bugs/bug_catalog.yaml (ONLY to avoid duplicating existing bugs)
+- tests/simulator/ (only so you can follow the existing bug-test style and fix any simulator test that breaks because the set of implemented bug ids grew)
+You must NOT read, open, grep, list-contents-of, or otherwise inspect: uds_assistant/testgen/, data/gold/, uds_assistant/eval/, uds_assistant/llm/, uds_assistant/agent/, uds_assistant/rules/, uds_assistant/runner/, uds_assistant/export/, outputs/, docs/, tests/testgen/, tests/eval/, tests/rules/, PROGRESS.md, DECISIONS.md, FINAL_REPORT.md, README.md. Do not grep across the whole repo (scope every search to the allowed paths). Running `python -m pytest` on the whole suite is allowed (you will see pass/fail output only; do not open failing files outside your allowed paths — if something outside them fails, report it to me instead).
+
+## Rules
+Type hints, pydantic models, docstrings on public functions, `python -m ruff check .` clean. No ISO 14229 text. Do NOT edit PROGRESS.md or DECISIONS.md and do NOT git commit — report your decisions to me in your final message instead.
+
+## Task
+1. Write 12 NEW, realistic ECU diagnostic defects — the kind of thing seen in real ECU software — clearly different from every bug in data/bugs/bug_catalog.yaml (different mechanism, not just a renamed duplicate). Spread them across these categories (at least one each): session handling, security access, NRC priority/order, length/format checking, DID/RID handling, timing, state after ECU reset or S3 timeout, suppress-positive-response handling. Base them on the actual spec contents in data/bcm_spec.yaml and on how the simulator currently behaves.
+2. Save them to data/bugs/heldout_catalog.yaml, using the same schema as the existing catalog entries (load it with the existing simulator catalog loader), plus `heldout: true` on every entry (extend the pydantic BugDef with an optional `heldout: bool = False` field if needed, backward-compatible). Expose a constant for the path (e.g. HELDOUT_BUG_CATALOG_PATH) next to the existing default catalog path constant, and export it from uds_assistant.simulator.
+3. Implement each as a toggleable bug in the simulator via explicit hooks, exactly the same mechanism as existing bugs (SimulatedEcu(spec, bugs={...}), enable_bug/disable_bug, IMPLEMENTED_BUG_IDS or a parallel HELDOUT id set — keep unknown-id validation working). With all bugs off, behaviour must be byte-for-byte unchanged (the existing simulator↔rules agreement tests in tests/simulator/ must still pass).
+4. Add tests/simulator/test_heldout_bugs.py: for every held-out bug, a crafted request sequence whose output with the bug ON differs from the bug-OFF output (assert the specific differing bytes), plus a test that every id in heldout_catalog.yaml is implemented and has `heldout: true`, and that no held-out id collides with an original-catalog id.
+5. Run `python -m pytest -q` (whole suite) and `python -m ruff check .` until both are clean.
+
+## Final message to me
+List: the 12 bug ids with category and one-line description, files changed, the exact pytest summary line, ruff status, and any design decisions (one line each) for me to log in DECISIONS.md. Do NOT describe what tests would catch them beyond your own unit tests.
+````
+
+### Subagent prompt A2 (model: sonnet, given verbatim)
+
+````text
+You are writing a natural-language requirements dataset for a UDS diagnostics test-generation project in C:\Users\pasar\Desktop\tata_tech (Windows; Bash tool is Git Bash; `python` = 3.13.6). Work fully autonomously; never ask questions. Do not pip install anything.
+
+## Strict context limits (MANDATORY)
+You may read ONLY: data/bcm_spec.yaml and data/requirements_seed.csv.
+You must NOT read, open, grep or list-contents-of anything else in the repo — in particular NOT uds_assistant/llm/, uds_assistant/testgen/, uds_assistant/agent/, uds_assistant/rag/, data/gold/, outputs/, tests/, docs/. Do not grep the repo. Do NOT edit PROGRESS.md or DECISIONS.md and do NOT git commit.
+
+## Task
+Write data/requirements_natural.csv with exactly 20 requirements phrased the way a real automotive diagnostic test engineer writes them:
+- varied wording and synonyms (e.g. "programming mode", "flash session", "unlock step", "seed-key handshake", "keep-alive", "fault memory", "trouble codes", "wake the session", "coding value");
+- NO hex identifiers in most of them (at most 5 of 20 may contain a hex ID or SID); refer indirectly ("the door lock setting", "the wiper sensitivity calibration", "the unlock step", "the VIN", "the lighting self-test");
+- some with multiple constraints (e.g. "only in extended mode, only after unlocking, and only while the car is parked");
+- a couple (2–3) deliberately ambiguous (mark ambiguous=true and say why in notes);
+- cover sessions, security access/lockout, reads, writes with ranges, routines, DTC read/clear, S3/keep-alive timing, ECU reset, suppress-positive-response — grounded in what data/bcm_spec.yaml actually defines (only reference things that exist in the spec, except you may include ONE requirement about something the spec does not support, labelled accordingly in notes, with empty targets).
+
+CSV columns (exact header, in this order):
+id,text,split,target_services,target_dids,target_routines,required_categories,required_preconditions,ambiguous,notes
+
+Ground-truth label conventions (MUST follow exactly so labels are machine-scorable):
+- id: NAT-001 … NAT-020
+- split: `dev` or `test` — exactly 8 dev and 12 test, chosen by you so both splits have a similar mix of topics and difficulty (decide before writing labels; do not change after).
+- target_services: semicolon-separated SIDs as 0xNN uppercase hex (e.g. `0x22;0x2E`), the services a test for this requirement must exercise.
+- target_dids: semicolon-separated DID ids `0xNNNN` uppercase hex as defined in data/bcm_spec.yaml (empty if none).
+- target_routines: semicolon-separated routine ids `0xNNNN` (empty if none).
+- required_categories: semicolon-separated subset of exactly these tokens: positive;negative;session;security;timing — the test categories a complete test set for this requirement must include.
+- required_preconditions: semicolon-separated subset of exactly this vocabulary: default_session; extended_session; programming_session; security_level_1; security_level_3; vehicle_stationary; vehicle_moving; nvm_fault; dtc_status_set; routine_started; s3_elapsed; lockout_active — or the single token `none`. (Use security_level_N matching the spec's level numbers; check the spec.)
+- ambiguous: true/false
+- notes: short; for ambiguous ones, what is ambiguous and which interpretation the labels assume.
+
+Quote fields containing commas. Validate the file with a short python snippet (csv module): 20 rows, 8/12 split, all tokens from the vocabularies, every DID/routine id exists in data/bcm_spec.yaml, every SID is one of 0x10,0x11,0x14,0x19,0x22,0x27,0x2E,0x31,0x3E. Also write data/requirements_natural.md: a short README describing the column semantics and vocabularies (no labels discussion beyond that).
+
+## Final message to me
+The validation output, the split (which ids are dev/test), a count of requirements containing hex IDs, which are ambiguous, and any decisions (one line each) for me to log.
+````
+
+### Subagent prompt A4 (model: opus, given verbatim)
+
+````text
+You are adding AUTOSAR Dcm SWS citations to the rules engine of the Python repo C:\Users\pasar\Desktop\tata_tech (Windows; Bash tool is Git Bash; `python` = 3.13.6, keep code 3.11-compatible). Work fully autonomously; never ask questions. pypdf is installed; do not install anything else.
+
+Read AGENT.md, DECISIONS.md (especially the [R-…] entries), uds_assistant/rules/nrc_order.py, uds_assistant/rules/engine.py, tests/rules/test_nrc_order_structure.py, docs/behaviour_contract.md.
+
+Source: data/sources/AUTOSAR_CP_SWS_DiagnosticCommunicationManager.pdf (AUTOSAR CP R24-11, 835 pages; it is the Dcm SWS even though the filename doesn't contain "Dcm"). Do NOT read uds_assistant/testgen/, data/gold/, data/bugs/heldout_catalog.yaml (other agents are working concurrently: do not touch uds_assistant/simulator/, data/bugs/, data/requirements_natural*, uds_assistant/eval/).
+
+## Task
+1. `uds_assistant/rules/sws.py` (or scripts/ + a small module): extract the PDF text with pypdf into a cache file `data/sources/.cache/dcm_sws.txt` (create dir; extraction once, reused if cache newer than PDF). Add BOTH the PDF and the cache dir to .gitignore (AUTOSAR redistribution terms: we do not commit their text; the owner downloads the PDF). Provide `load_sws_text() -> str | None` (None if PDF absent) and `find_requirement(sws_id) -> str | None` returning the requirement paragraph text.
+2. For EACH check in `evaluate_nrc` in rules/nrc_order.py (service supported 0x11, service in session 0x7F, length 0x13, subfunction supported 0x12, subfunction in session 0x7E, request-out-of-range 0x31 variants, security 0x33, conditions 0x22, sequence 0x24, 0x35/0x36/0x37 security access, 0x14, 0x78, 0x72, suppress-positive handling, S3, etc.) search the extracted text for the SWS_Dcm_xxxxx requirement(s) that ACTUALLY state that behaviour. Add the citation to that check's `# Source:` comment ONLY when the requirement text clearly supports it — keep the existing DECISIONS.md tag too. Never invent an ID; if unsure, don't cite. Paraphrase in your own words; do NOT paste AUTOSAR sentences into code or docs (IDs plus your own one-line paraphrase are fine).
+3. Test tests/rules/test_sws_citations.py: collect every `SWS_Dcm_\d+` string from rules/*.py; assert each appears in the extracted text (skip the test with a clear reason if the PDF is absent — use pytest.skip, not a needs_model mark); assert at least N citations exist when the PDF is present (N = what you added). Keep existing structure tests passing (they require a Source comment per NRC decision and tags existing in DECISIONS.md — read them).
+4. Disagreements: wherever the SWS order/behaviour differs from the current engine (e.g. order of 0x13 vs 0x12 vs 0x7E vs 0x31, 0x33 position, 0x22 vs 0x31 order, 0x24 handling, 0x37 semantics, suppress handling of certain NRCs), DO NOT change behaviour — changing it would require coordinated changes to the independent simulator, the behaviour contract and frozen gold/template data, which are frozen tonight. Instead write each disagreement into docs/SWS_DISAGREEMENTS.md (SWS id, what SWS says in your own words, what we do, impact, recommended change) and report them to me.
+5. Run `python -m pytest -q tests/rules` and `python -m ruff check uds_assistant/rules tests/rules`. (Other agents may be editing the simulator concurrently; if non-rules tests fail, report it but don't fix.) Do NOT edit PROGRESS.md or DECISIONS.md and do NOT git commit.
+
+## Final message to me
+Table of check → SWS IDs cited (with your one-line paraphrase), count of citations, list of disagreements, files changed, test/ruff results, and one-line decisions for me to log in DECISIONS.md.
+````
+
+**Addendum: exact record.** The A1 prompt as sent also ended with this paragraph:
+
+> (Note: two other agents work concurrently on uds_assistant/rules/ citations and on data/requirements_natural.csv; do not touch those. If an unrelated test fails transiently because of them, re-run once and report.)
+
+**Deviation from the brief's A1 read-list:** A1 was also allowed to read `tests/simulator/` (needed to follow the bug-test style and fix tests that enumerate bug ids) and was additionally forbidden to read `uds_assistant/rules/`, `runner/`, `export/`, `docs/` and the progress logs.
