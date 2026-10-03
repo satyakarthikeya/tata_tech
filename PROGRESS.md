@@ -489,3 +489,16 @@ Restored state:
 Noise: the parse prompt was the same in revisions 5 and 7–10, yet parsed F1 moved between 0.636 and 0.683. Greedy decoding on the GPU is not bit-reproducible across calls, so differences under about 0.05 are within noise.
 
 No plan prompt in revisions 7–10 was truncated: 0 server-log truncation warnings and 0 client truncation events, against 8 per run before the fix. Full suite: 895 passed, 13 skipped. `ruff check .`: clean.
+
+## B3 — prompts frozen (2026-10-03T14:37:19+05:30)
+
+Revision 8 is frozen, chosen on the dev split only. The test split had not been run in Ollama mode at this point.
+
+| What | Hash |
+|---|---|
+| Freeze commit | `1008ebd1f5e321abd848993600f9f6382ffb789a` |
+| `uds_assistant/llm/prompts.py` blob | `98a4741604338c3a0ffc2b17dc433e9c90d47620` |
+| `uds_assistant/llm` tree | `3559f7e7e0e53b5d08212b5cbccd5aa06e6bba71` |
+| `uds_assistant/agent` tree | `1d678f0f41eb23962defd6c8ea387bea4fcffb59` |
+
+B4 must not change any of these.
