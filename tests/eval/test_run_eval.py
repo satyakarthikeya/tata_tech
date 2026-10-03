@@ -117,7 +117,9 @@ def test_markdown_states_synthetic_spec_and_mode(full_report: tuple[Path, dict[s
     assert "in-sample (templates tuned on these)" in text
     assert "## Held-out bug detection" in text
     assert "## Requirement understanding (natural requirements)" in text
-    assert "pending Part B" in text
+    assert "not requested in this invocation (run with --mode ollama)" in text
+    assert "## Mock vs Ollama — side by side" in text
+    assert "## Interpretation: where the LLM helped and where it didn't" in text
     assert "## Appendix: Self-consistency check (circular by construction)" in text
     assert "UNVERIFIED TEMPLATES" in text
     headline = text.split("## Headline metrics", 1)[1].split("\n## ", 1)[0]
@@ -240,7 +242,13 @@ def test_headline_keys_and_values(full_report: tuple[Path, dict[str, Any]]) -> N
     assert held["bugs"] == 12
     assert held["generated"]["detected"] == block["heldout_bug_detection"]["generated"]["detected"]
     ru = head["requirement_understanding"]
-    assert ru["ollama"] == "pending Part B"
+    assert ru["ollama"].startswith("not run: not requested")
+    assert head["heldout_bug_detection"]["by_mode"]["mock"]["generated"]["detected"] == held["generated"]["detected"]
+    assert report["provenance_ok"] is True
+    prov = block["provenance"]
+    assert prov["checked"] == prov["passed"] > block["generated_tests"]["count"]
+    assert prov["seed"]["checked"] == block["generated_tests"]["count"]
+    assert set(report["freeze"]["paths"]) == set(run_eval.FREEZE_EXPECTED)
     assert ru["mock"]["split"] == "test" and ru["mock"]["requirements"] == 12
     tsplit = block["requirement_understanding"]["splits"]["test"]
     assert ru["mock"]["target_exact_parsed"] == tsplit["targets_parsed"]["exact"]
@@ -292,3 +300,113 @@ def test_skip_retrieval_compare_recorded_as_not_run(
     md = (out / "eval_report.md").read_text(encoding="utf-8")
     assert "## Retrieval comparison (BM25 vs Chroma)" in md
     assert "Not run:" in md
+
+
+# ----------------------------------------------------------------------------- B4: two modes
+
+
+class _FakeOllama(llm_factory.MockLLM):
+    """A mock backend posing as the Ollama client (no server needed)."""
+
+    name = "fake-ollama"
+
+
+def _patch_fake_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_get_llm = run_eval.get_llm
+
+    def fake_get_llm(cfg: Any = None, **kw: Any) -> Any:
+        if cfg is not None and cfg.llm_mode == "ollama":
+            return _FakeOllama()
+        return real_get_llm(cfg, **kw)
+
+    monkeypatch.setattr(run_eval, "get_llm", fake_get_llm)
+    monkeypatch.setattr(run_eval, "OllamaClient", _FakeOllama)
+
+
+def test_ollama_mode_runs_mock_side_by_side(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_fake_ollama(monkeypatch)
+    report = run_eval.run_evaluation(
+        "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
+        run_can=False, run_retrieval_compare=False, agreement_requests=20,
+    )
+    assert report["actual_mode"] == "ollama" and report["mode_fallback"] is False
+    assert report["modes_run"] == ["mock", "ollama"]
+    for name in ("mock", "ollama"):
+        blk = report["modes"][name]
+        assert blk["status"] == "completed"
+        assert blk["provenance"]["ok"] and blk["provenance"]["checked"] > 0
+        assert blk["latency"]["per_requirement_wall_s"]["all"]["n"] == 21
+        assert blk["pipeline_natural"]["requirements"] == 20
+    head = report["headline"]
+    assert head["modes_completed"] == ["mock", "ollama"]
+    assert isinstance(head["requirement_understanding"]["ollama"], dict)
+    assert isinstance(head["heldout_bug_detection"]["by_mode"]["mock"], dict)
+    md = (tmp_path / "eval_report.md").read_text(encoding="utf-8")
+    assert "# Details — mode=mock" in md and "# Details — mode=ollama" in md
+    assert "### Latency per requirement (wall clock)" in md
+    assert "Byte provenance — all generated tests" in md
+
+
+def test_no_mock_compare_skips_mock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_fake_ollama(monkeypatch)
+    report = run_eval.run_evaluation(
+        "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
+        run_can=False, run_retrieval_compare=False, natural=False, agreement_requests=20,
+        compare_mock=False,
+    )
+    assert report["modes_run"] == ["ollama"]
+    assert report["modes"]["mock"]["status"] == "not run"
+    assert report["baseline_comparison"] is None
+
+
+def test_provenance_failure_exits_nonzero_after_writing_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import functools
+
+    from uds_assistant.eval import provenance
+
+    def tampered(spec: Any, tests: Any) -> dict[str, Any]:
+        tests = list(tests)
+        if tests:
+            tests[0] = tests[0].model_copy(update={"template_id": "not_a_template"})
+        return provenance.check_provenance(spec, tests)
+
+    monkeypatch.setattr(run_eval, "check_provenance", tampered)
+    monkeypatch.setattr(run_eval, "run_evaluation", functools.partial(
+        run_eval.run_evaluation, requirement_ids=["REQ-001"], natural=False,
+        agreement_requests=20))
+    code = run_eval.main(["--mode", "mock", "--out", str(tmp_path), "--engine", "plain",
+                          "--skip-can", "--skip-retrieval-compare", "--no-export-run"])
+    assert code == run_eval.PROVENANCE_EXIT_CODE
+    report = json.loads((tmp_path / "eval_report.json").read_text(encoding="utf-8"))
+    assert report["provenance_ok"] is False
+    fails = report["modes"]["mock"]["provenance"]["seed"]["failures"]
+    assert fails and "not a registered template" in fails[0]["problems"][0]
+    assert "FAILED" in (tmp_path / "eval_report.md").read_text(encoding="utf-8")
+
+
+def test_percentile_nearest_rank() -> None:
+    assert run_eval.percentile_nearest_rank([], 95) is None
+    assert run_eval.percentile_nearest_rank([3.0], 95) == 3.0
+    vals = [float(i) for i in range(1, 21)]  # 1..20
+    assert run_eval.percentile_nearest_rank(vals, 95) == 19.0
+    assert run_eval.percentile_nearest_rank(vals, 100) == 20.0
+
+
+def test_rerender_adds_interpretation(
+    full_report: tuple[Path, dict[str, Any]], tmp_path: Path
+) -> None:
+    import shutil
+
+    src, _ = full_report
+    shutil.copy(src / "eval_report.json", tmp_path / "eval_report.json")
+    note = tmp_path / "interp.md"
+    note.write_text("Measured prose.", encoding="utf-8")
+    before = json.loads((tmp_path / "eval_report.json").read_text(encoding="utf-8"))
+    run_eval.rerender(tmp_path, note)
+    after = json.loads((tmp_path / "eval_report.json").read_text(encoding="utf-8"))
+    assert after["interpretation"]["text"] == "Measured prose."
+    assert {k: v for k, v in after.items() if k != "interpretation"} == \
+        {k: v for k, v in before.items() if k != "interpretation"}
+    assert "Measured prose." in (tmp_path / "eval_report.md").read_text(encoding="utf-8")

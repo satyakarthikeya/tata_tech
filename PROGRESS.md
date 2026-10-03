@@ -502,3 +502,25 @@ Revision 8 is frozen, chosen on the dev split only. The test split had not been 
 | `uds_assistant/agent` tree | `1d678f0f41eb23962defd6c8ea387bea4fcffb59` |
 
 B4 must not change any of these.
+
+## B4 — full evaluation, mock vs ollama (2026-10-03T15:22:04+05:30)
+
+- **Command:** `python -m uds_assistant.eval.run_eval --mode ollama`. It exited 0, and the mode actually used was ollama, with 0 fallbacks and 0 truncations.
+- **Time:** the run took 19.2 minutes in total. The ollama part took 18.2 minutes and the mock part 36 s.
+- **Freeze:** the llm, agent and testgen trees are unchanged since the freeze. The B4 agent confirmed this at the end of its run, and I re-checked with `git rev-parse` and `git diff` before committing.
+- **Provenance:** mock 343/343 and ollama 158/158 generated tests rebuild byte for byte from their templates.
+- **Tests:** the default pytest run gave 908 passed and 13 skipped, and the `needs_model` run gave 13 passed. ruff is clean.
+
+**Test split, mock vs ollama**
+
+| Metric | mock | ollama |
+|---|---|---|
+| Parsed targets, exact | 5/12 | 4/12 |
+| Parsed P / R / F1 | 0.933 / 0.560 / 0.700 | 0.512 / 0.880 / 0.647 |
+| Category recall | 67.9% | 64.3% |
+| Precondition recall | 80.0% | 73.3% |
+| Held-out bug detection, generated | 3/12 | 3/12 |
+| In-sample detection, generated | 25/26 | 21/26 |
+| Mean latency per requirement | 0.25 s | 30.8 s |
+
+The ollama model did not beat mock on any headline metric. Its parsed-target recall is higher, but its precision is much lower because it invents identifiers.

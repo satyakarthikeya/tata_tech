@@ -227,3 +227,26 @@ This subagent was interrupted when the session ended before it could report back
   - Dev results: parsed F1 0.683, category recall 0.727, precondition recall 1.0, 0 truncations.
   - Runs vary by about ±0.05 F1 because GPU decoding is not deterministic.
 - **[PB-B3-RISK]** The 3B model sometimes copies "(category)" into `template_id`; this showed up in revision 9, which was rejected. A possible fix is to strip that suffix before validation. It is deliberately not done, because it would come after the freeze.
+
+### B4 (full evaluation, mock vs ollama)
+
+- **[PB-B4-PROV]** Byte provenance is checked after the run on every generated test in every mode (`uds_assistant/eval/provenance.py`).
+  - Each test is rebuilt from its template using its stored parameters, and every step must match byte for byte.
+  - Any failure makes `run_eval` exit with code 2 after the report is written.
+  - Result: mock 343 of 343 passed, ollama 158 of 158 passed.
+- **[PB-B4-COMBINED]** `--mode ollama` also runs mock in the same invocation, and `--no-mock-compare` turns that off.
+  - `actual_mode` is the backend that really ran, after any fallback.
+  - The LLM-dependent headline rows carry results for both modes, and the report version is now 2.
+- **[PB-B4-EXPORTS]** Ollama exports go to `outputs/exports/ollama/` and `outputs/generated_tests_ollama.yaml`. The mock export paths are unchanged.
+- **[PB-B4-LATENCY]** Latency is the wall-clock time of one pipeline run per requirement over all 35 requirements, with p95 by nearest rank. Per-node values come from `node_timings`.
+- **[PB-B4-INTERP]** The interpretation was written after the numbers existed, in `outputs/eval_interpretation.md`, and was stored in the report with `--rerender`, which recomputes nothing.
+- **[PB-B4-RESULT]** Test split, mock vs ollama:
+  - Parsed F1: 0.700 vs 0.647 (precision 0.933 vs 0.512, recall 0.560 vs 0.880).
+  - Category recall: 67.9% vs 64.3%.
+  - Precondition recall: 80.0% vs 73.3%.
+  - Held-out generated bug detection: 3/12 vs 3/12, the same three bugs.
+  - In-sample generated detection: 25/26 vs 21/26. Generated tests on the seed requirements: 171 vs 68.
+  - Mean latency per requirement: 0.25 s vs 30.8 s.
+  - No truncations and no fallbacks in either mode.
+
+  The model did not beat mock on any headline metric, so mock stays the default.
