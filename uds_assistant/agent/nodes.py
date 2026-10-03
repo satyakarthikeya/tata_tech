@@ -35,6 +35,12 @@ from uds_assistant.llm.base import (
     TestPlan,
     build_prompt,
 )
+from uds_assistant.llm.prompts import (
+    EXPLAIN_INSTRUCTION,
+    PARSE_INSTRUCTION,
+    PLAN_INSTRUCTION,
+    SYSTEM_PROMPT,
+)
 from uds_assistant.rag.citations import citation_is_valid
 from uds_assistant.rag.model import Chunk, Hit
 from uds_assistant.testgen.model import Citation, TestCase
@@ -42,30 +48,6 @@ from uds_assistant.testgen.templates import TEMPLATES, applicable_params, valida
 
 COLLECTIONS = ("standard", "ecu_spec", "project")
 MAX_CITATIONS = 6
-
-SYSTEM_PROMPT = (
-    "You are a UDS (ISO 14229) diagnostics test-planning assistant for an automotive ECU. "
-    "You never write request or response bytes. You only reference identifiers that exist "
-    "in the provided spec index, choose template ids and option indices from the provided "
-    "catalog, and write short plain-English prose. Answer with JSON matching the schema "
-    "when one is required."
-)
-
-PARSE_INSTRUCTION = (
-    "Read the requirement and list the UDS services, DIDs, routines, sessions, security "
-    "levels and DTCs it refers to, using only identifiers from spec_index. Choose the test "
-    "intents that apply from the allowed intents list and add a few keywords."
-)
-PLAN_INSTRUCTION = (
-    "Choose test cases that verify the requirement thoroughly: positive behaviour plus "
-    "negative, session, security and timing checks where relevant. Each choice is a "
-    "template_id from the catalog and an option_index from that template's options, with a "
-    "one-sentence rationale. Do not repeat choices listed under rejected or already_kept."
-)
-EXPLAIN_INSTRUCTION = (
-    "Explain in 2-4 sentences, for a test engineer, what this test checks, why it matters "
-    "for the requirement, and what outcome is expected. Do not invent byte values."
-)
 
 
 def _catalog(deps: PipelineDeps) -> list[TemplateOptions]:
@@ -98,6 +80,7 @@ def parse(state: PipelineState, deps: PipelineDeps) -> PipelineState:
         parsed = ParsedRequirement.model_validate(raw.model_dump())
     except (LLMError, ValueError) as exc:
         s.log("parse", f"LLM parse failed ({exc}); continuing with an empty parse.")
+        s.fallback_events.append(f"parse: LLM call failed ({exc}); used an empty parse")
         parsed = ParsedRequirement(intents=["positive"])
 
     kept: dict[str, list[str]] = {}
@@ -199,6 +182,7 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
         test_plan = TestPlan.model_validate(raw.model_dump())
     except (LLMError, ValueError) as exc:
         s.log("plan", f"LLM plan failed ({exc}); no new choices this round.")
+        s.fallback_events.append(f"plan: LLM call failed ({exc}); no new choices this round")
         test_plan = TestPlan()
     s.plan = test_plan
 
@@ -510,6 +494,9 @@ def explain(state: PipelineState, deps: PipelineDeps) -> PipelineState:
             text = deps.llm.complete_text(SYSTEM_PROMPT, prompt).strip()
         except LLMError as exc:
             s.log("explain", f"{test.id}: LLM explanation failed ({exc}); kept template text.")
+            s.fallback_events.append(
+                f"explain: {test.id}: LLM call failed ({exc}); kept template text"
+            )
             text = ""
         explanation = text or test.explanation
         out.append(

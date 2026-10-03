@@ -32,7 +32,8 @@ def gold() -> list[TestCase]:
 @pytest.fixture(scope="module")
 def full_report(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, dict[str, Any]]:
     out = tmp_path_factory.mktemp("eval_out")
-    code = run_eval.main(["--mode", "mock", "--out", str(out), "--engine", "plain", "--skip-can"])
+    code = run_eval.main(["--mode", "mock", "--out", str(out), "--engine", "plain", "--skip-can",
+                         "--skip-retrieval-compare"])
     assert code == 0
     return out, json.loads((out / "eval_report.json").read_text(encoding="utf-8"))
 
@@ -132,7 +133,8 @@ def test_ollama_mode_falls_back_and_records_actual_mode(
 ) -> None:
     monkeypatch.setattr(llm_factory, "ollama_reachable", lambda *a, **k: False)
     report = run_eval.run_evaluation(
-        "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False
+        "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
+        run_retrieval_compare=False,
     )
     assert report["requested_mode"] == "ollama"
     assert report["actual_mode"] == "mock" and report["mode_fallback"] is True
@@ -279,3 +281,14 @@ def test_requirement_understanding_section(full_report: tuple[Path, dict[str, An
     assert ru["splits"]["test"]["targets_parsed"]["exact"] == exact
     fb = ru["splits"]["all"]["fallback"]
     assert fb["count"] == sum(1 for r in rows if r["fallback"])
+
+
+def test_skip_retrieval_compare_recorded_as_not_run(
+    full_report: tuple[Path, dict[str, Any]],
+) -> None:
+    out, report = full_report
+    assert report["retrieval_comparison"]["status"] == "not run"
+    assert "--skip-retrieval-compare" in report["retrieval_comparison"]["reason"]
+    md = (out / "eval_report.md").read_text(encoding="utf-8")
+    assert "## Retrieval comparison (BM25 vs Chroma)" in md
+    assert "Not run:" in md

@@ -31,7 +31,7 @@ def test_chroma_requested_but_unavailable_falls_back_to_bm25(monkeypatch):
     monkeypatch.setattr(factory_module, "Bm25Retriever", Bm25Retriever)
     import uds_assistant.rag.chroma as chroma_module
 
-    monkeypatch.setattr(chroma_module, "chroma_available", lambda: False)
+    monkeypatch.setattr(chroma_module, "chroma_available", lambda *a, **k: False)
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -51,7 +51,7 @@ def test_chroma_requested_and_available_uses_chroma(monkeypatch):
         def search(self, query, k=5, collections=None):
             return []
 
-    monkeypatch.setattr(chroma_module, "chroma_available", lambda: True)
+    monkeypatch.setattr(chroma_module, "chroma_available", lambda *a, **k: True)
     monkeypatch.setattr(chroma_module, "ChromaRetriever", FakeChromaRetriever)
 
     retriever = get_retriever(Config(retriever="chroma"), chunks=_CHUNKS)

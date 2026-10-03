@@ -1,0 +1,396 @@
+{
+  "llm_backend": "ollama",
+  "model": "qwen2.5:3b-instruct-q4_K_M",
+  "num_ctx": 4096,
+  "client_fallback_events": [],
+  "requirements": [
+    {
+      "requirement_id": "REQ-001",
+      "status": "completed",
+      "llm": "ollama",
+      "tests_kept": 19,
+      "dropped": 0,
+      "rejected": 0,
+      "rejected_reasons": [],
+      "plan_attempts": 1,
+      "plan_retries": 0,
+      "node_timings_ms": {
+        "parse": 9740.2,
+        "retrieve": 4.8,
+        "plan": 21899.1,
+        "instantiate": 31.2,
+        "validate": 34.0,
+        "explain": 85179.8
+      },
+      "wall_ms": 116890.1,
+      "llm_stats": {
+        "calls": 21.0,
+        "http_requests": 21.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 116800.7
+      },
+      "fallback_events": [],
+      "parsed": {
+        "services": [
+          "0x22",
+          "0x31"
+        ],
+        "dids": [
+          "0xF190"
+        ],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [
+          "0x03"
+        ],
+        "dtcs": [
+          "B10101",
+          "B10205",
+          "B10310"
+        ],
+        "intents": [
+          "read"
+        ],
+        "keywords": [
+          "VIN",
+          "diagnostic session",
+          "ECU"
+        ]
+      },
+      "notes": [],
+      "test_ids": [
+        "req_001__tpl_dtc_clear_specific_B10101",
+        "req_001__tpl_negative_suppress_10_01",
+        "req_001__tpl_negative_suppress_11_01",
+        "req_001__tpl_negative_suppress_3e_01",
+        "req_001__tpl_negative_suppress_10_02",
+        "req_001__tpl_negative_suppress_11_02",
+        "req_001__tpl_negative_suppress_31_02",
+        "req_001__tpl_negative_suppress_3e_02",
+        "req_001__tpl_negative_suppress_10_03",
+        "req_001__tpl_negative_suppress_11_03",
+        "req_001__tpl_negative_suppress_31_03",
+        "req_001__tpl_negative_suppress_3e_03",
+        "req_001__tpl_s3_keepalive_02",
+        "req_001__tpl_s3_keepalive_03",
+        "req_001__tpl_nrc_priority_2e_01",
+        "req_001__tpl_nrc_priority_31_01",
+        "req_001__tpl_routine_start_results_0201",
+        "req_001__tpl_routine_start_results_0202",
+        "req_001__tpl_routine_start_results_0203"
+      ]
+    },
+    {
+      "requirement_id": "REQ-002",
+      "status": "completed",
+      "llm": "ollama",
+      "tests_kept": 18,
+      "dropped": 0,
+      "rejected": 0,
+      "rejected_reasons": [],
+      "plan_attempts": 1,
+      "plan_retries": 0,
+      "node_timings_ms": {
+        "parse": 15563.7,
+        "retrieve": 5.2,
+        "plan": 19636.6,
+        "instantiate": 21.8,
+        "validate": 25.7,
+        "explain": 90496.8
+      },
+      "wall_ms": 125751.1,
+      "llm_stats": {
+        "calls": 20.0,
+        "http_requests": 20.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 125670.6
+      },
+      "fallback_events": [],
+      "parsed": {
+        "services": [
+          "0x22",
+          "0x2E"
+        ],
+        "dids": [
+          "0xF187",
+          "0xF18C"
+        ],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [
+          "0x03"
+        ],
+        "dtcs": [],
+        "intents": [
+          "read"
+        ],
+        "keywords": [
+          "part number",
+          "serial number"
+        ]
+      },
+      "notes": [],
+      "test_ids": [
+        "req_002__tpl_negative_suppress_10_01",
+        "req_002__tpl_negative_suppress_11_01",
+        "req_002__tpl_negative_suppress_3e_01",
+        "req_002__tpl_negative_suppress_10_02",
+        "req_002__tpl_negative_suppress_11_02",
+        "req_002__tpl_negative_suppress_31_02",
+        "req_002__tpl_negative_suppress_3e_02",
+        "req_002__tpl_negative_suppress_10_03",
+        "req_002__tpl_negative_suppress_11_03",
+        "req_002__tpl_negative_suppress_31_03",
+        "req_002__tpl_negative_suppress_3e_03",
+        "req_002__tpl_s3_keepalive_02",
+        "req_002__tpl_s3_keepalive_03",
+        "req_002__tpl_nrc_priority_2e_01",
+        "req_002__tpl_nrc_priority_31_01",
+        "req_002__tpl_routine_start_results_0201",
+        "req_002__tpl_routine_start_results_0202",
+        "req_002__tpl_routine_start_results_0203"
+      ]
+    },
+    {
+      "requirement_id": "REQ-003",
+      "status": "completed",
+      "llm": "ollama",
+      "tests_kept": 18,
+      "dropped": 0,
+      "rejected": 0,
+      "rejected_reasons": [],
+      "plan_attempts": 1,
+      "plan_retries": 0,
+      "node_timings_ms": {
+        "parse": 4512.5,
+        "retrieve": 5.1,
+        "plan": 20064.8,
+        "instantiate": 23.7,
+        "validate": 26.9,
+        "explain": 81597.9
+      },
+      "wall_ms": 106232.1,
+      "llm_stats": {
+        "calls": 20.0,
+        "http_requests": 20.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 106155.6
+      },
+      "fallback_events": [],
+      "parsed": {
+        "services": [
+          "0x10"
+        ],
+        "dids": [
+          "0xF186"
+        ],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [
+          "0x03"
+        ],
+        "dtcs": [],
+        "intents": [
+          "session",
+          "write",
+          "read"
+        ],
+        "keywords": [
+          "BCM",
+          "diagnostic session",
+          "extended diagnostic session",
+          "default session"
+        ]
+      },
+      "notes": [],
+      "test_ids": [
+        "req_003__tpl_negative_suppress_10_01",
+        "req_003__tpl_negative_suppress_11_01",
+        "req_003__tpl_negative_suppress_3e_01",
+        "req_003__tpl_negative_suppress_10_02",
+        "req_003__tpl_negative_suppress_11_02",
+        "req_003__tpl_negative_suppress_31_02",
+        "req_003__tpl_negative_suppress_3e_02",
+        "req_003__tpl_negative_suppress_10_03",
+        "req_003__tpl_negative_suppress_11_03",
+        "req_003__tpl_negative_suppress_31_03",
+        "req_003__tpl_negative_suppress_3e_03",
+        "req_003__tpl_s3_keepalive_02",
+        "req_003__tpl_s3_keepalive_03",
+        "req_003__tpl_nrc_priority_2e_01",
+        "req_003__tpl_nrc_priority_31_01",
+        "req_003__tpl_routine_start_results_0201",
+        "req_003__tpl_routine_start_results_0202",
+        "req_003__tpl_routine_start_results_0203"
+      ]
+    },
+    {
+      "requirement_id": "REQ-004",
+      "status": "completed",
+      "llm": "ollama",
+      "tests_kept": 18,
+      "dropped": 0,
+      "rejected": 0,
+      "rejected_reasons": [],
+      "plan_attempts": 1,
+      "plan_retries": 0,
+      "node_timings_ms": {
+        "parse": 4501.3,
+        "retrieve": 4.9,
+        "plan": 19833.8,
+        "instantiate": 16.8,
+        "validate": 19.1,
+        "explain": 79043.0
+      },
+      "wall_ms": 103420.0,
+      "llm_stats": {
+        "calls": 20.0,
+        "http_requests": 20.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 103357.7
+      },
+      "fallback_events": [],
+      "parsed": {
+        "services": [
+          "0x10",
+          "0x27",
+          "0x3E"
+        ],
+        "dids": [
+          "0x0160"
+        ],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [
+          "0x03"
+        ],
+        "dtcs": [],
+        "intents": [
+          "session",
+          "security",
+          "read",
+          "write"
+        ],
+        "keywords": [
+          "programming session",
+          "preconditions",
+          "BCM"
+        ]
+      },
+      "notes": [],
+      "test_ids": [
+        "req_004__tpl_negative_suppress_10_01",
+        "req_004__tpl_negative_suppress_11_01",
+        "req_004__tpl_negative_suppress_3e_01",
+        "req_004__tpl_negative_suppress_10_02",
+        "req_004__tpl_negative_suppress_11_02",
+        "req_004__tpl_negative_suppress_31_02",
+        "req_004__tpl_negative_suppress_3e_02",
+        "req_004__tpl_negative_suppress_10_03",
+        "req_004__tpl_negative_suppress_11_03",
+        "req_004__tpl_negative_suppress_31_03",
+        "req_004__tpl_negative_suppress_3e_03",
+        "req_004__tpl_s3_keepalive_02",
+        "req_004__tpl_s3_keepalive_03",
+        "req_004__tpl_nrc_priority_2e_01",
+        "req_004__tpl_nrc_priority_31_01",
+        "req_004__tpl_routine_start_results_0201",
+        "req_004__tpl_routine_start_results_0202",
+        "req_004__tpl_routine_start_results_0203"
+      ]
+    },
+    {
+      "requirement_id": "REQ-005",
+      "status": "completed",
+      "llm": "ollama",
+      "tests_kept": 18,
+      "dropped": 0,
+      "rejected": 0,
+      "rejected_reasons": [],
+      "plan_attempts": 1,
+      "plan_retries": 0,
+      "node_timings_ms": {
+        "parse": 4990.1,
+        "retrieve": 6.1,
+        "plan": 19866.2,
+        "instantiate": 18.6,
+        "validate": 22.8,
+        "explain": 79679.6
+      },
+      "wall_ms": 104584.4,
+      "llm_stats": {
+        "calls": 20.0,
+        "http_requests": 20.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 104515.6
+      },
+      "fallback_events": [],
+      "parsed": {
+        "services": [
+          "0x14",
+          "0x2E",
+          "0x31",
+          "0x3E"
+        ],
+        "dids": [
+          "0x0100"
+        ],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [
+          "0x01"
+        ],
+        "dtcs": [
+          "B10101",
+          "B10205",
+          "B10310"
+        ],
+        "intents": [
+          "write",
+          "routine",
+          "security",
+          "lockout"
+        ],
+        "keywords": [
+          "interior lighting",
+          "brightness",
+          "door lock",
+          "wiper",
+          "diagnostic session",
+          "security level"
+        ]
+      },
+      "notes": [],
+      "test_ids": [
+        "req_005__tpl_negative_suppress_10_01",
+        "req_005__tpl_negative_suppress_11_01",
+        "req_005__tpl_negative_suppress_3e_01",
+        "req_005__tpl_negative_suppress_10_02",
+        "req_005__tpl_negative_suppress_11_02",
+        "req_005__tpl_negative_suppress_31_02",
+        "req_005__tpl_negative_suppress_3e_02",
+        "req_005__tpl_negative_suppress_10_03",
+        "req_005__tpl_negative_suppress_11_03",
+        "req_005__tpl_negative_suppress_31_03",
+        "req_005__tpl_negative_suppress_3e_03",
+        "req_005__tpl_s3_keepalive_02",
+        "req_005__tpl_s3_keepalive_03",
+        "req_005__tpl_nrc_priority_2e_01",
+        "req_005__tpl_nrc_priority_31_01",
+        "req_005__tpl_routine_start_results_0201",
+        "req_005__tpl_routine_start_results_0202",
+        "req_005__tpl_routine_start_results_0203"
+      ]
+    }
+  ]
+}

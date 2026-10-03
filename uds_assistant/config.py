@@ -16,9 +16,11 @@ from pydantic import BaseModel, Field
 
 LlmMode = Literal["mock", "ollama"]
 RetrieverBackend = Literal["bm25", "chroma"]
+EmbedderBackend = Literal["fastembed", "sentence-transformers"]
 
 _VALID_LLM_MODES: tuple[LlmMode, ...] = ("mock", "ollama")
 _VALID_RETRIEVERS: tuple[RetrieverBackend, ...] = ("bm25", "chroma")
+_VALID_EMBEDDERS: tuple[EmbedderBackend, ...] = ("fastembed", "sentence-transformers")
 
 
 class Config(BaseModel):
@@ -26,6 +28,7 @@ class Config(BaseModel):
 
     llm_mode: LlmMode = Field(default="mock")
     retriever: RetrieverBackend = Field(default="bm25")
+    embedder: EmbedderBackend = Field(default="fastembed")
 
 
 def _read_enum_env(name: str, valid: tuple[str, ...], default: str) -> str:
@@ -52,4 +55,7 @@ def get_config() -> Config:
     """
     llm_mode = _read_enum_env("LLM_MODE", _VALID_LLM_MODES, "mock")
     retriever = _read_enum_env("RETRIEVER", _VALID_RETRIEVERS, "bm25")
-    return Config(llm_mode=llm_mode, retriever=retriever)  # type: ignore[arg-type]
+    embedder = _read_enum_env("EMBEDDER", _VALID_EMBEDDERS, "fastembed")
+    return Config(  # type: ignore[call-overload]
+        llm_mode=llm_mode, retriever=retriever, embedder=embedder
+    )

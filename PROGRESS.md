@@ -347,3 +347,71 @@ The owner pointed out that the A3 subagent never finished. The orchestrator then
 **Spot-check of a missed-bug reason:** `read_did_session_restriction_ignored` is missed because `read_did_wrong_session_or_unknown` was only ever instantiated with the unknown DID 0xDEAD. No generated test reads 0x0150 outside its read sessions, so the reason given in the report is accurate. This is reported only; templates stay frozen.
 
 **Freeze:** the testgen tree hash is still `9a121b2742c5f85fa48fd4f5340caf3b85979c67`.
+
+---
+
+# Part B (2026-10-03T13:13:12+05:30)
+
+Part B starts from HEAD `622d495`.
+
+## B0 — Preconditions: all passed
+
+| Check | Result |
+|---|---|
+| `ollama list` | Shows `qwen2.5:3b-instruct-q4_K_M` (1.9 GB, id 357c53fb659c) |
+| `GET http://localhost:11434/api/tags` | Responds, listing the model (3.1B parameters, Q4_K_M, context length 32768) |
+| Ollama version | 0.35.1 |
+| GPU | NVIDIA GeForce RTX 3050 Laptop GPU, 4096 MiB VRAM, driver 581.15 |
+
+`ollama.exe` is not on Git Bash's PATH; it was run from PowerShell instead.
+
+## B1 setup
+
+Installed in one attempt:
+- chromadb 1.5.9
+- fastembed 0.8.1
+- onnxruntime 1.30.0, pulled in as a dependency
+
+Absent afterwards: torch, transformers, sentence-transformers.
+
+`BAAI/bge-small-en-v1.5` downloaded through fastembed (Qdrant's ONNX export, 384 dimensions) and embeds correctly.
+
+## Plan
+
+| Step | Work | Who |
+|---|---|---|
+| B1 | Embeddings and Chroma retrieval comparison | Subagent, Sonnet |
+| B2 | Ollama settings and 5-requirement smoke test | Subagent, Sonnet |
+| B3 | Dev-only prompt tuning, then freeze | Subagent, Opus, with a strict dev-only rule |
+| B4 | Full mock vs ollama evaluation with byte-provenance assertion | Subagent, Opus |
+| B5 | Docs, UI and final report | Subagent, Sonnet |
+
+B1 and B2 touch different areas and run in parallel. The orchestrator verifies each step and commits.
+
+## B1 and B2 — done (2026-10-03T13:35:02+05:30)
+
+**B1**
+- fastembed embedder plus an optional sentence-transformers path, selected with `EMBEDDER`.
+- Chroma retriever using fastembed, and a BM25 vs Chroma comparison wired into the eval.
+- needs_model tests for rag and eval: 10 passed.
+- Retrieval, test split (n=11):
+
+  | Backend | hit@1 | hit@3 | MRR |
+  |---|---|---|---|
+  | BM25 | 36.4% | 63.6% | 0.552 |
+  | Chroma | 18.2% | 63.6% | 0.462 |
+
+**B2**
+- Prompts moved to `llm/prompts.py`.
+- Client sends num_ctx 4096, temperature 0 and a JSON-schema format.
+- Per-node timings, LLM stats and fallback events are recorded on each run.
+- MODEL_SETUP.md section 2b covers the server env vars for 4 GB of VRAM.
+- Smoke run on REQ-001 to REQ-005 (`outputs/ollama_smoke.json`):
+  - all completed
+  - 0 JSON failures, 0 retries, 0 fallbacks
+  - 18 to 19 tests per requirement
+  - 103 to 126 s per requirement, about 80 s of it in explain
+  - weak parsing
+- needs_model tests for llm and agent: 3 passed.
+
+**Verification:** ruff clean; 855 passed, 13 skipped (needs_model).

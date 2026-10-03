@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from uds_assistant.llm.base import (
     LLMError,
+    LLMStats,
     ParsedRequirement,
     PlannedTest,
     TestPlan,
@@ -122,17 +123,27 @@ class MockLLM:
 
     name = "mock"
 
+    def __init__(self, fallback_events: list[str] | None = None) -> None:
+        self.stats = LLMStats()
+        self.fallback_events: list[str] = list(fallback_events or [])
+        """Why this mock is in use instead of Ollama (verbatim warning text), if it fell back."""
+
     def complete_json(self, system: str, prompt: str, schema: type[T]) -> T:
         """Answer a structured request; dispatches on ``schema``."""
+        self.stats.calls += 1
+        self.stats.http_requests += 1
         ctx = extract_context(prompt)
         if issubclass(schema, ParsedRequirement):
             return schema.model_validate(_parse(ctx).model_dump())
         if issubclass(schema, TestPlan):
             return schema.model_validate(_plan(ctx).model_dump())
+        self.stats.errors += 1
         raise LLMError(f"MockLLM has no rule for schema {schema.__name__}")
 
     def complete_text(self, system: str, prompt: str) -> str:
         """Write a templated prose explanation from the prompt's context."""
+        self.stats.calls += 1
+        self.stats.http_requests += 1
         return _explain(extract_context(prompt))
 
 

@@ -18,7 +18,9 @@ def test_mock_is_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LLM_MODE", raising=False)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert isinstance(get_llm(), MockLLM)
+        llm = get_llm()
+        assert isinstance(llm, MockLLM)
+        assert llm.fallback_events == []
 
 
 def test_ollama_unreachable_falls_back_with_warning() -> None:
@@ -28,6 +30,9 @@ def test_ollama_unreachable_falls_back_with_warning() -> None:
     with pytest.warns(UserWarning, match="falling back"):
         llm = get_llm(Config(llm_mode="ollama"), transport=httpx.MockTransport(down))
     assert isinstance(llm, MockLLM)
+    assert len(llm.fallback_events) == 1
+    assert llm.fallback_events[0].startswith("LLM_MODE=ollama requested but Ollama is not reachable")
+    assert llm.fallback_events[0].endswith("falling back to the deterministic mock LLM.")
 
 
 def test_ollama_reachable_returns_client() -> None:

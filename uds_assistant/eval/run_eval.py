@@ -37,6 +37,7 @@ from uds_assistant.eval.agreement import DEFAULT_REQUESTS, simulator_rules_agree
 from uds_assistant.eval.can_check import run_udsoncan_sequence
 from uds_assistant.eval.heldout import heldout_analysis
 from uds_assistant.eval.report_md import render_markdown
+from uds_assistant.eval.retrieval_compare import run_retrieval_comparison
 from uds_assistant.export import to_capl, to_pytest
 from uds_assistant.llm.client import OllamaClient
 from uds_assistant.llm.factory import get_llm
@@ -263,6 +264,7 @@ def run_evaluation(
     run_exported: bool = True,
     run_can: bool = True,
     natural: bool = True,
+    run_retrieval_compare: bool = True,
     agreement_requests: int = DEFAULT_REQUESTS,
 ) -> dict[str, Any]:
     """Run the full evaluation and write ``eval_report.{json,md}`` into ``out_dir``.
@@ -271,7 +273,8 @@ def run_evaluation(
     ``requirement_ids`` restricts the run to a subset of seed requirements (the
     natural-requirement section always uses all of ``requirements_natural.csv``
     unless ``natural`` is False). ``run_can=False`` skips the udsoncan
-    virtual-CAN check (reported as "skipped").
+    virtual-CAN check (reported as "skipped"); ``run_retrieval_compare=False``
+    records the BM25-vs-Chroma retrieval comparison as "not run".
     """
     if mode not in LLM_MODES:
         raise ValueError(f"mode must be one of {LLM_MODES}, got {mode!r}")
@@ -417,6 +420,13 @@ def run_evaluation(
         if run_exported:
             export_info["run"] = run_export_check(files[0], cwd=root)
         timings["exports"] = time.perf_counter() - t
+    t = time.perf_counter()
+    if run_retrieval_compare:
+        retrieval_comparison = run_retrieval_comparison(root)
+    else:
+        retrieval_comparison = {"status": "not run",
+                                "reason": "--skip-retrieval-compare given"}
+    timings["retrieval_compare"] = time.perf_counter() - t
     timings["total"] = time.perf_counter() - t_start
 
     mode_block = {"status": "completed", "llm": llm.name, **metrics_block}
@@ -448,6 +458,7 @@ def run_evaluation(
         "bug_catalog_size": len(catalog.ids),
         "heldout_catalog_size": len(heldout_catalog.ids),
         "natural_requirements": len(natural_reqs),
+        "retrieval_comparison": retrieval_comparison,
         "simulator_rules_agreement": agreement,
         "udsoncan_virtual_can": can_result,
         "metric_definitions": {**m.METRIC_DEFINITIONS, **u.UNDERSTANDING_DEFINITIONS},
@@ -482,6 +493,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="write exports but do not run the exported pytest file")
     parser.add_argument("--skip-can", action="store_true",
                         help="skip the udsoncan virtual-CAN check (for fast test runs)")
+    parser.add_argument("--skip-retrieval-compare", action="store_true",
+                        help="skip the BM25-vs-Chroma retrieval comparison (for fast test runs)")
     return parser
 
 
@@ -490,7 +503,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     report = run_evaluation(
         args.mode, args.out, args.engine, run_exported=not args.no_export_run,
-        run_can=not args.skip_can,
+        run_can=not args.skip_can, run_retrieval_compare=not args.skip_retrieval_compare,
     )
     block = report["modes"][report["actual_mode"]]
     det = block["bug_detection"]

@@ -1,7 +1,8 @@
 """Builds the configured :class:`Retriever` from runtime config, with a safe fallback.
 
 ``RETRIEVER=bm25`` (the default) always works offline. ``RETRIEVER=chroma``
-needs ``chromadb`` and ``sentence-transformers`` installed; if either is
+needs ``chromadb`` and the embedder chosen by ``EMBEDDER`` (``fastembed`` by default,
+or ``sentence-transformers``) installed; if either is
 missing, this falls back to BM25 and emits a warning rather than crashing
 (AGENT.md: "fall back to bm25 if chromadb or embeddings are missing").
 """
@@ -37,13 +38,21 @@ def get_retriever(
     if cfg.retriever == "chroma":
         from uds_assistant.rag.chroma import chroma_available
 
-        if chroma_available():
+        if chroma_available(cfg.embedder):
             from uds_assistant.rag.chroma import ChromaRetriever
 
-            return ChromaRetriever(chunks)
+            try:
+                return ChromaRetriever(chunks, embedder=cfg.embedder)
+            except Exception as exc:  # noqa: BLE001 - model missing/offline, corrupt store, ...
+                warnings.warn(
+                    f"RETRIEVER=chroma could not start ({type(exc).__name__}: {exc}); "
+                    "falling back to the bm25 retriever.",
+                    stacklevel=2,
+                )
+                return Bm25Retriever(chunks)
         warnings.warn(
-            "RETRIEVER=chroma requested but chromadb/sentence-transformers are not "
-            "installed; falling back to the bm25 retriever.",
+            f"RETRIEVER=chroma requested but chromadb or the {cfg.embedder} embedder is "
+            "not installed; falling back to the bm25 retriever.",
             stacklevel=2,
         )
 

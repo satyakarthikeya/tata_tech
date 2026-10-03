@@ -148,3 +148,52 @@ This subagent was interrupted when the session ended before it could report back
   - In-sample 25/26 is a secondary number, labelled "templates tuned on these".
 - **[PA-DOCS-TEMPLATES]** PROJECT.md now documents 23 templates instead of the planned 8–12: 14 in v1, plus 9 added in Phase 7 after seeing the in-sample misses. It also states Python 3.13.
 - **[PA-NEXT-SWS]** D2, D5, D6 and D7 are the first SWS disagreements to fix in Part B. The fix must be coordinated across the rules engine, simulator, behaviour contract and gold tests, and done with a new held-out set.
+
+## Part B
+
+- **[PB-INSTALL]** For Part B the owner lifted the offline rule for three things only: chromadb, fastembed and BAAI/bge-small-en-v1.5.
+  - onnxruntime 1.30.0 came in as an unavoidable dependency of fastembed and chromadb. It is on AGENT.md's never-install list, but the owner explicitly allowed the packages that require it.
+  - torch, transformers and sentence-transformers are still not installed.
+- **[PB-EMBED]** Embeddings use fastembed, which runs ONNX on the CPU with no torch.
+  - fastembed's `BAAI/bge-small-en-v1.5` resolves to Qdrant's ONNX export (`Qdrant/bge-small-en-v1.5-onnx-Q`), the same model exported to ONNX.
+  - The sentence-transformers embedder stays as an optional code path and is not installed.
+- **[PB-OLLAMA-CLI]** `ollama.exe` is not on Git Bash's PATH. Preconditions were checked with PowerShell `ollama list` and HTTP `/api/tags`.
+
+### B1 (embeddings and retrieval comparison)
+
+- **[PB-RAG-EMBED]** The embedder is chosen with `EMBEDDER=fastembed|sentence-transformers`; the default is fastembed running bge-small-en-v1.5 on ONNX.
+  - sentence-transformers is an optional path that is only imported when selected.
+  - The model cache lives at `~/.cache/uds_assistant/fastembed`, which `FASTEMBED_CACHE_PATH` overrides. It was seeded from the temporary cache so it survives Temp cleanup.
+- **[PB-RAG-CHROMA]** The Chroma store is at `outputs/chroma` and is gitignored.
+  - It uses cosine distance and one collection per embedder.
+  - Only changed chunks are re-embedded, using a text hash.
+  - The factory warns and falls back to BM25 if chromadb or the embedder is missing, or if building the store fails.
+- **[PB-RETRIEVAL-CMP]** Relevance ground truth comes from the labelled targets in `requirements_natural.csv`.
+  - A DID or routine target matches by identifier in the ecu_spec collection; a service-only target matches the standard `svc-<sid>` chunk.
+  - NAT-020, which has no targets, is excluded. Search spans all collections.
+  - Reported per split: hit@1, hit@3, MRR@10, and citation validity over the top 3 hits.
+- **[PB-RETRIEVAL-RESULT]** Neither backend is clearly better on 19 queries, so the default stays BM25.
+  - Test split (n=11): BM25 hit@1 36.4%, hit@3 63.6%, MRR 0.552. Chroma hit@1 18.2%, hit@3 63.6%, MRR 0.462.
+  - All rows: Chroma hit@3 68.4% vs BM25 52.6%.
+
+### B2 (Ollama settings and smoke test)
+
+- **[PB-PROMPTS]** All agent prompt text now lives in `uds_assistant/llm/prompts.py`, moved there word for word in B2. Prompt tuning edits only that file.
+- **[PB-OPTS]** `OllamaClient` always sends:
+  - `num_ctx=4096`, overridable with `OLLAMA_NUM_CTX`
+  - `temperature=0` and `seed=0`, for parse, plan and explain alike
+  - `keep_alive=10m`, overridable with `OLLAMA_KEEP_ALIVE`
+  - a JSON-schema `format` on structured calls
+
+  Explain also runs at temperature 0 so results can be reproduced.
+- **[PB-INSTR]** `PipelineResult` gained:
+  - `node_timings` and `node_calls`
+  - `llm_stats`: calls, JSON failures, retries, errors and latency for that run
+  - `fallback_events`: the `get_llm` fallback warning quoted exactly, plus any failed LLM call the pipeline continued past
+
+  Timing fields are left out of the engine-equality and determinism tests.
+- **[PB-SMOKE]** Real-model smoke run on REQ-001 to REQ-005:
+  - 0 JSON or schema failures, 0 retries, 0 fallbacks.
+  - 18 to 19 tests kept per requirement; planning was not selective.
+  - Parse output was weak: identifiers not in the requirement were added, and `sessions` came back empty every time.
+  - Explain dominates the time, at about 80 s per requirement (one call per test). Total was 103 to 126 s per requirement.

@@ -1,7 +1,11 @@
 """Ollama-backed :class:`~uds_assistant.llm.base.LLMClient` (``LLM_MODE=ollama``).
 
-Talks to a local Ollama server over HTTP (``/api/chat``) with ``stream=false``
-and temperature 0. Structured calls pass the pydantic model's JSON schema as
+Talks to a local Ollama server over HTTP (``/api/chat``) with ``stream=false``,
+temperature 0 for every call (parse, plan *and* explain: greedy decoding keeps
+runs reproducible and the explain prose is short, so there is no reason to
+sample), a bounded context window (``num_ctx`` 4096 by default so the KV cache
+fits a 4 GB GPU; ``OLLAMA_NUM_CTX`` overrides) and a ``keep_alive`` so the
+model stays loaded between pipeline nodes. Structured calls pass the pydantic model's JSON schema as
 Ollama's ``format`` so the model is constrained to that shape; the reply is
 still validated with pydantic, and an invalid reply is re-prompted with the
 validation error. Transport errors (connection refused, timeouts) and 5xx
@@ -22,12 +26,17 @@ from typing import Any, TypeVar
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from uds_assistant.llm.base import LLMError
+from uds_assistant.llm.base import LLMError, LLMStats
+from uds_assistant.llm.prompts import SCHEMA_RETRY_INSTRUCTION
 
 T = TypeVar("T", bound=BaseModel)
 
 DEFAULT_MODEL = "qwen2.5:3b-instruct-q4_K_M"
 DEFAULT_BASE_URL = "http://localhost:11434"
+DEFAULT_NUM_CTX = 4096
+DEFAULT_KEEP_ALIVE = "10m"
+DEFAULT_TEMPERATURE = 0
+DEFAULT_SEED = 0
 
 
 def ollama_base_url() -> str:
@@ -43,6 +52,21 @@ def ollama_model() -> str:
     return os.environ.get("OLLAMA_MODEL", "").strip() or DEFAULT_MODEL
 
 
+def ollama_num_ctx() -> int:
+    """Context window from ``OLLAMA_NUM_CTX`` (default 4096; invalid values ignored)."""
+    raw = os.environ.get("OLLAMA_NUM_CTX", "").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_NUM_CTX
+    return value if value > 0 else DEFAULT_NUM_CTX
+
+
+def ollama_keep_alive() -> str:
+    """Model keep-alive from ``OLLAMA_KEEP_ALIVE`` (default ``10m``)."""
+    return os.environ.get("OLLAMA_KEEP_ALIVE", "").strip() or DEFAULT_KEEP_ALIVE
+
+
 class OllamaClient:
     """Minimal synchronous Ollama chat client with retries and schema validation."""
 
@@ -56,6 +80,9 @@ class OllamaClient:
         timeout_s: float = 120.0,
         max_retries: int = 2,
         backoff_s: float = 0.5,
+        num_ctx: int | None = None,
+        keep_alive: str | None = None,
+        temperature: float = DEFAULT_TEMPERATURE,
         transport: httpx.BaseTransport | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -64,6 +91,11 @@ class OllamaClient:
         self.timeout_s = timeout_s
         self.max_retries = max(0, max_retries)
         self.backoff_s = backoff_s
+        self.num_ctx = num_ctx or ollama_num_ctx()
+        self.keep_alive = keep_alive or ollama_keep_alive()
+        self.temperature = temperature
+        self.stats = LLMStats()
+        self.fallback_events: list[str] = []
         self._transport = transport
         self._sleep = sleep
 
@@ -77,7 +109,12 @@ class OllamaClient:
             "model": self.model,
             "messages": messages,
             "stream": False,
-            "options": {"temperature": 0},
+            "keep_alive": self.keep_alive,
+            "options": {
+                "temperature": self.temperature,
+                "num_ctx": self.num_ctx,
+                "seed": DEFAULT_SEED,
+            },
         }
         if schema is not None:
             body["format"] = schema.model_json_schema()
@@ -92,6 +129,9 @@ class OllamaClient:
         """POST once (with transport-level retries) and return the message content."""
         last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
+            if attempt > 0:
+                self.stats.retries += 1
+            self.stats.http_requests += 1
             try:
                 with self._client() as client:
                     resp = client.post("/api/chat", json=body)
@@ -118,26 +158,36 @@ class OllamaClient:
 
     def complete_json(self, system: str, prompt: str, schema: type[T]) -> T:
         """Ask for JSON matching ``schema``; re-prompt with the error if invalid."""
+        self.stats.calls += 1
+        start = time.perf_counter()
+        try:
+            return self._complete_json(system, prompt, schema)
+        except LLMError:
+            self.stats.errors += 1
+            raise
+        finally:
+            self.stats.latency_ms += (time.perf_counter() - start) * 1000
+
+    def _complete_json(self, system: str, prompt: str, schema: type[T]) -> T:
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ]
         last_error = ""
-        for _ in range(self.max_retries + 1):
+        for attempt in range(self.max_retries + 1):
+            if attempt > 0:
+                self.stats.retries += 1
             content = self._post_chat(self.build_chat_body(messages, schema))
             try:
                 return schema.model_validate(json.loads(content))
             except (json.JSONDecodeError, ValidationError) as exc:
+                self.stats.json_failures += 1
                 last_error = str(exc)
                 messages = messages + [
                     {"role": "assistant", "content": content},
                     {
                         "role": "user",
-                        "content": (
-                            "Your previous reply was not valid JSON for the required schema. "
-                            f"Error: {last_error}\nReply again with only a JSON object that "
-                            "matches the schema."
-                        ),
+                        "content": SCHEMA_RETRY_INSTRUCTION.format(error=last_error),
                     },
                 ]
         raise LLMError(
@@ -147,11 +197,19 @@ class OllamaClient:
 
     def complete_text(self, system: str, prompt: str) -> str:
         """Ask for free text."""
+        self.stats.calls += 1
+        start = time.perf_counter()
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ]
-        return self._post_chat(self.build_chat_body(messages)).strip()
+        try:
+            return self._post_chat(self.build_chat_body(messages)).strip()
+        except LLMError:
+            self.stats.errors += 1
+            raise
+        finally:
+            self.stats.latency_ms += (time.perf_counter() - start) * 1000
 
 
 def ollama_reachable(

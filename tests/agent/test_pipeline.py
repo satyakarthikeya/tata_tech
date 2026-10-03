@@ -39,6 +39,13 @@ def test_langgraph_is_available_here() -> None:
     assert resolve_engine(None) in ("langgraph", "plain")
 
 
+def _content(result: PipelineResult, *, drop: tuple[str, ...] = ()) -> dict:
+    """Result as a dict without wall-clock fields (timings, LLM latency) and ``drop``."""
+    data = result.model_dump(exclude={"node_timings", *drop})
+    data["llm_stats"] = {k: v for k, v in data["llm_stats"].items() if k != "latency_ms"}
+    return data
+
+
 @pytest.mark.parametrize("req_id", REQ_IDS)
 def test_langgraph_and_plain_produce_identical_results(
     req_id: str, spec: EcuSpec, retriever: Bm25Retriever
@@ -46,7 +53,7 @@ def test_langgraph_and_plain_produce_identical_results(
     lg = _run(req_id, "langgraph", spec, retriever)
     plain = _run(req_id, "plain", spec, retriever)
     assert lg.engine == "langgraph" and plain.engine == "plain"
-    assert lg.model_dump(exclude={"engine"}) == plain.model_dump(exclude={"engine"})
+    assert _content(lg, drop=("engine",)) == _content(plain, drop=("engine",))
 
 
 @pytest.mark.parametrize("req_id", REQ_IDS)
@@ -131,7 +138,7 @@ def test_suite_covers_all_categories(spec: EcuSpec, retriever: Bm25Retriever) ->
 def test_pipeline_is_deterministic(spec: EcuSpec, retriever: Bm25Retriever) -> None:
     a = run_pipeline(REQ_TEXT["REQ-006"], "REQ-006", spec, MockLLM(), retriever, engine="plain")
     b = run_pipeline(REQ_TEXT["REQ-006"], "REQ-006", spec, MockLLM(), retriever, engine="plain")
-    assert a == b
+    assert _content(a) == _content(b)
 
 
 def test_every_node_logs_decisions(spec: EcuSpec, retriever: Bm25Retriever) -> None:

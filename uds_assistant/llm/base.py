@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import asdict, dataclass
 from typing import Literal, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -140,6 +141,35 @@ class TestPlan(_Schema):
     __test__ = False  # not a pytest test class despite the name
 
     tests: list[PlannedTest] = Field(default_factory=list)
+
+
+@dataclass
+class LLMStats:
+    """Counters an LLM backend accumulates; read with :meth:`snapshot`."""
+
+    calls: int = 0
+    """Public ``complete_json`` / ``complete_text`` calls."""
+    http_requests: int = 0
+    """Chat requests actually sent (>= calls; extra ones are re-prompts)."""
+    json_failures: int = 0
+    """Replies that were not valid JSON or failed schema validation."""
+    retries: int = 0
+    """Re-sent requests: schema re-prompts plus transport/5xx retries."""
+    errors: int = 0
+    """Public calls that ended in :class:`LLMError`."""
+    latency_ms: float = 0.0
+    """Wall-clock time spent inside public calls."""
+
+    def snapshot(self) -> dict[str, float]:
+        """A plain-dict copy of the counters."""
+        return asdict(self)
+
+
+def stats_delta(after: dict[str, float], before: dict[str, float]) -> dict[str, float]:
+    """Counter differences ``after - before`` (latency rounded to 0.1 ms)."""
+    out = {k: after[k] - before.get(k, 0) for k in after}
+    out["latency_ms"] = round(out.get("latency_ms", 0.0), 1)
+    return out
 
 
 @runtime_checkable

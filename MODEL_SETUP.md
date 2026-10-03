@@ -100,6 +100,75 @@ export OLLAMA_MODEL="qwen2.5:3b-instruct-q4_K_M"
 export LLM_MODE="ollama"
 ```
 
+### 2b. Recommended settings for a 4 GB GPU (RTX 3050 Laptop class)
+
+The verified setup is `qwen2.5:3b-instruct-q4_K_M` (~1.9 GB) on a 4 GB card.
+The model plus a 4096-token KV cache fits in VRAM; the default 32768 context
+would not. Settings come in two kinds.
+
+**Ollama server variables** (read by the Ollama *server*, not by this app). They
+only take effect if set **before the server starts**; setting them in a shell
+after the Ollama app is already running does nothing.
+
+| Variable | Value | Why |
+|---|---|---|
+| `OLLAMA_FLASH_ATTENTION` | `1` | Flash attention: less memory per token of context |
+| `OLLAMA_KV_CACHE_TYPE` | `q8_0` | Halves KV-cache size versus f16 (needs flash attention) |
+| `OLLAMA_MAX_LOADED_MODELS` | `1` | Never keep a second model resident on a 4 GB card |
+
+Windows (the Ollama tray app / service): set them persistently, then restart the app.
+
+```powershell
+setx OLLAMA_FLASH_ATTENTION 1
+setx OLLAMA_KV_CACHE_TYPE q8_0
+setx OLLAMA_MAX_LOADED_MODELS 1
+# Quit Ollama from the system-tray icon (right-click -> Quit Ollama), or:
+Get-Process ollama*, "ollama app" -ErrorAction SilentlyContinue | Stop-Process
+# Start it again so it inherits the new variables (new shell or Start menu -> Ollama):
+Start-Process "$env:LOCALAPPDATA\Programs\Ollama\ollama app.exe"
+```
+
+`setx` only affects processes started afterwards, so restart the app from a
+fresh shell or the Start menu. Alternative without the tray app (one-off, in the
+same shell that runs the server):
+
+```powershell
+$env:OLLAMA_FLASH_ATTENTION = "1"; $env:OLLAMA_KV_CACHE_TYPE = "q8_0"; $env:OLLAMA_MAX_LOADED_MODELS = "1"
+ollama serve
+```
+
+```bash
+# Git Bash / Linux / macOS (stop any running server first)
+OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_MAX_LOADED_MODELS=1 ollama serve
+```
+
+Note: `ollama.exe` is usually **not** on Git Bash's `PATH` (the installer adds it
+to the Windows user PATH, which an already-open Git Bash may not see). Use
+PowerShell for the CLI, call it by full path
+(`"$LOCALAPPDATA/Programs/Ollama/ollama.exe"`), or just use the HTTP API
+(`curl http://localhost:11434/api/tags`), which is all this project needs.
+
+**Client variables** (read by this project's `OllamaClient`):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LLM_MODE` | `mock` | Set to `ollama` to use the real model |
+| `OLLAMA_HOST` | `http://localhost:11434` | Server URL |
+| `OLLAMA_MODEL` | `qwen2.5:3b-instruct-q4_K_M` | Model tag |
+| `OLLAMA_NUM_CTX` | `4096` | `num_ctx` sent with every request |
+| `OLLAMA_KEEP_ALIVE` | `10m` | `keep_alive` sent with every request |
+
+Every request also sends `temperature: 0` and `seed: 0` (parse, plan and explain
+alike: reproducible runs, and the explain prose is short), `stream: false`, and,
+for structured calls (parse, plan), the pydantic JSON schema as `format`.
+
+Smoke test against the real model (5 seed requirements, writes
+`outputs/ollama_smoke.json`):
+
+```bash
+python scripts/ollama_smoke.py
+```
+
 ## 3. Install the retrieval stack (ChromaDB + embeddings)
 
 **Warning:** `sentence-transformers` pulls in `torch` (hundreds of MB). Only do
@@ -166,9 +235,11 @@ Then run the full suite once more to confirm nothing regressed:
 python -m pytest -q
 ```
 
-Only 2 tests were marked `needs_model` as of Phase 9 (`tests/rag/test_chroma.py`
-and the Ollama-reachability path); the rest of the suite already runs
-unconditionally against mock/bm25.
+`needs_model` tests include `tests/rag/test_chroma.py` and, for Ollama, the real-server
+smoke tests in `tests/llm/test_client.py`, `tests/llm/test_client_options.py` (one
+parse call returns a valid `ParsedRequirement`) and `tests/agent/test_instrumentation.py`
+(the pipeline completes in ollama mode); the rest of the suite runs unconditionally
+against mock/bm25. To run just the LLM/agent ones: `RUN_MODEL_TESTS=1 python -m pytest -m needs_model -v tests/llm tests/agent`.
 
 ## 5. Run the evaluation in Ollama mode and compare
 

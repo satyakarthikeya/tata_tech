@@ -29,9 +29,10 @@ def get_llm(
         base_url = ollama_base_url()
         if ollama_reachable(base_url, timeout_s=probe_timeout_s, transport=transport):
             return OllamaClient(base_url=base_url, transport=transport)
-        warnings.warn(
+        message = (
             f"LLM_MODE=ollama requested but Ollama is not reachable at {base_url}; "
-            "falling back to the deterministic mock LLM.",
-            stacklevel=2,
+            "falling back to the deterministic mock LLM."
         )
+        warnings.warn(message, stacklevel=2)
+        return MockLLM(fallback_events=[message])
     return MockLLM()

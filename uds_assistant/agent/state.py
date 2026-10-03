@@ -71,6 +71,12 @@ class PipelineState(BaseModel):
     feedback: list[str] = Field(default_factory=list)
     needs_replan: bool = False
     decisions: list[Decision] = Field(default_factory=list)
+    node_timings: dict[str, float] = Field(default_factory=dict)
+    """Accumulated wall-clock milliseconds per node (re-plan rounds add up)."""
+    node_calls: dict[str, int] = Field(default_factory=dict)
+    """How many times each node ran."""
+    fallback_events: list[str] = Field(default_factory=list)
+    """Per-call fallbacks: an LLM call failed and the node continued without it."""
 
     def log(self, node: str, message: str) -> None:
         """Append a decision (call only on a node's private copy)."""
@@ -104,6 +110,13 @@ class PipelineResult(BaseModel):
     notes: list[str]
     decisions: list[Decision]
     plan_attempts: int
+    node_timings: dict[str, float] = Field(default_factory=dict)
+    """Per-node latency in ms (parse/retrieve/plan/instantiate/validate/explain)."""
+    node_calls: dict[str, int] = Field(default_factory=dict)
+    llm_stats: dict[str, float] = Field(default_factory=dict)
+    """LLM call counters for this run (calls, http_requests, json_failures, retries, ...)."""
+    fallback_events: list[str] = Field(default_factory=list)
+    """Fallback-to-mock events: get_llm fallback warning (verbatim) and per-call LLM failures."""
     status: Literal["completed", "failed"] = "completed"
 
     @property

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from uds_assistant.eval.metrics import CATEGORIES
+from uds_assistant.eval.retrieval_compare import render_section as _retrieval_section
 
 
 def _pct(value: float | None) -> str:
@@ -353,6 +354,8 @@ def render_markdown(report: dict[str, Any]) -> str:
     ]
     lines += _heldout(blk)
     lines += _understanding(report, blk)
+    if "retrieval_comparison" in report:
+        lines += _retrieval_section(report["retrieval_comparison"])
     lines += _checks(report)
     lines += _in_sample(report, blk)
 

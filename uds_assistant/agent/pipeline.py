@@ -12,13 +12,14 @@ imports, else plain.
 from __future__ import annotations
 
 import os
+import time
 import warnings
 from collections.abc import Callable
 from typing import Literal
 
 from uds_assistant.agent import nodes
 from uds_assistant.agent.state import PipelineDeps, PipelineResult, PipelineState
-from uds_assistant.llm.base import LLMClient
+from uds_assistant.llm.base import LLMClient, stats_delta
 from uds_assistant.rag.model import Retriever
 from uds_assistant.spec.schema import EcuSpec
 from uds_assistant.store.audit import AuditStore
@@ -39,7 +40,13 @@ NODE_FUNCTIONS: dict[str, NodeFn] = {
 def run_node(name: str, state: PipelineState, deps: PipelineDeps) -> PipelineState:
     """Run one node and persist the decisions it added to the audit store."""
     before = len(state.decisions)
+    start = time.perf_counter()
     new_state = NODE_FUNCTIONS[name](state, deps)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    new_state.node_timings[name] = round(
+        new_state.node_timings.get(name, 0.0) + elapsed_ms, 1
+    )
+    new_state.node_calls[name] = new_state.node_calls.get(name, 0) + 1
     if deps.store is not None and deps.run_id is not None:
         for d in new_state.decisions[before:]:
             deps.store.record_decision(deps.run_id, d.node, d.message)
@@ -108,6 +115,8 @@ def run_pipeline(
     state = PipelineState(
         requirement_id=requirement_id, requirement_text=requirement_text, max_retries=max_retries
     )
+    llm_stats = getattr(llm, "stats", None)
+    stats_before = llm_stats.snapshot() if llm_stats is not None else {}
     try:
         if chosen == "langgraph":
             from uds_assistant.agent.graph import run_graph
@@ -125,6 +134,7 @@ def run_pipeline(
         for t in tests:
             store.record_test(run_id, t)
         store.finish_run(run_id, "completed")
+    fallback_events = list(getattr(llm, "fallback_events", [])) + final.fallback_events
     return PipelineResult(
         run_id=run_id,
         requirement_id=requirement_id,
@@ -138,4 +148,10 @@ def run_pipeline(
         notes=final.notes,
         decisions=final.decisions,
         plan_attempts=final.plan_attempts,
+        node_timings=final.node_timings,
+        node_calls=final.node_calls,
+        llm_stats=(
+            stats_delta(llm_stats.snapshot(), stats_before) if llm_stats is not None else {}
+        ),
+        fallback_events=fallback_events,
     )
