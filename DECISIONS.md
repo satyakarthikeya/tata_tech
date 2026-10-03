@@ -456,3 +456,18 @@ Both agents were launched after the Part C freeze. Their exact prompts are recor
   - These numbers are not evidence of improvement: the sets are seen. The sweep was designed without them, but v3 is the real test.
 - **[PD2-FREEZE]** The Part C freeze table no longer matches, because D1a changed the agent and llm trees and the sweep adds a file under testgen. A Part D freeze table is needed.
 - **[PD2-RUNTIME]** The full test suite now takes about 9.5 minutes, because the report fixture runs the sweep (about 55 s) and the conformance tests take about 40 s.
+
+### D1b (dev-only tuning with the real model) and the robustness fixes
+
+- **[PD-D1B-SELECT]** Revision 2 was selected by the pre-registered rule: parsed F1 + category recall + precondition recall on the 8 dev rows, with ties broken by fewer rejections.
+  - Dev parsed precision / recall / F1 went from 0.583 / 0.824 / 0.683 (Part B, old code) to 0.929 / 0.765 / 0.839. Category recall is 0.682 and precondition recall 1.0.
+  - Its lead over revision 5 (score 2.521 against 2.482) is within the run-to-run noise on 8 rows.
+  - There were 0 planner rejections, 0 truncations and 0 JSON failures in every revision.
+- **[PD-D1B-ENUM]** Ollama accepted the per-call enum schema with a limit of 12: no grammar errors, no JSON failures, and plan calls took about 6.5 s on average. The constrained plan calls returned only offered choices.
+- **[PD-D1B-QUOTES]** The parse prompt no longer asks for evidence quotes. The 3B model copied instruction text into them, and the quote gate then dropped true services. The quote gate stays in code, but with no quotes supplied it has no effect.
+- **[PD-D1B-GENERIC]** Generic words (`ecu`, `diagnostic`, `session`, `reset`) no longer count as a match between a DID name and the requirement text.
+- **[PD-D1B-SEED]** On the 15 seed requirements, the untouched D1a code (revision 0) had 13 planner rejections, all "unknown template id". The model's evidence quotes dropped service 0x10, no service survived, the shortlist was empty, and the planner ran unconstrained. Revision 2 had 0 rejections.
+- **[PD-FIX-EMPTY]** Fix (orchestrator): when nothing is on offer for a limited-context backend, the plan node now skips the model call instead of running unconstrained. This closes the path behind those 13 rejections.
+- **[PD-FIX-HEX]** Fix (orchestrator): a parsed hex identifier is rewritten to the spec's spelling when its numeric value equals exactly one known identifier (`0x150` becomes `0x0150`, `0x2e` becomes `0x2E`). The value must be hex, and there is no nearest-match guessing. An unknown id is still dropped.
+- **[PD-FIX-CHECK]** After the two fixes I re-ran the dev harness once as revision 6. It matches revision 2 (parsed F1 0.839, category recall 0.682, precondition recall 1.0, 0 rejections), so the fixes changed no dev outcome.
+- **[PD-FIX-TEST]** `test_empty_shortlist_falls_back_to_the_unconstrained_schema` asserted the old behaviour. It is now `test_empty_shortlist_does_not_call_the_model`.

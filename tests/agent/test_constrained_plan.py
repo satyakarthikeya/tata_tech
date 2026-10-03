@@ -157,20 +157,24 @@ def test_normalisation_still_applies_to_constrained_choices(
     assert any(n.startswith("Normalised planner template_id") for n in s.notes)
 
 
-def test_empty_shortlist_falls_back_to_the_unconstrained_schema(
+def test_empty_shortlist_does_not_call_the_model(
     spec: EcuSpec, retriever: Bm25Retriever, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Part D: with nothing on offer there is nothing to choose, and an unconstrained call
+    only invited invented template names (13 rejections on the seed smoke run), so the
+    planner call is skipped."""
     monkeypatch.setattr(nodes, "plan_shortlist", lambda *a, **k: [])
     calls: list[type] = []
 
     class Fake(SchemaPlanner):
         def complete_json(self, system, prompt, schema, json_schema=None):  # type: ignore[no-untyped-def]
             calls.append(schema)
-            assert json_schema is None
             return TestPlan()
 
-    _plan_state(spec, retriever, Fake(lambda e: []))
-    assert calls == [TestPlan]
+    s = _plan_state(spec, retriever, Fake(lambda e: []))
+    assert calls == []
+    assert s.plan == TestPlan()
+    assert not s.rejected
 
 
 def test_end_to_end_with_ollama_client_over_mock_transport(

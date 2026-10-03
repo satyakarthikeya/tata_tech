@@ -82,7 +82,11 @@ SERVICE_RETRIEVAL_K = 3
 
 _WEAK_WORDS = frozenset(
     {"id", "pct", "kph", "enable", "state", "level", "flag", "number", "index", "mode", "test",
-     "self", "variant", "the", "and", "for", "with", "value"}
+     "self", "variant", "the", "and", "for", "with", "value",
+     # D1b: words of the UDS/ECU vocabulary itself. They occur in nearly every diagnostics
+     # requirement ("ECU reset", "diagnostic session"), so sharing one with a DID name
+     # (active_diagnostic_session, factory_reset_flag, ecu_serial_number) is no evidence.
+     "ecu", "diagnostic", "session", "reset"}
 )
 _TOKEN_RE = re.compile(r"[0-9A-Za-z]+")
 

@@ -116,6 +116,33 @@ def _catalog(deps: PipelineDeps) -> list[TemplateOptions]:
 # -------------------------------------------------------------------------------- parse
 
 
+def _normalise_hex_ids(
+    values: list[str], known: object, field_name: str, state: PipelineState
+) -> list[str]:
+    """Rewrite a short or lower-case hex id to the spec's spelling (``0x150`` -> ``0x0150``).
+
+    Only a value that is hex (``0x`` + hex digits) and whose numeric value matches exactly
+    one known identifier is rewritten. Anything else is returned unchanged, so an id that
+    is not in the spec is still dropped by the caller. No fuzzy matching.
+    """
+    canonical: dict[int, str] = {}
+    for k in known:  # type: ignore[attr-defined]
+        if isinstance(k, str) and re.fullmatch(r"0[xX][0-9a-fA-F]+", k):
+            canonical[int(k, 16)] = k
+    out: list[str] = []
+    for v in values:
+        if isinstance(v, str) and v not in known and re.fullmatch(r"0[xX][0-9a-fA-F]+", v):  # type: ignore[operator]
+            fixed = canonical.get(int(v, 16))
+            if fixed is not None:
+                note = f"Normalised {field_name[:-1]} identifier {v} -> {fixed}."
+                state.notes.append(note)
+                state.log("parse", note)
+                v = fixed
+        if v not in out:
+            out.append(v)
+    return out
+
+
 def parse(state: PipelineState, deps: PipelineDeps) -> PipelineState:
     """LLM -> :class:`ParsedRequirement`; identifiers not in the spec are dropped + noted."""
     s = state.model_copy(deep=True)
@@ -144,6 +171,7 @@ def parse(state: PipelineState, deps: PipelineDeps) -> PipelineState:
     for field_name in ("services", "dids", "routines", "sessions", "security_levels", "dtcs"):
         values: list[str] = getattr(parsed, field_name)
         known = index[field_name]
+        values = _normalise_hex_ids(values, known, field_name, s)
         kept[field_name] = [v for v in values if v in known]
         for v in values:
             if v not in known:
@@ -321,6 +349,7 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
     budget = context_budget(deps.llm)
     shortlist: set[tuple[str, int]] | None = None
     constrained = False
+    skip_llm = False
     plan_schema: dict[str, object] = {}
     if budget is None:
         # Unlimited backend (mock): the full catalog as JSON context, unchanged.
@@ -349,6 +378,7 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
             constrained = False
             prompt, entries = compact_plan_prompt(s, deps, catalog, exclude, budget)
         shortlist = {(e.template_id, e.option_index) for e in entries}
+        skip_llm = not entries
         if constrained:
             plan_schema = constrained_plan_schema(
                 [(e.template_id, e.option_index) for e in entries]
@@ -361,7 +391,12 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
         )
     mark = truncation_mark(deps.llm)
     try:
-        if constrained:
+        if skip_llm:
+            # Nothing is on offer (no relevant option, or all offered ones were already used or
+            # rejected): asking an unconstrained model would only invite invented choices.
+            s.log("plan", "no options on offer; planner call skipped (no new choices this round).")
+            test_plan = TestPlan()
+        elif constrained:
             reply = deps.llm.complete_json(  # type: ignore[call-arg]
                 SYSTEM_PROMPT, prompt, ConstrainedPlan, json_schema=plan_schema
             )

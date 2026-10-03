@@ -1,0 +1,1164 @@
+{
+  "revision": "3",
+  "note": "PARSE_INSTRUCTION steps 2-4: match DIDs/routines by shortened form/acronym/words, never mix groups; session/security conditions explicitly ALSO add 0x10/0x27",
+  "split": "dev",
+  "n_requirements": 8,
+  "timestamp": "2026-10-04T04:28:24+0530",
+  "model": "qwen2.5:3b-instruct-q4_K_M",
+  "num_ctx": 4096,
+  "retriever": "bm25",
+  "explain": "stubbed in harness (template explanation kept); does not affect scores",
+  "wall_s": 156.1,
+  "summary": {
+    "targets_parsed_exact": 4,
+    "targets_exercised_exact": 0,
+    "parsed_precision": 0.8571,
+    "parsed_recall": 0.7059,
+    "parsed_f1": 0.7742,
+    "exercised_f1": 0.5424,
+    "category_recall_micro": 0.7273,
+    "precondition_recall_micro": 0.8889,
+    "fallback_count": 0,
+    "mean_tests_per_req": 6.12,
+    "json_failures": 0,
+    "llm_retries": 0,
+    "llm_errors": 0,
+    "prompt_truncations": 0,
+    "client_truncation_events": 0,
+    "mean_shortlist": 17.8,
+    "fp_by_kind": {
+      "service": 2
+    },
+    "fn_by_kind": {
+      "did": 3,
+      "service": 2
+    },
+    "rejected_total": 0,
+    "rejected_by_reason": {},
+    "dropped_notes": {
+      "NAT-001": [
+        "Dropped ungrounded did identifier 0xF186: not written in the requirement and its name (active_diagnostic_session) shares no word with the requirement text.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded service identifier 0x2E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x3E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "NAT-003": [
+        "Dropped ungrounded did identifier 0xF186: not written in the requirement and its name (active_diagnostic_session) shares no word with the requirement text.",
+        "Dropped ungrounded did identifier 0xF187: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded did identifier 0xF18C: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded did identifier 0xF190: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded service identifier 0x2E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x11: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x27: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x3E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "NAT-005": [
+        "Dropped ungrounded did identifier 0x0120: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session."
+      ],
+      "NAT-007": [
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement."
+      ],
+      "NAT-009": [
+        "Dropped unknown did identifier 0x150 (not in spec).",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session.",
+        "Dropped ungrounded service identifier 0x11: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "NAT-011": [
+        "Dropped unknown did identifier 0x0201 (not in spec).",
+        "Dropped ungrounded session identifier 0x01: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session."
+      ],
+      "NAT-013": [
+        "Dropped ungrounded did identifier 0x0150: not written in the requirement and its name (factory_reset_flag) shares no word with the requirement text.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded security_level identifier 0x03: no unlock/security/seed/key word in the requirement."
+      ],
+      "NAT-015": [
+        "Dropped ungrounded did identifier 0xF186: not written in the requirement and its name (active_diagnostic_session) shares no word with the requirement text.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement."
+      ]
+    },
+    "plan_call_s_mean": 6.85,
+    "plan_call_s_max": 7.9,
+    "plan_calls": 8,
+    "selection_score": 2.3904
+  },
+  "aggregate_dev": {
+    "requirements": 8,
+    "targets_parsed": {
+      "exact": 4,
+      "exact_rate": 0.5,
+      "tp": 12,
+      "fp": 2,
+      "fn": 5,
+      "precision": 0.8571,
+      "recall": 0.7059,
+      "f1": 0.7742
+    },
+    "targets_exercised": {
+      "exact": 0,
+      "exact_rate": 0.0,
+      "tp": 16,
+      "fp": 26,
+      "fn": 1,
+      "precision": 0.381,
+      "recall": 0.9412,
+      "f1": 0.5424
+    },
+    "categories": {
+      "scored_requirements": 8,
+      "hit": 16,
+      "required": 22,
+      "micro_recall": 0.7273,
+      "macro_recall": 0.7083
+    },
+    "preconditions": {
+      "scored_requirements": 4,
+      "hit": 8,
+      "required": 9,
+      "micro_recall": 0.8889,
+      "macro_recall": 0.9167
+    },
+    "fallback": {
+      "count": 0,
+      "ids": [],
+      "unexpected_count": 0,
+      "unexpected_ids": [],
+      "note": "unexpected = excluding requirements with an empty label set (e.g. NAT-020), for which producing nothing is correct"
+    }
+  },
+  "truncation_warnings": [],
+  "prompts_sha256": "b620c31196400d06",
+  "prompts": {
+    "EXPLAIN_BATCH_INSTRUCTION": "For every test in tests, write 2-3 sentences for a test engineer: what the test checks, why it matters for the requirement, and the expected outcome. Answer with JSON {\"explanations\": [{\"test_id\": ..., \"explanation\": ...}]} containing exactly one entry per test, using the given test_id values. Plain prose only; do not write byte values.",
+    "PARSE_INSTRUCTION": "Extract the UDS identifiers in requirement_text, using only keys from spec_index. Work in this order and add nothing the text does not mention or clearly imply.\n1. services: the service for the main action (never empty). read/report a value -> 0x22; write/set/change a value or calibration -> 0x2E; switch/enter/return to a session or mode -> 0x10; unlock/seed/key -> 0x27; ECU reset/reboot -> 0x11; keep-alive/tester present -> 0x3E; start/stop/results of a routine or self-test -> 0x31; read fault memory/trouble codes -> 0x19; clear them -> 0x14.\n2. dids / routines: go through the names in spec_index and list every entry the text refers to, also by a shortened form, an acronym or a few of its words (a stored setting or identity value is a DID, something started, stopped or run is a routine). Copy the key from the matching group: DID keys go in dids, routine keys in routines, never mix them. Only entries the text names.\n3. sessions: default -> 0x01, programming/flash -> 0x02, extended/diagnostic mode -> 0x03. Then check the condition: if the text says the action needs, requires or is only possible in a session or mode, ALSO add service 0x10 and that session; 'readable in any/every session' is not a condition.\n4. security: if the text says the action needs an unlock, security access, a seed/key or a security level, ALSO add service 0x27 and the level (level 1 -> 0x01, programming-level -> 0x03). Otherwise leave security_levels empty and do not add 0x27.\n5. intents from allowed_intents, 2-4 keywords.\nExamples (made-up requirements; <id of X> stands for the key of the spec_index entry whose name matches X, never copy an identifier from an example):\n'<X> shall be readable in every session.' -> services [0x22], dids [<id of X>], sessions [0x01,0x02,0x03]\n'<Y> must give results only after it was started.' -> services [0x31], routines [<id of Y>]\n'Changing <Z> shall need extended mode and a level 1 unlock.' -> services [0x10,0x27,0x2E], dids [<id of Z>], sessions [0x03], security_levels [0x01]\nIf the text names no matching entry for dids, routines or DTCs, leave that list empty.",
+    "PLAN_COMPACT_TEMPLATE": "OPTIONS (the only choices allowed; answer with a template_id and one of its option_index values):\n{options}\n\n{history}REQUIREMENT {requirement_id}: {requirement_text}\nPARSED: {parsed}\n\nTASK: {instruction}",
+    "PLAN_CONSTRAINED_TEMPLATE": "OPTIONS (the only choices allowed). Write each choice as one string <template_id>#<option_index>, joining a template_id line with one of its option_index values:\n{options}\n\n{history}REQUIREMENT {requirement_id}: {requirement_text}\nPARSED: {parsed}\n\nTASK: {instruction}",
+    "PLAN_INSTRUCTION": "Choose a small, focused set of test cases (usually 4-8) that verify this requirement. Only pick options about the requirement's own DID, routine or service; skip options about other identifiers. Cover each category the requirement needs, one or two options each: positive (the behaviour works), negative (wrong value, length, sub-function or order is rejected), session (the service is refused in the wrong session), security (locked access, lockout or relock, whenever an unlock or security level is involved), timing (only for session timeout or keep-alive). Each choice is a template_id and one of its option_index values from the list, with a one-sentence rationale that names the part of the requirement it checks. Do not repeat a choice.",
+    "SCHEMA_RETRY_INSTRUCTION": "Your previous reply was not valid JSON for the required schema. Error: {error}\nReply again with only a JSON object that matches the schema.",
+    "SYSTEM_PROMPT": "You are a UDS (ISO 14229) diagnostics test-planning assistant for an automotive ECU. You never write request or response bytes. You only reference identifiers that exist in the provided spec index, choose template ids and option indices from the provided catalog, and write short plain-English prose. Answer with JSON matching the schema when one is required."
+  },
+  "requirements": [
+    {
+      "id": "NAT-001",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 7,
+      "label_targets": [
+        "did:0xF190",
+        "service:0x22"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 1,
+        "fp": 1,
+        "fn": 1,
+        "missed": [
+          "did:0xF190"
+        ],
+        "extra": [
+          "service:0x10"
+        ]
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 2,
+        "fp": 3,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0x0150",
+          "did:0xDEAD",
+          "service:0x10"
+        ]
+      },
+      "categories": {
+        "required": 1,
+        "hit": 1,
+        "recall": 1.0,
+        "missed": []
+      },
+      "produced_categories": [
+        "negative",
+        "positive"
+      ],
+      "preconditions": {
+        "required": 0,
+        "hit": 0,
+        "recall": null,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x10",
+          "0x22"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x02",
+          "0x03"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "session",
+          "security"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded did identifier 0xF186: not written in the requirement and its name (active_diagnostic_session) shares no word with the requirement text.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded service identifier 0x2E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x3E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "read_did_positive",
+        "read_did_positive",
+        "read_did_positive",
+        "read_did_wrong_session_or_unknown",
+        "read_did_wrong_session_or_unknown",
+        "read_did_wrong_session_or_unknown",
+        "read_did_wrong_session_or_unknown"
+      ],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 18788.5,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: nat_001__tpl_read_did_wrong_dead_01: missing in LLM reply; used fallback text",
+        "explain: nat_001__tpl_read_did_wrong_dead_02: missing in LLM reply; used fallback text",
+        "explain: nat_001__tpl_read_did_wrong_dead_03: missing in LLM reply; used fallback text",
+        "explain: nat_001__tpl_read_did_wrong_0150_01: missing in LLM reply; used fallback text"
+      ],
+      "plan_call_s": [
+        7.16
+      ],
+      "parse_call_s": [
+        4.69,
+        6.94
+      ],
+      "shortlist_sizes": [
+        27
+      ],
+      "wall_s": 18.9
+    },
+    {
+      "id": "NAT-003",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 4,
+      "label_targets": [
+        "service:0x10"
+      ],
+      "parsed": {
+        "exact": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "missed": [],
+        "extra": []
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 1,
+        "fp": 2,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0xF186",
+          "service:0x22"
+        ]
+      },
+      "categories": {
+        "required": 2,
+        "hit": 1,
+        "recall": 0.5,
+        "missed": [
+          "session"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "timing"
+      ],
+      "preconditions": {
+        "required": 0,
+        "hit": 0,
+        "recall": null,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "s3_elapsed"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x10"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x03"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "positive",
+          "negative",
+          "session",
+          "security",
+          "timing",
+          "sequence"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded did identifier 0xF186: not written in the requirement and its name (active_diagnostic_session) shares no word with the requirement text.",
+        "Dropped ungrounded did identifier 0xF187: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded did identifier 0xF18C: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded did identifier 0xF190: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded service identifier 0x2E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x11: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x27: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x3E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "s3_timeout_reverts_session",
+        "negative_response_with_suppress_bit",
+        "suppress_positive_response",
+        "unsupported_subfunction"
+      ],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 19295.5,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "plan_call_s": [
+        5.53
+      ],
+      "parse_call_s": [
+        4.87,
+        8.89
+      ],
+      "shortlist_sizes": [
+        11
+      ],
+      "wall_s": 19.3
+    },
+    {
+      "id": "NAT-005",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 8,
+      "label_targets": [
+        "did:0x0100",
+        "service:0x10",
+        "service:0x27",
+        "service:0x2E"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 1,
+        "fp": 0,
+        "fn": 3,
+        "missed": [
+          "did:0x0100",
+          "service:0x10",
+          "service:0x27"
+        ],
+        "extra": []
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 4,
+        "fp": 6,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0x0101",
+          "did:0x0150",
+          "did:0xF187",
+          "did:0xF18C",
+          "did:0xF190",
+          "service:0x22"
+        ]
+      },
+      "categories": {
+        "required": 4,
+        "hit": 3,
+        "recall": 0.75,
+        "missed": [
+          "security"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "session"
+      ],
+      "preconditions": {
+        "required": 2,
+        "hit": 2,
+        "recall": 1.0,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "security_level_1",
+        "security_level_3",
+        "vehicle_moving"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x2E"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [
+          "0x03"
+        ],
+        "security_levels": [
+          "0x01"
+        ],
+        "dtcs": [],
+        "intents": [
+          "write",
+          "security"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded did identifier 0x0120: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "write_did_secured_positive",
+        "write_did_secured_positive",
+        "write_did_invalid_length",
+        "write_readonly_did",
+        "service_not_in_session",
+        "condition_not_met",
+        "write_readonly_did",
+        "write_readonly_did"
+      ],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 19354.3,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: nat_005__tpl_write_readonly_f190: missing in LLM reply; used fallback text",
+        "explain: nat_005__tpl_service_not_in_session_2e_01: missing in LLM reply; used fallback text",
+        "explain: nat_005__tpl_condition_not_met_did_0150: missing in LLM reply; used fallback text",
+        "explain: nat_005__tpl_write_readonly_f187: missing in LLM reply; used fallback text",
+        "explain: nat_005__tpl_write_readonly_f18c: missing in LLM reply; used fallback text"
+      ],
+      "plan_call_s": [
+        7.45
+      ],
+      "parse_call_s": [
+        4.12,
+        7.79
+      ],
+      "shortlist_sizes": [
+        28
+      ],
+      "wall_s": 19.4
+    },
+    {
+      "id": "NAT-007",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 4,
+      "label_targets": [
+        "did:0x0130",
+        "service:0x2E"
+      ],
+      "parsed": {
+        "exact": true,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "missed": [],
+        "extra": []
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 2,
+        "fp": 3,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "service:0x10",
+          "service:0x22",
+          "service:0x27"
+        ]
+      },
+      "categories": {
+        "required": 2,
+        "hit": 1,
+        "recall": 0.5,
+        "missed": [
+          "security"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive"
+      ],
+      "preconditions": {
+        "required": 2,
+        "hit": 2,
+        "recall": 1.0,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "security_level_1"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x2E"
+        ],
+        "dids": [
+          "0x0130"
+        ],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "negative",
+          "range"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "write_did_out_of_range",
+        "read_did_invalid_length",
+        "write_did_secured_positive",
+        "read_did_positive"
+      ],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 18740.7,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "plan_call_s": [
+        5.89
+      ],
+      "parse_call_s": [
+        3.98,
+        8.87
+      ],
+      "shortlist_sizes": [
+        13
+      ],
+      "wall_s": 18.8
+    },
+    {
+      "id": "NAT-009",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 8,
+      "label_targets": [
+        "did:0x0150",
+        "service:0x10",
+        "service:0x27",
+        "service:0x2E"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 3,
+        "fp": 0,
+        "fn": 1,
+        "missed": [
+          "did:0x0150"
+        ],
+        "extra": []
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 3,
+        "fp": 5,
+        "fn": 1,
+        "missed": [
+          "did:0x0150"
+        ],
+        "extra": [
+          "did:0x0100",
+          "did:0x0101",
+          "did:0x0130",
+          "did:0x0160",
+          "service:0x22"
+        ]
+      },
+      "categories": {
+        "required": 4,
+        "hit": 4,
+        "recall": 1.0,
+        "missed": []
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "security",
+        "session"
+      ],
+      "preconditions": {
+        "required": 3,
+        "hit": 2,
+        "recall": 0.6667,
+        "missed": [
+          "vehicle_stationary"
+        ]
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "security_level_1",
+        "security_level_3"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x10",
+          "0x27",
+          "0x2E"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [
+          "0x02"
+        ],
+        "security_levels": [
+          "0x01"
+        ],
+        "dtcs": [],
+        "intents": [
+          "session",
+          "security"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped unknown did identifier 0x150 (not in spec).",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session.",
+        "Dropped ungrounded service identifier 0x11: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "write_did_secured_positive",
+        "write_did_without_security",
+        "service_not_in_session",
+        "seed_request_while_unlocked",
+        "seed_replay_rejected",
+        "write_did_out_of_range",
+        "write_did_invalid_length",
+        "session_change_relocks_security"
+      ],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 28214.4,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "plan_call_s": [
+        7.89
+      ],
+      "parse_call_s": [
+        4.36,
+        15.96
+      ],
+      "shortlist_sizes": [
+        30
+      ],
+      "wall_s": 28.3
+    },
+    {
+      "id": "NAT-011",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 4,
+      "label_targets": [
+        "routine:0x0201",
+        "service:0x31"
+      ],
+      "parsed": {
+        "exact": true,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "missed": [],
+        "extra": []
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 2,
+        "fp": 3,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "routine:0xDEAD",
+          "service:0x10",
+          "service:0x27"
+        ]
+      },
+      "categories": {
+        "required": 4,
+        "hit": 3,
+        "recall": 0.75,
+        "missed": [
+          "security"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "session"
+      ],
+      "preconditions": {
+        "required": 2,
+        "hit": 2,
+        "recall": 1.0,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "routine_started",
+        "security_level_1"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x31"
+        ],
+        "dids": [],
+        "routines": [
+          "0x0201"
+        ],
+        "sessions": [],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped unknown did identifier 0x0201 (not in spec).",
+        "Dropped ungrounded session identifier 0x01: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "routine_start_results",
+        "negative_response_with_suppress_bit",
+        "service_not_in_session",
+        "nrc_priority_session_over_identifier"
+      ],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 14672.3,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: nat_011__tpl_routine_start_results_0201: missing in LLM reply; used fallback text",
+        "explain: nat_011__tpl_service_not_in_session_31_01: missing in LLM reply; used fallback text",
+        "explain: nat_011__tpl_nrc_priority_31_01: missing in LLM reply; used fallback text"
+      ],
+      "plan_call_s": [
+        5.61
+      ],
+      "parse_call_s": [
+        4.25,
+        4.81
+      ],
+      "shortlist_sizes": [
+        11
+      ],
+      "wall_s": 14.7
+    },
+    {
+      "id": "NAT-013",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 6,
+      "label_targets": [
+        "service:0x11"
+      ],
+      "parsed": {
+        "exact": true,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "missed": [],
+        "extra": []
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 1,
+        "fp": 1,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "service:0x10"
+        ]
+      },
+      "categories": {
+        "required": 2,
+        "hit": 1,
+        "recall": 0.5,
+        "missed": [
+          "positive"
+        ]
+      },
+      "produced_categories": [
+        "negative"
+      ],
+      "preconditions": {
+        "required": 0,
+        "hit": 0,
+        "recall": null,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x11"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x03"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded did identifier 0x0150: not written in the requirement and its name (factory_reset_flag) shares no word with the requirement text.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded security_level identifier 0x03: no unlock/security/seed/key word in the requirement."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "unsupported_subfunction",
+        "unsupported_subfunction",
+        "unsupported_subfunction",
+        "negative_response_with_suppress_bit"
+      ],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 18519.5,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: nat_013__tpl_negative_suppress_11_01: missing in LLM reply; used fallback text",
+        "explain: nat_013__tpl_negative_suppress_11_03: missing in LLM reply; used fallback text",
+        "explain: nat_013__tpl_negative_suppress_11_02: missing in LLM reply; used fallback text"
+      ],
+      "plan_call_s": [
+        7.38
+      ],
+      "parse_call_s": [
+        4.11,
+        7.03
+      ],
+      "shortlist_sizes": [
+        6
+      ],
+      "wall_s": 18.6
+    },
+    {
+      "id": "NAT-015",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 8,
+      "label_targets": [
+        "service:0x3E"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 1,
+        "fp": 1,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "service:0x10"
+        ]
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 1,
+        "fp": 3,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0xF186",
+          "service:0x10",
+          "service:0x22"
+        ]
+      },
+      "categories": {
+        "required": 3,
+        "hit": 2,
+        "recall": 0.6667,
+        "missed": [
+          "session"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "timing"
+      ],
+      "preconditions": {
+        "required": 0,
+        "hit": 0,
+        "recall": null,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "s3_elapsed"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x10",
+          "0x3E"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x02",
+          "0x03"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "positive",
+          "negative",
+          "session",
+          "security",
+          "timing"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded did identifier 0xF186: not written in the requirement and its name (active_diagnostic_session) shares no word with the requirement text.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "s3_timeout_reverts_session",
+        "s3_timeout_reverts_session",
+        "suppress_positive_response",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "s3_keepalive_boundary",
+        "s3_keepalive_boundary"
+      ],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 17973.5,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: nat_015__tpl_s3_timeout_02: missing in LLM reply; used fallback text",
+        "explain: nat_015__tpl_s3_timeout_03: missing in LLM reply; used fallback text",
+        "explain: nat_015__tpl_suppress_positive_3e_01: missing in LLM reply; used fallback text",
+        "explain: nat_015__tpl_negative_suppress_10_01: missing in LLM reply; used fallback text",
+        "explain: nat_015__tpl_negative_suppress_3e_01: missing in LLM reply; used fallback text",
+        "explain: nat_015__tpl_negative_suppress_10_02: missing in LLM reply; used fallback text"
+      ],
+      "plan_call_s": [
+        7.9
+      ],
+      "parse_call_s": [
+        4.4,
+        5.67
+      ],
+      "shortlist_sizes": [
+        16
+      ],
+      "wall_s": 18.0
+    }
+  ],
+  "error_breakdown": {
+    "fp_by_kind": {
+      "service": 2
+    },
+    "fn_by_kind": {
+      "did": 3,
+      "service": 2
+    },
+    "rejected_total": 0,
+    "rejected_by_reason": {},
+    "dropped_notes": {
+      "NAT-001": [
+        "Dropped ungrounded did identifier 0xF186: not written in the requirement and its name (active_diagnostic_session) shares no word with the requirement text.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded service identifier 0x2E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x3E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "NAT-003": [
+        "Dropped ungrounded did identifier 0xF186: not written in the requirement and its name (active_diagnostic_session) shares no word with the requirement text.",
+        "Dropped ungrounded did identifier 0xF187: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded did identifier 0xF18C: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded did identifier 0xF190: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded service identifier 0x2E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x11: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x27: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x3E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "NAT-005": [
+        "Dropped ungrounded did identifier 0x0120: not written in the requirement and its spec chunk was not retrieved for the requirement text.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session."
+      ],
+      "NAT-007": [
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement."
+      ],
+      "NAT-009": [
+        "Dropped unknown did identifier 0x150 (not in spec).",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session.",
+        "Dropped ungrounded service identifier 0x11: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "NAT-011": [
+        "Dropped unknown did identifier 0x0201 (not in spec).",
+        "Dropped ungrounded session identifier 0x01: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session."
+      ],
+      "NAT-013": [
+        "Dropped ungrounded did identifier 0x0150: not written in the requirement and its name (factory_reset_flag) shares no word with the requirement text.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded security_level identifier 0x03: no unlock/security/seed/key word in the requirement."
+      ],
+      "NAT-015": [
+        "Dropped ungrounded did identifier 0xF186: not written in the requirement and its name (active_diagnostic_session) shares no word with the requirement text.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement."
+      ]
+    },
+    "plan_call_s_mean": 6.85,
+    "plan_call_s_max": 7.9,
+    "plan_calls": 8
+  }
+}

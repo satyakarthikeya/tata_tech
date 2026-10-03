@@ -1,0 +1,937 @@
+{
+  "revision": "0",
+  "timestamp": "2026-10-04T04:17:18+0530",
+  "summary": {
+    "n": 15,
+    "rejected_total": 13,
+    "rejected_plan_total": 13,
+    "fallback_events": 16,
+    "json_failures": 0,
+    "llm_errors": 0,
+    "server_log_truncations": 0,
+    "mean_tests": 5.2,
+    "wall_s_total": 312.9
+  },
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "status": "completed",
+      "tests": 5,
+      "parsed": {
+        "services": [
+          "0x22"
+        ],
+        "dids": [
+          "0xF190"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x02",
+          "0x03"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "read"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 17626.9,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: req_001__tpl_read_badlen_f190_01: missing in LLM reply; used fallback text",
+        "explain: req_001__tpl_write_readonly_f190: missing in LLM reply; used fallback text"
+      ],
+      "call_s": [
+        [
+          "json",
+          4.2
+        ],
+        [
+          "plan-enum",
+          6.37
+        ],
+        [
+          "json",
+          7.05
+        ]
+      ],
+      "wall_s": 17.7
+    },
+    {
+      "id": "REQ-002",
+      "status": "completed",
+      "tests": 7,
+      "parsed": {
+        "services": [
+          "0x22"
+        ],
+        "dids": [
+          "0xF187",
+          "0xF18C"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x03"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "read"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded service identifier 0x2E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 20117.8,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: req_002__tpl_read_badlen_f187_01: missing in LLM reply; used fallback text",
+        "explain: req_002__tpl_read_badlen_f18c_01: missing in LLM reply; used fallback text",
+        "explain: req_002__tpl_write_readonly_f187: missing in LLM reply; used fallback text",
+        "explain: req_002__tpl_write_readonly_f18c: missing in LLM reply; used fallback text"
+      ],
+      "call_s": [
+        [
+          "json",
+          4.18
+        ],
+        [
+          "plan-enum",
+          8.17
+        ],
+        [
+          "json",
+          7.77
+        ]
+      ],
+      "wall_s": 20.2
+    },
+    {
+      "id": "REQ-003",
+      "status": "completed",
+      "tests": 0,
+      "parsed": {
+        "services": [],
+        "dids": [],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x03"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "positive",
+          "negative",
+          "session",
+          "security",
+          "sequence"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded service identifier 0x10: its evidence quote 'switch/enter/return to a session or mode' is not in the requirement text.",
+        "Dropped ungrounded did identifier 0xF186: its evidence quote 'active_diagnostic_session' is not in the requirement text.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded service identifier 0x27: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x2E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "No parsed service had evidence in the requirement; continuing with none."
+      ],
+      "plan_attempts": 1,
+      "rejected": [
+        "plan: sessions[0] unknown template id 'sessions'",
+        "plan: sessions[1] unknown template id 'sessions'",
+        "plan: security_levels[0] unknown template id 'security_levels'",
+        "plan: security_levels[1] unknown template id 'security_levels'",
+        "plan: timing[0] unknown template id 'timing'",
+        "plan: negative[0] unknown template id 'negative'",
+        "plan: negative[1] unknown template id 'negative'"
+      ],
+      "llm_stats": {
+        "calls": 2.0,
+        "http_requests": 2.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 12678.0,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "call_s": [
+        [
+          "json",
+          4.92
+        ],
+        [
+          "json",
+          7.76
+        ]
+      ],
+      "wall_s": 12.7
+    },
+    {
+      "id": "REQ-004",
+      "status": "completed",
+      "tests": 0,
+      "parsed": {
+        "services": [],
+        "dids": [],
+        "routines": [],
+        "sessions": [
+          "0x02"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "positive",
+          "session",
+          "security"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded service identifier 0x10: its evidence quote 'The BCM shall be able to switch into programming session (0x' is not in the requirement text.",
+        "Dropped ungrounded did identifier 0xF186: its evidence quote 'The active diagnostic session shall be able to switch into p' is not in the requirement text.",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded service identifier 0x27: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x2E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "No parsed service had evidence in the requirement; continuing with none."
+      ],
+      "plan_attempts": 1,
+      "rejected": [
+        "plan: services[1] unknown template id 'services'",
+        "plan: routines[2] unknown template id 'routines'",
+        "plan: sessions[1] unknown template id 'sessions'",
+        "plan: security_levels[2] unknown template id 'security_levels'",
+        "plan: dtcs[1] unknown template id 'dtcs'",
+        "plan: intents[1] unknown template id 'intents'"
+      ],
+      "llm_stats": {
+        "calls": 2.0,
+        "http_requests": 2.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 11780.8,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "call_s": [
+        [
+          "json",
+          5.21
+        ],
+        [
+          "json",
+          6.57
+        ]
+      ],
+      "wall_s": 11.8
+    },
+    {
+      "id": "REQ-005",
+      "status": "completed",
+      "tests": 8,
+      "parsed": {
+        "services": [
+          "0x27",
+          "0x2E",
+          "0x10"
+        ],
+        "dids": [
+          "0x0100"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x03"
+        ],
+        "security_levels": [
+          "0x01"
+        ],
+        "dtcs": [],
+        "intents": [
+          "write",
+          "security",
+          "session"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 26497.2,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "call_s": [
+        [
+          "json",
+          4.07
+        ],
+        [
+          "plan-enum",
+          8.48
+        ],
+        [
+          "json",
+          13.95
+        ]
+      ],
+      "wall_s": 26.5
+    },
+    {
+      "id": "REQ-006",
+      "status": "completed",
+      "tests": 7,
+      "parsed": {
+        "services": [
+          "0x27",
+          "0x2E",
+          "0x10"
+        ],
+        "dids": [
+          "0x0101"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x03"
+        ],
+        "security_levels": [
+          "0x01"
+        ],
+        "dtcs": [],
+        "intents": [
+          "write",
+          "security",
+          "session"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 24001.4,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "call_s": [
+        [
+          "json",
+          4.12
+        ],
+        [
+          "plan-enum",
+          8.4
+        ],
+        [
+          "json",
+          11.49
+        ]
+      ],
+      "wall_s": 24.0
+    },
+    {
+      "id": "REQ-007",
+      "status": "completed",
+      "tests": 6,
+      "parsed": {
+        "services": [
+          "0x22",
+          "0x2E"
+        ],
+        "dids": [
+          "0x0130"
+        ],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "read",
+          "write"
+        ],
+        "keywords": [],
+        "evidence": {
+          "service:0x22": "The wiper sensitivity level (DID 0x0130) shall only accept values between 1 and 5 inclusive.",
+          "did:0x0130": "The wiper sensitivity level (DID 0x0130) shall only accept values between 1 and 5 inclusive."
+        }
+      },
+      "notes": [
+        "Dropped ungrounded session identifier 0x01: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded security_level identifier 0x03: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded service identifier 0x27: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 21606.9,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: req_007__tpl_service_not_in_session_2e_01: missing in LLM reply; used fallback text",
+        "explain: req_007__tpl_nrc_priority_2e_01: missing in LLM reply; used fallback text"
+      ],
+      "call_s": [
+        [
+          "json",
+          5.65
+        ],
+        [
+          "plan-enum",
+          7.15
+        ],
+        [
+          "json",
+          8.81
+        ]
+      ],
+      "wall_s": 21.7
+    },
+    {
+      "id": "REQ-008",
+      "status": "completed",
+      "tests": 5,
+      "parsed": {
+        "services": [
+          "0x22",
+          "0x2E"
+        ],
+        "dids": [
+          "0x0100"
+        ],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "read",
+          "write"
+        ],
+        "keywords": [],
+        "evidence": {
+          "service:0x22": "The interior lighting brightness (DID 0x0100) shall only accept values between 0 and 100 inclusive.",
+          "did:0x0100": "The interior lighting brightness (DID 0x0100) shall only accept values between 0 and 100 inclusive."
+        }
+      },
+      "notes": [
+        "Dropped ungrounded session identifier 0x01: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded security_level identifier 0x03: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded service identifier 0x10: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x11: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x14: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x3E: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support.",
+        "Dropped ungrounded service identifier 0x31: no evidence: no matching word in the requirement, not implied by a kept identifier, and no retrieval-plus-word support."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 24070.9,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "call_s": [
+        [
+          "json",
+          6.41
+        ],
+        [
+          "plan-enum",
+          6.49
+        ],
+        [
+          "json",
+          11.18
+        ]
+      ],
+      "wall_s": 24.1
+    },
+    {
+      "id": "REQ-009",
+      "status": "completed",
+      "tests": 8,
+      "parsed": {
+        "services": [
+          "0x10",
+          "0x27",
+          "0x2E"
+        ],
+        "dids": [
+          "0x0150"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x02",
+          "0x03"
+        ],
+        "security_levels": [
+          "0x03"
+        ],
+        "dtcs": [],
+        "intents": [
+          "write",
+          "security",
+          "conditions"
+        ],
+        "keywords": [],
+        "evidence": {
+          "service:0x10": "The factory reset flag (DID 0x0150) shall only be writable in programming session with security level 0x03, and only while the vehicle is stationary.",
+          "did:0x0150": "The factory reset flag (DID 0x0150) shall only be writable in programming session with security level 0x03, and only while the vehicle is stationary."
+        }
+      },
+      "notes": [],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 30974.8,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "call_s": [
+        [
+          "json",
+          5.73
+        ],
+        [
+          "plan-enum",
+          9.34
+        ],
+        [
+          "json",
+          15.9
+        ]
+      ],
+      "wall_s": 31.0
+    },
+    {
+      "id": "REQ-010",
+      "status": "completed",
+      "tests": 8,
+      "parsed": {
+        "services": [
+          "0x27"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [
+          "0x01"
+        ],
+        "dtcs": [],
+        "intents": [
+          "security",
+          "lockout"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded did identifier 0x0130: not written in the requirement and its name (wiper_sensitivity_level) shares no word with the requirement text.",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 25902.7,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "call_s": [
+        [
+          "json",
+          4.03
+        ],
+        [
+          "plan-enum",
+          7.45
+        ],
+        [
+          "json",
+          14.42
+        ]
+      ],
+      "wall_s": 26.0
+    },
+    {
+      "id": "REQ-011",
+      "status": "completed",
+      "tests": 4,
+      "parsed": {
+        "services": [
+          "0x31"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "negative",
+          "read",
+          "write",
+          "routine"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped unknown did identifier 0x0201 (not in spec).",
+        "Dropped ungrounded session identifier 0x01: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded security_level identifier 0x03: no unlock/security/seed/key word in the requirement."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 19561.2,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "call_s": [
+        [
+          "json",
+          4.24
+        ],
+        [
+          "plan-enum",
+          6.77
+        ],
+        [
+          "json",
+          8.56
+        ]
+      ],
+      "wall_s": 19.6
+    },
+    {
+      "id": "REQ-012",
+      "status": "completed",
+      "tests": 4,
+      "parsed": {
+        "services": [
+          "0x31"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "negative",
+          "sequence"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped unknown did identifier 0x0202 (not in spec).",
+        "Dropped ungrounded session identifier 0x01: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 17842.3,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: req_012__tpl_routine_start_results_0202: missing in LLM reply; used fallback text"
+      ],
+      "call_s": [
+        [
+          "json",
+          3.94
+        ],
+        [
+          "plan-enum",
+          5.92
+        ],
+        [
+          "json",
+          7.98
+        ]
+      ],
+      "wall_s": 17.9
+    },
+    {
+      "id": "REQ-013",
+      "status": "completed",
+      "tests": 4,
+      "parsed": {
+        "services": [
+          "0x11"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x03"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "positive",
+          "negative",
+          "session",
+          "security",
+          "dtc",
+          "read",
+          "write",
+          "routine"
+        ],
+        "keywords": [],
+        "evidence": {}
+      },
+      "notes": [
+        "Dropped ungrounded session identifier 0x02: the requirement does not name or imply this session.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded security_level identifier 0x03: no unlock/security/seed/key word in the requirement."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 16077.9,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: req_013__tpl_negative_suppress_11_01: missing in LLM reply; used fallback text",
+        "explain: req_013__tpl_negative_suppress_11_03: missing in LLM reply; used fallback text"
+      ],
+      "call_s": [
+        [
+          "json",
+          4.47
+        ],
+        [
+          "plan-enum",
+          5.72
+        ],
+        [
+          "json",
+          5.89
+        ]
+      ],
+      "wall_s": 16.1
+    },
+    {
+      "id": "REQ-014",
+      "status": "completed",
+      "tests": 4,
+      "parsed": {
+        "services": [
+          "0x19"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "read",
+          "dtc"
+        ],
+        "keywords": [],
+        "evidence": {
+          "service:0x19": "ReadDTCInformation"
+        }
+      },
+      "notes": [
+        "Dropped ungrounded did identifier 0xF186: its evidence quote 'active_diagnostic_session' is not in the requirement text.",
+        "Dropped ungrounded did identifier 0xF187: its evidence quote 'manufacturer_part_number' is not in the requirement text.",
+        "Dropped ungrounded did identifier 0xF18C: its evidence quote 'ecu_serial_number' is not in the requirement text.",
+        "Dropped ungrounded did identifier 0x0150: its evidence quote 'factory_reset_flag' is not in the requirement text.",
+        "Dropped ungrounded did identifier 0x0160: its evidence quote 'coding_variant_id' is not in the requirement text.",
+        "Dropped ungrounded session identifier 0x01: the requirement does not name or imply this session.",
+        "Dropped ungrounded session identifier 0x03: the requirement does not name or imply this session.",
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded security_level identifier 0x03: no unlock/security/seed/key word in the requirement."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 21355.0,
+        "truncations": 0.0
+      },
+      "fallback_events": [],
+      "call_s": [
+        [
+          "json",
+          6.08
+        ],
+        [
+          "plan-enum",
+          5.34
+        ],
+        [
+          "json",
+          9.94
+        ]
+      ],
+      "wall_s": 21.4
+    },
+    {
+      "id": "REQ-015",
+      "status": "completed",
+      "tests": 8,
+      "parsed": {
+        "services": [
+          "0x10",
+          "0x2E",
+          "0x3E"
+        ],
+        "dids": [
+          "0xF186"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x02",
+          "0x03"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "positive",
+          "session",
+          "security",
+          "length",
+          "sequence"
+        ],
+        "keywords": [],
+        "evidence": {
+          "service:0x10": "TesterPresent shall be accepted in every diagnostic session to keep the S3 session timer from expiring.",
+          "did:0xF186": "TesterPresent shall be accepted in every diagnostic session to keep the S3 session timer from expiring."
+        }
+      },
+      "notes": [
+        "Dropped ungrounded security_level identifier 0x01: no unlock/security/seed/key word in the requirement.",
+        "Dropped ungrounded security_level identifier 0x03: no unlock/security/seed/key word in the requirement."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "llm_stats": {
+        "calls": 3.0,
+        "http_requests": 3.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 22143.6,
+        "truncations": 0.0
+      },
+      "fallback_events": [
+        "explain: req_015__tpl_write_readonly_f186: missing in LLM reply; used fallback text",
+        "explain: req_015__tpl_service_not_in_session_2e_01: missing in LLM reply; used fallback text",
+        "explain: req_015__tpl_negative_suppress_10_01: missing in LLM reply; used fallback text",
+        "explain: req_015__tpl_s3_timeout_02: missing in LLM reply; used fallback text",
+        "explain: req_015__tpl_nrc_priority_2e_01: missing in LLM reply; used fallback text"
+      ],
+      "call_s": [
+        [
+          "json",
+          5.5
+        ],
+        [
+          "plan-enum",
+          9.12
+        ],
+        [
+          "json",
+          7.53
+        ]
+      ],
+      "wall_s": 22.2
+    }
+  ]
+}
