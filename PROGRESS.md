@@ -604,3 +604,72 @@ No change to templates, prompts, planner or gold is allowed from here until the 
 | `uds_assistant/agent` tree | `9696c352234501d72ac54c18af5189317482321d` |
 | `uds_assistant/llm/prompts.py` blob | `c0c6d5a6f0b64790beb13bf0179a6ef7877f31f7` |
 | `data/gold` tree | `778740195a3dc923ae2f6a34fd4b78e11d87b024` |
+
+## C4 — subagent prompts (given verbatim, both Sonnet, launched after the Part C freeze)
+
+### C4 subagent 1: held-out bugs v2
+
+````text
+You are authoring a second HELD-OUT bug set (v2) for an ECU simulator in the Python repo C:\Users\pasar\Desktop\tata_tech (Windows; Bash tool is Git Bash; `python` = 3.13.6, code must stay 3.11-compatible). Work autonomously; never ask questions. Do not pip install anything. Do not use the GPU or Ollama.
+
+## Strict context limits (MANDATORY — this is an independence experiment)
+You may read ONLY:
+- data/bcm_spec.yaml
+- docs/behaviour_contract.md
+- uds_assistant/spec/ (any file)
+- uds_assistant/protocol/ (any file)
+- uds_assistant/simulator/ (any file; needed to implement bug hooks)
+- data/bugs/bug_catalog.yaml and data/bugs/heldout_catalog.yaml (ONLY to avoid duplicating the 38 existing bugs)
+- tests/simulator/ (only to follow the existing bug-test style, and to fix a simulator test that enumerates bug ids)
+You must NOT read, open, grep, list the contents of, or otherwise inspect: uds_assistant/testgen/, uds_assistant/agent/, uds_assistant/llm/, uds_assistant/eval/, uds_assistant/rules/, uds_assistant/runner/, uds_assistant/export/, uds_assistant/rag/, uds_assistant/api/, uds_assistant/ui/, data/gold/, data/requirements_*, outputs/, docs/ files other than behaviour_contract.md, tests/testgen/, tests/eval/, tests/rules/, tests/agent/, tests/llm/, PROGRESS.md, DECISIONS.md, FINAL_REPORT.md, README.md, PROJECT.md. Do not grep across the whole repo (scope every search to the allowed paths). Running `python -m pytest` on the whole suite is allowed (you will see pass/fail output only): if a test outside your allowed paths fails, do not open it — report its name to me.
+
+## Rules
+Type hints, pydantic models, docstrings on public functions, `python -m ruff check .` clean. No ISO 14229 text. Do NOT edit PROGRESS.md or DECISIONS.md, do NOT edit anything outside uds_assistant/simulator/, tests/simulator/ and data/bugs/, and do NOT git commit — report your decisions to me in your final message instead.
+
+## Task
+1. Write 15 NEW, realistic ECU diagnostic defects — the kind seen in real ECU software — clearly different from all 38 bugs in data/bugs/bug_catalog.yaml and data/bugs/heldout_catalog.yaml (different mechanism, not a renamed duplicate). Spread them across: session handling, security access, NRC priority/order, length/format checking, DID/RID handling, DTC handling (0x14 / 0x19), timing (P2/S3), state after ECU reset / S3 timeout, suppress-positive-response handling. At least one per category, at least two for DID/RID handling and two for security. Base them on the actual spec in data/bcm_spec.yaml and on the documented behaviour in docs/behaviour_contract.md. Pick distinctive ids (snake_case, descriptive of the defect, never reusing words that name a test or template).
+2. Save them to data/bugs/heldout_v2_catalog.yaml with the same schema as the existing catalogs (loadable by the existing simulator catalog loader), plus `heldout_v2: true` on every entry (extend the pydantic BugDef with an optional `heldout_v2: bool = False`, backward-compatible). Expose a path constant HELDOUT_V2_BUG_CATALOG_PATH next to the other catalog path constants and export it from uds_assistant.simulator, together with a HELDOUT_V2_BUG_IDS set; make sure the simulator accepts these ids (the ALL_BUG_IDS-style validation must include them; unknown ids still raise ValueError).
+3. Implement each as a toggleable bug in the simulator via explicit hooks, exactly the same mechanism as the existing bugs. With all bugs off, behaviour must be byte-for-byte unchanged (the existing simulator↔rules agreement tests in tests/simulator/ must still pass).
+4. Add tests/simulator/test_heldout_v2_bugs.py: for every v2 bug, a crafted request sequence whose output with the bug ON differs from bug-OFF (assert the specific differing bytes), plus tests that every id in the catalog is implemented and tagged heldout_v2, and that no id collides with any other catalog.
+5. Run `python -m pytest -q` (whole suite) and `python -m ruff check .` until clean (report-only for failures outside your allowed paths).
+
+## Final message to me
+List: the 15 bug ids with category and one-line description, files changed, the exact pytest summary line, ruff status, any design decisions (one line each) for me to log. Do NOT speculate about what any test suite would or would not catch.
+````
+
+### C4 subagent 2: natural requirements v2
+
+````text
+You are writing a second natural-language requirements dataset (v2) for a UDS diagnostics test-generation project in C:\Users\pasar\Desktop\tata_tech (Windows; Bash tool is Git Bash; `python` = 3.13.6). Work autonomously; never ask questions. Do not pip install anything. Do not use the GPU or Ollama.
+
+## Strict context limits (MANDATORY)
+You may read ONLY: data/bcm_spec.yaml and data/requirements_seed.csv.
+You must NOT read, open, grep or list the contents of anything else in the repo — in particular NOT data/requirements_natural.csv, data/requirements_natural.md, uds_assistant/ (any package), data/gold/, data/bugs/, outputs/, tests/, docs/, PROGRESS.md, DECISIONS.md. Do not grep the repo. Do NOT edit PROGRESS.md or DECISIONS.md and do NOT git commit. The only files you may create are data/requirements_natural_v2.csv and data/requirements_natural_v2.md.
+
+## Task
+Write data/requirements_natural_v2.csv with exactly 16 requirements phrased the way a real automotive diagnostic test engineer writes them:
+- varied wording and synonyms (e.g. "programming mode", "flash session", "unlock step", "seed-key handshake", "keep-alive", "fault memory", "trouble codes", "wake the session", "coding value", "power-cycle the module");
+- NO hex identifiers in most of them (at most 4 of 16 may contain a hex ID or SID); refer indirectly ("the door lock setting", "the wiper sensitivity calibration", "the unlock step", "the VIN", "the lighting self-test", "the variant coding");
+- some with multiple constraints (e.g. "only in extended mode, only after unlocking, and only while the car is parked");
+- 2 deliberately ambiguous ones (ambiguous=true, with the reason in notes);
+- cover sessions, security access/lockout, reads (including several values in one request), writes with ranges, routines (including a long-running one), DTC read/clear, S3/keep-alive timing, ECU reset, suppress-positive-response, state surviving a reset/timeout — grounded in what data/bcm_spec.yaml actually defines (only reference things that exist in the spec, except you may include ONE requirement about something the spec does not support, with empty targets, labelled accordingly in notes).
+
+CSV columns (exact header, in this order):
+id,text,split,target_services,target_dids,target_routines,required_categories,required_preconditions,ambiguous,notes
+
+Ground-truth label conventions (MUST follow exactly so labels are machine-scorable):
+- id: NAT2-001 … NAT2-016
+- split: `test2` for every row (this whole set is a fresh held-out test set; there is no dev part).
+- target_services: semicolon-separated SIDs as 0xNN uppercase hex (e.g. `0x22;0x2E`), the services a test for this requirement must exercise.
+- target_dids: semicolon-separated DID ids `0xNNNN` uppercase hex as defined in data/bcm_spec.yaml (empty if none).
+- target_routines: semicolon-separated routine ids `0xNNNN` (empty if none).
+- required_categories: semicolon-separated subset of exactly these tokens: positive;negative;session;security;timing — the test categories a complete test set for this requirement must include.
+- required_preconditions: semicolon-separated subset of exactly this vocabulary: default_session; extended_session; programming_session; security_level_1; security_level_3; vehicle_stationary; vehicle_moving; nvm_fault; dtc_status_set; routine_started; s3_elapsed; lockout_active — or the single token `none`. (Use security_level_N matching the spec's level numbers; check the spec.)
+- ambiguous: true/false
+- notes: short; for ambiguous ones, what is ambiguous and which interpretation the labels assume.
+
+Quote fields containing commas. Validate the file with a short python snippet (csv module): 16 rows, all split == test2, all tokens from the vocabularies, every DID/routine id exists in data/bcm_spec.yaml, every SID is one of 0x10,0x11,0x14,0x19,0x22,0x27,0x2E,0x31,0x3E. Also write data/requirements_natural_v2.md: a short README describing the file (it is a fresh blind test set, written without seeing any other requirement set; same column semantics and vocabularies as above).
+
+## Final message to me
+The validation output, the count of requirements containing hex IDs, which are ambiguous, and any decisions (one line each) for me to log.
+````
