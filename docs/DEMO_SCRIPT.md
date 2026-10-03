@@ -2,7 +2,7 @@
 
 Audience: Tata Technologies reviewers. Steps 1 to 7 run offline in a terminal with the mock LLM (a deterministic keyword stand-in for a language model): no internet, no GPU, no real LLM. Step 6b is an optional ~2 minute segment with the real local model (Ollama, Qwen2.5-3B); it needs a GPU and Ollama running, and has a pre-recorded fallback if either is unavailable.
 
-Numbers: this script never quotes an evaluation number. Where the demo shows one, the script says "the report shows ..." and gives a placeholder such as `<v2 generated detection from the report>`. Fill the placeholders from `outputs\eval_report.md` (or `outputs\partC\before_after.md`) before the session, and read them out from the screen, not from memory. The test counts and bytes in the expected outputs below come from deterministic mock runs of the code and do not depend on the evaluation.
+Numbers: the figures quoted below are the real ones from `outputs\eval_report.md` (report version 3, generated 2026-10-03, template set v3) and `outputs\partC\before_after.md`. They are for orientation: during the session read them from the screen (the script's section [5] prints them from `outputs\eval_report.json`), and if the report has been regenerated since, the screen wins. The headline is the FRESH v2 numbers, whatever they are, including the unfavourable ones: held-out v2 detection is 2/15 for the generated suite in both modes. The test counts and bytes in the expected outputs below come from deterministic mock runs of the code and do not depend on the evaluation.
 
 Setup before the session (do once, 2 minutes before):
 
@@ -13,7 +13,7 @@ python scripts/demo.py --offline > $null; echo "rc=$LASTEXITCODE"   # warm-up, s
 
 Terminal font large; two windows ready (one at the repo root, one with `outputs\eval_report.md` open in an editor; optionally a third with `outputs\partC\before_after.md`).
 
-Timings below are measured on the build machine: the whole `python scripts/demo.py` takes about 2 to 4 seconds; `--full-eval` takes about 65 seconds (mock-only, now that it also runs the v2 sets and the determinism check).
+Timings below are measured on the build machine: the whole `python scripts/demo.py` takes about 2 seconds (2.3 s in the last run; `--offline` 1.5 s); `--full-eval` takes about 65 seconds (mock-only, now that it also runs the v2 sets and the determinism check).
 
 | # | Step | Time |
 |---|---|---|
@@ -156,27 +156,40 @@ Expected: `This bug is NOT caught by the tests for this requirement`. **Say:** "
 
 ## 6. Show the honest eval numbers (1:30)
 
-Section [5] prints the headline from `outputs\eval_report.json` (it does not re-run the evaluation). With a version-3 report it prints the fresh v2 rows first, then the seen rows:
+Section [5] prints the headline from `outputs\eval_report.json` (it does not re-run the evaluation). With the current version-3 report it prints the fresh v2 rows first, then the seen rows:
+
+**Expected output (real run):**
 
 ```
 Report version 3. Modes in this report: mock, ollama
-Simulator <-> rules agreement : <agreed>/<total>
-Gold tests on clean simulator : <passed>/<total>
+Simulator <-> rules agreement : 5000/5000
+Gold tests on clean simulator : 60/60
 udsoncan virtual-CAN sequence : PASS
 Part C freeze: all recorded hashes match and are clean = True
 
 FRESH v2 headline (written blind after the freeze; nothing was tuned on it):
 HELD-OUT v2 bug detection (15 bugs; generated suite is the headline):
-  mock    generated <v2 generated detection from the report>, gold <...>, union <...>
-  ollama  generated <...>
+  mock    generated 2/15 (13.3%), gold 5/15, union 5/15
+  ollama  generated 2/15 (13.3%), gold 5/15, union 5/15
 Natural v2 requirement understanding (test2, n=16):
-  mock    parsed exact <...>, P/R/F1 <...>
-  ollama  parsed exact <...>, P/R/F1 <...>
-  noise check ollama: <n> runs, parsed F1 mean <...> (min-max <...> to <...>)
+  mock    parsed exact 0/16, P/R/F1 1.000/0.225/0.367
+  ollama  parsed exact 4/16, P/R/F1 0.565/0.796/0.661
+  noise check mock: deterministic, re-run identical = True
+  noise check ollama: 3 runs, parsed F1 mean 0.661 (min-max 0.661 to 0.661)
 
 SEEN / tuned-on rows (not independent evidence):
-HELD-OUT v1 bug detection (12 bugs; SEEN: templates designed against these misses): ...
-Natural v1 test split (n=12; SEEN): ...
+HELD-OUT v1 bug detection (12 bugs; SEEN: templates designed against these misses):
+  mock    generated 10/12 (83.3%), gold 3/12, union 11/12
+  ollama  generated 5/12 (41.7%), gold 3/12, union 6/12
+Natural v1 test split (n=12; SEEN):
+  mock    parsed exact 5/12, P/R/F1 0.933/0.560/0.700
+  ollama  parsed exact 3/12, P/R/F1 0.500/0.840/0.627
+Latency per requirement (mean / p95): mock 0.27 s / 0.46 s, ollama 21.4 s / 28.5 s
+Before/after table: outputs\partC\before_after.md
+Read the table above: the v2 rows are the independent evidence; see docs/RESULTS.md for the interpretation.
+Honest note: in-sample and v1 held-out numbers are optimistic (seen); trust the fresh v2 rows.
+
+Demo finished in 2.3 s.
 ```
 
 If `outputs\eval_report.json` is an older (version 2) report the script prints `Fresh v2 headline: n/a - this report predates Part C` and the old held-out and test-split rows instead. If a mode was not run, its line says `not run: ...`. Nothing is hard-coded in the script, so what you read is what is in the file.
@@ -188,7 +201,7 @@ Get-Content outputs\eval_report.md -TotalCount 60
 Get-Content outputs\partC\before_after.md
 ```
 
-**Say:** "Three independent-ish checks say the oracle and simulator are consistent. The numbers I want you to focus on are the two fresh v2 rows: 15 bugs and 16 requirements written blind after I froze the templates and prompts. The report shows <v2 generated detection from the report> bugs caught by the generated tests, and <v2 natural-requirement result from the report> on requirement understanding. The v1 rows and the in-sample row are labelled seen or tuned on: they went up after the Part C work, but I designed the new templates against the v1 misses, so that rise is expected and is not evidence. Each missed v2 bug has a stated reason in the report. The before/after table shows what changed from the pre-Part C report, with the comparability caveats written under it. The freeze line says the frozen code and data were unchanged when these numbers were produced."
+**Say:** "Three independent-ish checks say the oracle and simulator are consistent: 5000 of 5000 random requests agree, all 60 hand-written tests pass, and a third-party client completes a real exchange. The numbers I want you to focus on are the fresh v2 rows: 15 bugs and 16 requirements written blind after I froze the templates and prompts. The generated tests catch 2 of the 15 fresh bugs, in both modes. The hand-written gold tests catch 5, and together they catch 5. That is low, and I am showing it rather than the 25 of 26 in-sample number. On requirement understanding the real model beats my keyword mock on fresh phrasing: parsed F1 0.661 against 0.367, and it covers 74% of the required test categories against 48%. But it invents targets: precision 0.565 with 30 false positives, mostly services, while the mock is at 1.000 precision and finds under a quarter of the targets (recall 0.225). My precision fix did not work, because the grounding check does not cover services. The v1 rows and the in-sample row are labelled seen or tuned on: they went up after the Part C work (the mock from 3 to 10 of 12 on v1), but I designed the new templates against the v1 misses, so that rise is expected and is not evidence. 11 of the 13 missed v2 bugs have no generated test that applies the stimulus, and 2 apply it but never check the response that exposes the bug; each has a stated reason in the report. The before/after table shows what changed from the pre-Part C report, with the comparability caveats under it. The freeze line says the frozen code and data were unchanged when these numbers were produced."
 
 **Optional live re-run (about 65 s, only if the room has time):**
 
@@ -196,7 +209,7 @@ Get-Content outputs\partC\before_after.md
 python scripts/demo.py --full-eval
 ```
 
-It is a mock-only run. It writes to a temp folder (does not change `outputs\`) and ends with a one-line summary beginning `mode=mock tests=<n> HELD-OUT v2 (fresh) bug detection: generated <x>/15 ...`, plus the freeze line.
+It is a mock-only run. It writes to a temp folder (does not change `outputs\`) and ends with a one-line summary beginning `mode=mock tests=206 HELD-OUT v2 (fresh) bug detection: generated 2/15, gold 5/15, union 5/15; natural v2 (fresh) understanding: parsed exact 0/16, ...`, plus the freeze line.
 
 **Fallback:** the file `outputs\eval_report.md` is pre-generated; just open it. Never wait on `--full-eval` live unless there is slack.
 
@@ -229,9 +242,9 @@ python scripts/demo.py --llm ollama --req REQ-010
 
 `scripts/demo.py --llm ollama` uses the same `get_llm` factory as the app (the equivalent of `LLM_MODE=ollama`; the default stays mock). If Ollama is unreachable the script prints `WARNING: ... falling back to the deterministic mock LLM` and `continuing with the deterministic mock LLM, NOT ollama`, and the `Engine=... llm=mock` line shows what actually ran. Say so out loud if that happens. Section [5] already prints both modes' recorded numbers. (Note: the ollama suite is smaller and may not catch the default bug; the script says so honestly.)
 
-**Say (while it runs):** "This is the real 3B model on a 4 GB laptop GPU. It reads the requirement, picks templates from a ranked shortlist, and writes the explanations in one batched call. Bytes still come only from templates, so even a 3B model cannot put a wrong byte in a test. It takes about <ollama seconds per requirement from the report> per requirement, against a fraction of a second for the mock."
+**Say (while it runs):** "This is the real 3B model on a 4 GB laptop GPU. It reads the requirement, picks templates from a ranked shortlist, and writes the explanations in one batched call. Bytes still come only from templates, so even a 3B model cannot put a wrong byte in a test. In the recorded run it took 21.4 s per requirement on average (p95 28.5 s), against 0.27 s for the mock; one full run of all 83 pipeline runs, including the three noise runs, took about 31 minutes."
 
-**Say (once it finishes; read the numbers from the report, not from memory):** "We ran both on the same requirements, and ollama three times on the fresh natural-v2 set so you can see the run-to-run spread. The comparison table in the report shows the v2 rows for both modes and the noise-check block lists every ollama run with the mean and range. Part B showed this model finding more of the right identifiers but also inventing some. The Part C fixes target that: ids copied from prompt examples are removed, a grounding check drops identifiers the text does not support, and template ids are normalised. Whether that helped is the number in the v2 rows: <ollama v2 result vs mock from the report>. The model path is safe either way: the validator rejects bad template choices (the report counts them) and byte provenance holds for every generated test."
+**Say (once it finishes; read the numbers from the report, not from memory):** "We ran both on the same requirements, and ollama three times on the fresh natural-v2 set so you can see the run-to-run spread. On the fresh set the model finds more of the right targets (recall 0.796 against 0.225, parsed F1 0.661 against 0.367) and its tests cover more categories (74.0% against 48.0%; mean over three runs 75.3%, range 74.0 to 76.0). The parsed numbers were identical in all three runs; the variation is in planning and explaining (precondition recall 77.8% to 85.2%). Part B showed this model finding more of the right identifiers but also inventing some. The Part C fixes target that: ids copied from prompt examples are removed, a grounding check drops DIDs, routines and DTCs the text does not support, and template ids are normalised. That did not fix precision: it is 0.565 with 30 false positives, 25 of them services, which the grounding check does not cover. The normalisation never fired, and rejected planner choices went from 10 to 15 on the old requirements and 12 on the new ones. What did work is the batched explain step: one model call per requirement instead of one per test, and mean latency from 30.8 s down to 21.4 s. The model path is safe either way: the validator rejects bad template choices and byte provenance holds for every generated test, 418 of 418 for ollama. Detection of the fresh bugs is 2 of 15 in both modes; the model does not change what the templates can do."
 
 **MOCK FALLBACK (Ollama slow, down, or the GPU is busy).** Do not wait. Use the recorded results and say they are recorded:
 
@@ -251,9 +264,9 @@ python scripts/demo.py --llm ollama --req REQ-010
 
 ## Likely curveballs (short answers)
 
-- *Why mock as the default?* Reproducible, offline, much faster, and the LLM cannot affect bytes either way. Whether the real model beats it is a question for the v2 rows of the report, not for this script.
+- *Why mock as the default?* Reproducible, offline, much faster, and the LLM cannot affect bytes either way. On fresh requirement phrasing the real model has better recall but poor precision (0.565 against 1.000), so it is a trade-off, not a clear win.
 - *Did you try a real model?* Yes: Qwen2.5-3B (Q4_K_M) via Ollama on an RTX 3050 4 GB; the recorded comparison is in `outputs\eval_report.md`.
-- *Is the ollama gap just noise?* Check the noise-check block in the report: if the gap between mock and ollama is inside the min-max range of the ollama runs, it is within noise. Part B measured about +-0.05 on parsed F1.
+- *Is the ollama gap just noise?* The noise-check block in the report lists the three ollama runs: parsed F1 was 0.661 in all three (range 0.661 to 0.661), exercised F1 0.583 to 0.611. The gap to the mock (0.661 against 0.367) is far outside that. Part B measured about +-0.05 on parsed F1 on the dev split; three runs is a small sample.
 - *Why did the v1 numbers go up, and is that an improvement?* The Part C templates were designed against the v1 misses, so v1 is "seen". The improvement claim rests only on the fresh v2 rows.
 - *Why fix four SWS disagreements and not nine?* Four were high confidence (an explicit normative requirement contradicts us); the rest are order-of-checks guesses, no observable effect, or a configuration choice. See `docs\SWS_DISAGREEMENTS.md`.
 - *Is the spec real?* No, synthetic by design.

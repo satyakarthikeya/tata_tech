@@ -21,7 +21,7 @@ flowchart TD
     LLM -.-> EXPL
     RAG[("rag/ corpus<br/>spec, UDS notes, requirements")] -.-> RETRIEVE
     SPEC[("data/bcm_spec.yaml<br/>SYNTHETIC BCM spec")] -.-> INST
-    TPL[["testgen/ 23 templates"]] -.-> INST
+    TPL[["testgen/ 27 templates"]] -.-> INST
     ORACLE[["rules/ engine = ORACLE<br/>expected response bytes<br/>(one NRC-order function)"]] -.-> INST
     ORACLE -.-> VAL
 
@@ -82,4 +82,4 @@ How it is enforced:
 | Oracle re-check of every step, plus schema and citation checks | [agent/nodes.py](../uds_assistant/agent/nodes.py) (`check_test`, `validate`), [rag/citations.py](../uds_assistant/rag/citations.py) | Failures are dropped and fed back to the planner (max 2 retries) |
 | The simulator must not import the oracle | [tests/simulator/test_independence.py](../tests/simulator/test_independence.py) | Keeps the two implementations independent |
 
-What this does and does not buy: it guarantees the bytes are consistent with the oracle. It does not guarantee the LLM picks the right templates; that is what the requirement-understanding and held-out bug numbers in [RESULTS.md](RESULTS.md) measure, and with the mock LLM they are modest.
+What this does and does not buy: it guarantees the bytes are consistent with the oracle. It does not guarantee the LLM picks the right templates; that is what the requirement-understanding and held-out bug numbers in [RESULTS.md](RESULTS.md) measure, and they are modest: held-out v2 bug detection is 2/15 for the generated suite in both modes (report version 3).

@@ -50,9 +50,11 @@ def _run_demo(*args: str, env_extra: dict[str, str] | None = None) -> subprocess
 def test_demo_headline_shows_both_modes() -> None:
     proc = _run_demo("--offline")
     assert proc.returncode == 0, proc.stderr
-    assert "HELD-OUT bug detection (12 bugs)" in proc.stdout
+    assert "FRESH v2 headline" in proc.stdout
+    assert "HELD-OUT v2 bug detection (15 bugs" in proc.stdout
     assert "mock" in proc.stdout and "ollama" in proc.stdout
-    assert "did NOT beat the mock" in proc.stdout
+    # v1 rows are shown, but clearly labelled as seen / tuned on
+    assert "SEEN" in proc.stdout
 
 
 def test_demo_llm_ollama_falls_back_to_mock_when_unreachable() -> None:

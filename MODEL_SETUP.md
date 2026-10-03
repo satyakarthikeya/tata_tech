@@ -245,20 +245,23 @@ python -m pytest -q
 smoke tests in `tests/llm/test_client.py`, `tests/llm/test_client_options.py` (one
 parse call returns a valid `ParsedRequirement`) and `tests/agent/test_instrumentation.py`
 (the pipeline completes in ollama mode); the rest of the suite runs unconditionally
-against mock/bm25. Last recorded run: 13 passed. To run just the LLM/agent ones: `RUN_MODEL_TESTS=1 python -m pytest -m needs_model -v tests/llm tests/agent`.
+against mock/bm25. Last recorded run (after Part C): 13 passed in 123.61s. To run just the LLM/agent ones: `RUN_MODEL_TESTS=1 python -m pytest -m needs_model -v tests/llm tests/agent`.
 
 ## 5. Run the evaluation in Ollama mode and compare
 
-This takes about 19 minutes (about 18 minutes of it in ollama mode: roughly 30 s
-per requirement over 35 requirements) and uses the GPU. Do not run it while the
+A plain `--mode ollama` run takes about 19 minutes in Part B (roughly 30 s per
+requirement over 35 requirements). After Part C, with batched explain, the full
+command below (35 old requirements, 16 fresh natural-v2 requirements, two extra
+noise runs, before/after table) took about 31 minutes (1854 s; mean 21.4 s per
+requirement) and uses the GPU. Do not run it while the
 GPU is busy with something else.
 
 ```powershell
-python -m uds_assistant.eval.run_eval --mode ollama
+python -m uds_assistant.eval.run_eval --mode ollama --noise-runs 3 --before-after
 ```
 
 ```bash
-python -m uds_assistant.eval.run_eval --mode ollama
+python -m uds_assistant.eval.run_eval --mode ollama --noise-runs 3 --before-after
 ```
 
 `--mode ollama` also runs `mock` in the same invocation (`--no-mock-compare`

@@ -106,12 +106,16 @@ def test_app_shows_headline_heldout_and_understanding() -> None:
     assert not at.exception
     subheaders = [s.value for s in at.subheader]
     assert any("Headline metrics" in s for s in subheaders)
-    assert any("Held-out bug detection" in s for s in subheaders)
-    assert any("Requirement understanding" in s for s in subheaders)
-    # headline table (7 rows) + held-out per-bug (12) + understanding splits and per-requirement
+    assert any("Fresh v2 headline" in s for s in subheaders)
+    assert any("Held-out v2 bug detection" in s for s in subheaders)
+    assert any("Natural v2 requirement understanding" in s for s in subheaders)
+    assert any("Held-out v1 bug detection" in s and "seen" in s for s in subheaders)
+    # headline table + v2 per-bug (15) + v2 per-requirement (16)
+    # + v1 per-bug (12) + natural v1 per-requirement (20)
     assert len(at.table) >= 1
-    assert any(len(df.value) == 12 for df in at.dataframe)
-    assert any(len(df.value) == 20 for df in at.dataframe)
+    sizes = [len(df.value) for df in at.dataframe]
+    for expected in (15, 16, 12, 20):
+        assert expected in sizes, (expected, sizes)
 
 
 @pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")

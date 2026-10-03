@@ -11,15 +11,22 @@ No real OEM document and no ISO 14229 text is copied anywhere in this repo —
 see `DECISIONS.md` for every design choice and `AGENT.md` for the working
 rules this project was built under.
 
-**Status.** Part A (honest evaluation: held-out bugs, natural requirements,
-SWS citations) and Part B (real-model evaluation) are both done. The local
-Qwen2.5-3B model (Ollama) and Chroma retrieval (fastembed embeddings) were run
-for real and compared with the deterministic mock. **Headline:** on the
-held-out TEST split (n=12) the 3B model did **not** beat the mock on any
-headline metric: it has higher parsed-target recall (0.880 vs 0.560) but much
-lower precision (0.512 vs 0.933), held-out bug detection is 3/12 for both, and
-it is about 120x slower (30.8 s vs 0.25 s mean per requirement). **Mock stays
-the default.** Details: [`docs/RESULTS.md`](docs/RESULTS.md).
+**Status.** Part A (honest evaluation), Part B (real-model evaluation) and
+Part C (fixes, then a fresh blind evaluation) are done. The local Qwen2.5-3B
+model (Ollama) and Chroma retrieval (fastembed embeddings) were run for real and
+compared with the deterministic mock. **Headline (fresh v2 data, written blind
+after the Part C freeze):** held-out v2 bug detection is **2/15 (13.3%) for the
+generated suite in both modes** (gold 5/15, union 5/15), so the coverage
+templates added in Part C did not transfer from the seen v1 bugs to fresh ones.
+On 16 fresh natural requirements the model is better than the mock at
+requirement understanding (parsed F1 0.661 vs 0.367, category recall 74.0% vs
+48.0%, precondition recall 77.8% vs 55.6%), but its precision is 0.565 with 30
+false positives (the mock's precision is 1.000, its recall 0.225). The precision
+fix did not work; explain batching did (1.00 LLM call per requirement, mean
+latency 21.37 s vs 30.79 s). The v1 and in-sample numbers are seen or tuned on
+and are not evidence. **Mock stays the default.** Details:
+[`docs/RESULTS.md`](docs/RESULTS.md),
+[`outputs/partC/interpretation.md`](outputs/partC/interpretation.md).
 
 **Core principle:** the LLM handles language (parsing the requirement,
 choosing which templates/tests apply, writing the human explanation); it never
@@ -81,7 +88,7 @@ python -m pytest -q
 ```
 
 Current result on this machine (Python 3.13.6, Windows, default run):
-**912 passed, 13 skipped in 218.26s (0:03:38)**. The skipped tests are the `needs_model` tests, skipped
+**1167 passed, 14 skipped in 303.53s (0:05:03)**. The 14 skips are the 13 `needs_model` tests plus 1 UI test that only applies to an old version 2 report. The `needs_model` tests are skipped
 automatically unless `RUN_MODEL_TESTS=1`. To run them (needs Ollama running with
 the model pulled, and fastembed + chromadb installed; see `MODEL_SETUP.md`; they
 use the GPU and take a few minutes):
@@ -94,7 +101,8 @@ RUN_MODEL_TESTS=1 python -m pytest -m needs_model -v      # bash
 $env:RUN_MODEL_TESTS = "1"; python -m pytest -m needs_model -v   # PowerShell
 ```
 
-Last recorded result for that run (Part B, B4): **13 passed**.
+Result of the `needs_model` run (real Ollama server and Chroma/fastembed, after
+the Part C evaluation): **13 passed, 1168 deselected in 123.61s (0:02:03)**.
 `RUN_MODEL_TESTS=1 pytest` (everything, model tests included) also works.
 
 Tests mirror the package layout under `tests/` (one subdirectory per package:
@@ -105,52 +113,69 @@ Tests mirror the package layout under `tests/` (one subdirectory per package:
 
 ```bash
 python -m uds_assistant.eval.run_eval --mode mock      # fast, offline
-python -m uds_assistant.eval.run_eval --mode ollama    # ~19 minutes, uses the GPU; also runs mock
+python -m uds_assistant.eval.run_eval --mode ollama --noise-runs 3 --before-after   # about 31 minutes, uses the GPU; also runs mock
 ```
 
 `--mode ollama` runs the mock in the same invocation (`--no-mock-compare`
 turns that off), so both columns come from the same inputs, templates and
-retriever. It exits with code 2 if any generated test fails the byte-provenance
-check. Regenerates `outputs/eval_report.json` and `outputs/eval_report.md`: a 7-row
-headline table (simulator/rules agreement, gold on clean simulator, udsoncan
-virtual-CAN sequence, **held-out bug detection**, requirement understanding,
-coverage, citation validity), plus in-sample bug detection, request validity
-and metric definitions. Add `--skip-can` to skip the udsoncan virtual-CAN check
-(fast runs only).
+retriever. `--noise-runs N` repeats the natural-v2 run N times in ollama mode
+(run 1 feeds the tables; the report lists every run with mean and range; the
+mock runs once plus a second run that must be identical). `--before-after`
+writes `outputs/partC/before_after.md` from the frozen pre-Part C baseline.
+`--rerender` rebuilds the report from stored JSON without recomputing anything.
+It exits with code 2 if any generated test fails the byte-provenance check.
+Regenerates `outputs/eval_report.json` and `outputs/eval_report.md` (report
+version 3): the fresh v2 rows first, then simulator/rules agreement, gold on the
+clean simulator, udsoncan virtual-CAN sequence, coverage, citation validity, the
+seen (v1) and in-sample rows labelled as such, the noise check, retrieval
+comparison and freeze verification. Add `--skip-can` to skip the udsoncan
+virtual-CAN check (fast runs only).
 
-**Headline (report version 2, both modes, one invocation).** On the
-held-out TEST split (n=12 requirements) the local 3B model did **not** beat the
-deterministic mock on any headline metric:
+**Headline (report version 3, both modes, one invocation).**
 
 | Metric | mock | ollama |
 |---|---|---|
-| Held-out bug detection, generated (12 bugs) | 3/12 (25.0%) | 3/12 (25.0%) |
-| Parsed-target precision / recall / F1 (test split) | 0.933 / 0.560 / 0.700 | 0.512 / 0.880 / 0.647 |
-| Parsed exact match (test split) | 5/12 | 4/12 |
-| Category recall / precondition recall (test split) | 67.9% / 80.0% | 64.3% / 73.3% |
-| Planner choices rejected (35 requirements) | 0 | 10 |
-| Mean wall-clock per requirement | 0.25 s | 30.8 s |
-| Byte provenance (all generated tests) | 343/343 | 158/158 |
+| **Held-out v2 bug detection, FRESH (15 bugs): generated / gold / union** | 2/15 / 5/15 / 5/15 | 2/15 / 5/15 / 5/15 |
+| **Natural v2, FRESH (n=16): parsed P / R / F1** | 1.000 / 0.225 / 0.367 | 0.565 / 0.796 / 0.661 |
+| Natural v2, FRESH: parsed exact | 0/16 | 4/16 |
+| Natural v2, FRESH: category recall / precondition recall (run 1) | 48.0% / 55.6% | 74.0% / 77.8% |
+| Natural v2, ollama 3-run mean (range): category / precondition recall | - | 75.3% (74.0%-76.0%) / 82.7% (77.8%-85.2%) |
+| Natural v2, FRESH: parsed false positives | 0 | 30 (25 services, 5 DIDs) |
+| Planner choices rejected (35 old requirements / v2) | 0 / 0 | 15 / 12 |
+| Mean wall-clock per requirement (35 old requirements) | 0.27 s | 21.37 s |
+| Byte provenance (all generated tests, all runs) | 511/511 | 418/418 |
+| SEEN: held-out v1 generated (12 bugs) | 10/12 | 5/12 |
+| In-sample (tuned on): generated (26 bugs) | 25/26 | 19/26 |
 
-Ollama has higher parsed recall but much lower precision because it invents
-identifiers; held-out detection is equal (the same three bugs; both suites use
-the same templates); it is about 120x slower. **So mock stays the default.**
-Caveats: n=12, GPU nondeterminism of about +-0.05 F1, prompts tuned on only 8
-dev rows, and a 24-option plan shortlist forced by the 4096-token context.
-The in-sample number (generated 25/26 mock, 21/26 ollama) is secondary: the
-templates were tuned on those bugs. Retrieval: neither BM25 nor Chroma is
-clearly better on 19 queries (test split hit@3 63.6% for both), so BM25 stays
-the default. See `outputs/eval_report.md` for all numbers,
-[`docs/RESULTS.md`](docs/RESULTS.md) for the walkthrough, and
+Reading it honestly: the generated suite catches only 2 of 15 fresh bugs in
+both modes (11 misses have no generated test applying the stimulus, 2 apply it
+but cannot see the bug); the model helps requirement understanding on fresh
+phrasing but invents targets (mostly services, which the grounding check does
+not cover), so the precision fix did not work; rejected planner choices rose and
+normalisation fired 0 times; explain batching cut latency from 30.79 s to
+21.37 s. The v1 held-out numbers are SEEN (the Part C templates were designed
+against those misses) and the in-sample numbers are tuned on: neither is
+evidence of improvement. Caveats: n=15 and n=16, one model, a synthetic spec,
+bugs written by an LLM, three ollama noise runs, five SWS disagreements still
+open. Retrieval: neither BM25 nor Chroma is clearly better on 19 queries (test
+split hit@3 63.6% for both), so BM25 stays the default. See
+`outputs/eval_report.md` for all numbers, [`docs/RESULTS.md`](docs/RESULTS.md)
+for the walkthrough (including the before/after table, the noise check and the
+list of missed bugs), [`outputs/partC/before_after.md`](outputs/partC/before_after.md),
+[`outputs/partC/interpretation.md`](outputs/partC/interpretation.md) and
 `FINAL_REPORT.md` for the honest summary and caveats.
 
-Quick tour of the whole system: `python scripts/demo.py` (see
-[`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)).
+Quick tour of the whole system: `python scripts/demo.py` (about 2 seconds, mock,
+offline; see [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)). Useful flags:
+`--req REQ-010`, `--bug <id>` (any bug id from the in-sample, held-out v1 and
+held-out v2 catalogs), `--text "..."`, `--offline` (load pre-generated tests),
+`--full-eval` (mock-only re-run into a temp folder, about 65 s) and
+`--llm ollama`.
 
 The demo also has an ollama segment: `python scripts/demo.py --llm ollama`
-(about 30 s per requirement; falls back to the mock with a printed warning if
-Ollama is not reachable). The demo script has a pre-recorded fallback for when
-Ollama is slow or down.
+(about 21 s per requirement in the recorded run; falls back to the mock with a
+printed warning if Ollama is not reachable). The demo script has a pre-recorded
+fallback for when Ollama is slow or down.
 
 ## API
 
@@ -184,7 +209,7 @@ from a flatter path.)
 streamlit run uds_assistant/ui/streamlit_app.py
 ```
 
-An engineering UI over the same pipeline (generate → review → run → export; the bug picker offers in-sample and held-out bugs). The evaluation section reads `outputs/eval_report.json` and shows the side-by-side mock | ollama headline table, requirement understanding per mode on the test split, held-out detection per mode, latency, rejections/retries, fallback and truncation events, byte-provenance counts, and the BM25 vs Chroma retrieval comparison (`n/a` for anything an older report lacks),
+An engineering UI over the same pipeline (generate → review → run → export; the bug picker offers `[in-sample]`, `[held-out v1, seen]` and `[held-out v2, fresh]` bugs, and after generating it shows which LLM backend actually ran). The evaluation section reads `outputs/eval_report.json` (versions 2 and 3) and `outputs/partC/before_after.md` and shows the freeze status, the fresh v2 headline, the noise check, the before/after table, the side-by-side mock | ollama comparison, latency, rejections/retries, fallback and truncation events, byte-provenance counts, and the BM25 vs Chroma retrieval comparison (`n/a` for anything an older report lacks). It has only been tested headless (AppTest); the manual click-through procedure is [`docs/UI_CHECKLIST.md`](docs/UI_CHECKLIST.md) and has not been done in a real browser.
 calling `agent.run_pipeline` / `runner.run_suite` / `export.render_*` directly
 rather than over HTTP, with its own audit trail (`outputs/ui_audit.sqlite`).
 
@@ -211,7 +236,7 @@ uds_assistant/
               rules/nrc_order.py = the single NRC-evaluation-order function
   simulator/  Independent ECU implementation (does not import rules/), bug catalog,
               in-process + virtual-CAN/ISO-TP transports
-  testgen/    TestCase model, 23 parameterized templates, gold-test execution
+  testgen/    TestCase model, 27 parameterized templates (set v3), gold-test execution
   rag/        BM25 (offline) + Chroma/fastembed retrieval, retrieval comparison, citations
   llm/        Pluggable LLM: mock (deterministic) and ollama (local Qwen2.5-3B); all prompts in llm/prompts.py (frozen at B3 revision 8)
   agent/      LangGraph pipeline (+ plain-Python fallback) over shared node functions
@@ -225,13 +250,22 @@ data/
   bcm_spec.yaml           synthetic BCM ECU spec
   requirements_seed.csv   15 seed requirements
   gold/gold_tests.yaml    60 hand-authored gold tests
-  bugs/bug_catalog.yaml   26 injectable simulator bugs
+  bugs/bug_catalog.yaml   26 injectable simulator bugs (in-sample)
+  bugs/heldout_catalog.yaml     12 held-out v1 bugs (SEEN)
+  bugs/heldout_v2_catalog.yaml  15 held-out v2 bugs (FRESH, written blind after the Part C freeze)
+  requirements_natural.csv      20 natural v1 requirements (8 dev / 12 test, SEEN)
+  requirements_natural_v2.csv   16 natural v2 requirements (split test2, FRESH)
   sources/                hand-written UDS reference notes (no ISO text copied)
 docs/
   behaviour_contract.md   plain-language ECU behaviour spec the simulator is built from
 outputs/
-  eval_report.{json,md}            current evaluation report: mock and ollama side by side (report version 2, template set v2)
-  eval_interpretation.md           written interpretation of the comparison
+  eval_report.{json,md}            current evaluation report: mock and ollama side by side (report version 3, template set v3)
+  partC/before_after.md            before/after Part C table
+  partC/interpretation.md          written interpretation of the Part C results
+  partC/baseline_before_partC.json frozen pre-Part C baseline
+  partC/mock_equivalence.json      evidence that C1 left the mock output unchanged
+  partC/eval_run.log               log of the real C5b run
+  eval_interpretation.md           Part B interpretation (historical)
   ollama_smoke.json                early 5-requirement real-model smoke run (B2, before the plan-context fix)
   prompt_tuning/                   dev-split-only prompt tuning revisions (B3)
   eval_report_baseline_v1.{json,md} evaluation report from template set v1, for before/after
@@ -310,8 +344,9 @@ circular by construction.
   the `SWS_Dcm_xxxxx` ID (38 distinct IDs, each verified against the local PDF
   by `tests/rules/test_sws_citations.py`). The PDF is git-ignored, so keep a
   local copy in `data/sources/`; without it, those tests are skipped. There
-  are 9 known disagreements with the SWS, listed in
-  `docs/SWS_DISAGREEMENTS.md` and not yet fixed.
+  were 9 known disagreements with the SWS, listed in
+  `docs/SWS_DISAGREEMENTS.md`; D2, D5, D6 and D7 were fixed in Part C and
+  D1, D3, D4, D8 and D9 are still open.
 - No ISO 14229 text is copied anywhere; protocol notes in
   `data/sources/uds_reference_notes.md` are written from scratch.
 - The LLM (mock or Ollama) never emits bytes that reach a test — see "Core
@@ -328,8 +363,10 @@ circular by construction.
 - [`docs/CODE_TOUR.md`](docs/CODE_TOUR.md) — guided tour of the code
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — architecture
 - [`docs/RESULTS.md`](docs/RESULTS.md) — results walkthrough, including the mock vs ollama comparison
-- [`outputs/eval_interpretation.md`](outputs/eval_interpretation.md) — where the LLM helped and where it did not
+- [`outputs/partC/interpretation.md`](outputs/partC/interpretation.md) — Part C interpretation: what improved, what did not, and why (Part B: [`outputs/eval_interpretation.md`](outputs/eval_interpretation.md))
+- [`outputs/partC/before_after.md`](outputs/partC/before_after.md) — before/after Part C table with comparability notes
+- [`docs/UI_CHECKLIST.md`](docs/UI_CHECKLIST.md) — manual click-through checklist for the Streamlit UI (not yet done in a real browser)
 - [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — demo script (`python scripts/demo.py`), with an optional ollama segment and a recorded fallback
-- [`docs/SWS_DISAGREEMENTS.md`](docs/SWS_DISAGREEMENTS.md) — rules engine vs AUTOSAR Dcm SWS (D1–D9, documented, not fixed)
+- [`docs/SWS_DISAGREEMENTS.md`](docs/SWS_DISAGREEMENTS.md) — rules engine vs AUTOSAR Dcm SWS (D1–D9: D2, D5, D6, D7 fixed in Part C; D1, D3, D4, D8, D9 open)
 - [`docs/RECONCILIATION.md`](docs/RECONCILIATION.md) — search for an older doc set (none found)
-- [`FINAL_REPORT.md`](FINAL_REPORT.md) — honest done/untested/not-done breakdown, Part A and Part B changes, test counts, eval numbers, limitations, next steps
+- [`FINAL_REPORT.md`](FINAL_REPORT.md) — honest done/untested/not-done breakdown, Part A, B and C changes, test counts, eval numbers, limitations, next steps

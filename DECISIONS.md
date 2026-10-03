@@ -398,3 +398,17 @@ Both agents were launched after the Part C freeze. Their exact prompts are recor
 - **[PC6-DOCS]** `docs/DEMO_SCRIPT.md` and `docs/CODE_TOUR.md` carry no final v2 numbers, only placeholders. The mock counts in them come from real runs.
 - **[PC6-CHECKLIST]** `docs/UI_CHECKLIST.md` has 10 steps. Steps 1 to 8 are checked against the real widget labels through the headless UI test, and step 6 is pinned by a test.
   - Not verified: launching `streamlit run` in a real browser (the checklist notes it may need `PYTHONPATH=.`), and the human-review button in a live browser.
+
+### C5b and C6b (real evaluation, final docs)
+
+- **[PC5B-RESULT]** The real run found, on fresh v2 data:
+  - Held-out bug detection by the generated suite is 2/15 in both modes (gold 5/15, union 5/15). The templates written in C3 did not transfer from the seen v1 bugs.
+  - On natural v2 the model beats the mock on understanding (parsed F1 0.661 vs 0.367, category recall 74.0% vs 48.0%), but its precision is 0.565 with 30 false positives, 25 of them services.
+  - The identifier grounding did not fix precision because it does not cover services, and the template-id normalisation fired 0 times.
+  - Rejected planner choices went up: 15 across the 35 old requirements (10 before), and 12 on v2.
+  - Explain batching worked: 1.00 call per requirement, mean latency 21.37 s (30.79 s before).
+  - Mock stays the default.
+- **[PC5B-FALLBACKS]** The 62 "fallback events" in the ollama report are not fallbacks to the mock. They are batched-explain replies that left out some tests, where a deterministic text was used. There were no truncation events and no JSON failures.
+- **[PC6B-DOCS]** The final docs lead with the fresh v2 numbers. v1 results are labelled SEEN, in-sample results are labelled "tuned on", and all numbers come from report version 3.
+- **[PC6B-STALE-TESTS]** Two tests asserted the old version 2 report layout and failed against the committed version 3 report. I updated them to the version 3 layout. They are not code regressions. One UI test that only applies to a version 2 report now skips.
+- **[PC6B-BM25-DRIFT]** The BM25 retrieval numbers differ from Part B (test split hit@1 27.3% against 36.4%). A likely cause, not confirmed by an ablation: the behaviour contract in the `project` search collection grew from about 10,000 to 17,500 characters in Part C, with the same 24 sections, so each chunk is longer and BM25 rankings shift.

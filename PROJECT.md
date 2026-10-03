@@ -4,21 +4,23 @@
 
 ---
 
-## Status (as of Part B)
+## Status (as of Part C)
 
-The original design below is implemented and evaluated in both `mock` and `ollama` modes; the numbers here are copied from `outputs/eval_report.md` / `.json` (report version 2; see `FINAL_REPORT.md` for the honest summary).
+The original design below is implemented and evaluated in both `mock` and `ollama` modes. Part C fixed what Part B found, then measured on fresh blind data whether the fixes worked. Numbers here are copied from `outputs/eval_report.md` / `.json` (report version 3), `outputs/partC/before_after.md` and `PROGRESS.md`; `FINAL_REPORT.md` is the honest summary and `docs/RESULTS.md` the walkthrough.
 
-- **Mock and ollama modes: both evaluated** (one invocation, same inputs, templates and retriever). Ollama = `qwen2.5:3b-instruct-q4_K_M` via Ollama 0.35.1 on an RTX 3050 Laptop GPU (4 GB), `num_ctx` 4096, temperature 0.
-- **Chroma retrieval with fastembed embeddings (`BAAI/bge-small-en-v1.5`, ONNX, CPU): done and compared with BM25** on 19 queries. Neither is clearly better (test split hit@3 63.6% for both; BM25 hit@1 36.4% vs 18.2%), so the default stays BM25.
-- **Comparison result:** on the held-out TEST split (n=12) the 3B model did **not** beat the deterministic mock on any headline metric. Parsed-target recall is higher (0.880 vs 0.560) but precision is much lower (0.512 vs 0.933; F1 0.647 vs 0.700); exact parse 4/12 vs 5/12; category recall 64.3% vs 67.9%; precondition recall 73.3% vs 80.0%; held-out bug detection 3/12 for both (the same three bugs); about 120x slower (30.8 s vs 0.25 s mean per requirement). Byte provenance held for every generated test in both modes (343/343 mock, 158/158 ollama).
-- **Default stays `mock`.** The 3B model path is safe (validator rejected all 10 bad template choices, no truncation, no fallback) but not better. Caveats: n=12, GPU nondeterminism of about +-0.05 F1, prompts tuned on 8 dev rows, a 24-option plan shortlist forced by the 4096-token context.
-- **Part B pipeline changes:** prompts moved to `uds_assistant/llm/prompts.py` and frozen at revision 8 (tuned on the dev split only); a plan-context budget and truncation detection were added after B3 found the full-catalog plan prompt (~16.2k tokens) was silently truncated at 4096.
-- **Templates: 23, frozen.** v1 had 14; the 9 generic v2 templates were added in Phase 7 *after* inspecting which in-sample bugs v1 missed, so in-sample detection is optimistic. Templates (and gold tests) are frozen at `uds_assistant/testgen` tree hash `9a121b2742c5f85fa48fd4f5340caf3b85979c67`; prompts at `uds_assistant/llm/prompts.py` blob `98a4741604338c3a0ffc2b17dc433e9c90d47620`.
-- **Headline bug-detection number is held-out:** generated suite **3/12 (25.0%)**, gold 3/12 (25.0%), union 5/12 (41.7%) on 12 held-out bugs written by a subagent that could not see templates, gold, eval, LLM or agent code. The in-sample 26-bug number (generated 25/26, 96.2%) is secondary and labelled "in-sample (templates tuned on these)".
-- **Natural requirements:** 20 labelled requirements (`data/requirements_natural.csv`; 8 dev / 12 test) measure requirement understanding; the test split is the main number.
-- **AUTOSAR SWS citations:** the rules engine cites 38 distinct AUTOSAR CP R24-11 Dcm SWS IDs; 9 documented disagreements (D1-D9) are in `docs/SWS_DISAGREEMENTS.md` and are **not fixed**. The SWS PDF is git-ignored and not redistributed; SWS tests skip without a local copy.
+- **Headline (fresh v2 data, written blind after the Part C freeze):**
+  - **Held-out v2 bug detection is 2/15 (13.3%) for the generated suite in both modes**; gold 5/15 (33.3%), union 5/15 (33.3%). 11 of the 13 misses have no generated test applying the stimulus; 2 apply it but cannot see the bug.
+  - **Natural v2 requirement understanding (n=16): ollama is better than mock.** Parsed F1 0.661 vs 0.367 (P/R 0.565/0.796 vs 1.000/0.225), category recall 74.0% vs 48.0%, precondition recall 77.8% vs 55.6% (ollama run 1; 3-run mean category recall 75.3%, range 74.0%-76.0%; precondition recall mean 82.7%, range 77.8%-85.2%). Ollama has 30 false positives (25 services, 5 DIDs); the mock has none but finds under a quarter of the targets.
+  - **The precision fix did not work** (the grounding check does not cover services). Template-id normalisation fired 0 times and rejected planner choices rose (15 on the 35 old requirements, 10 before; 12 on v2). **Explain batching worked:** 1.00 LLM call per requirement (4.51 before), mean latency 21.37 s (30.79 s before).
+- **SEEN and tuned-on numbers are not evidence.** Held-out v1 (12 bugs) is *seen*: the Part C templates were designed against its misses (mock generated 3/12 before, 10/12 after; ollama 3/12 before, 5/12 after). The in-sample 26-bug numbers are *tuned on* (mock 25/26, ollama 19/26).
+- **Mock and ollama modes: both evaluated** (one invocation, same inputs, templates and retriever, plus a 3-run ollama noise check). Ollama = `qwen2.5:3b-instruct-q4_K_M` via Ollama 0.35.1 on an RTX 3050 Laptop GPU (4 GB), `num_ctx` 4096, temperature 0. The whole evaluation took about 31 minutes (1854.37 s). **Default stays `mock`** (reproducible, offline, fast); whether to prefer ollama for parsing is a trade of recall against precision, not a clear win.
+- **Templates: 27 (template set v3).** v1 had 14; 9 generic v2 templates were added in Phase 7 after inspecting in-sample misses; Part C added 4 generic templates and variants of 3 more (cap 32), designed from the static list of stimuli the held-out v1 misses needed. So v1 held-out results are seen, and only the v2 sets measure the templates fairly.
+- **Freeze policy.** From the end of C3 until the v2 data was written and measured, nothing in templates, prompts, planner or gold tests changed. Recorded hashes (in `PROGRESS.md`, "Part C freeze"): commit `5a36eb432ed5aa05fb4a8ccb6776e8232a43d309`, `uds_assistant/testgen` tree `a4b6491fc2d01421c4cff10143aabd3c75017df1`, `uds_assistant/llm` tree `95ebf497e3e31a4d6d1377ca960b15e94e5cad66`, `uds_assistant/agent` tree `9696c352234501d72ac54c18af5189317482321d`, `uds_assistant/llm/prompts.py` blob `c0c6d5a6f0b64790beb13bf0179a6ef7877f31f7`, `data/gold` tree `778740195a3dc923ae2f6a34fd4b78e11d87b024`. Every evaluation run re-checks them; all matched and were clean. The check proves the frozen paths did not change, not that the v2 data was chosen blind (that rests on the recorded prompts).
+- **AUTOSAR SWS: 4 fixed, 5 open.** The rules engine cites 38 distinct AUTOSAR CP R24-11 Dcm SWS IDs. D2, D5, D6 and D7 were fixed in Part C (rules engine, behaviour contract, independent simulator, one hand-updated gold test; simulator and engine agree on 100% of requests on two seeds). **D1, D3, D4, D8 and D9 remain open** (`docs/SWS_DISAGREEMENTS.md`). The SWS PDF is git-ignored and not redistributed; SWS tests skip without a local copy.
+- **Chroma retrieval with fastembed embeddings (`BAAI/bge-small-en-v1.5`, ONNX, CPU): done and compared with BM25** on 19 queries. Neither is clearly better (test split hit@3 63.6% for both; hit@1 BM25 27.3% vs Chroma 18.2%), so the default stays BM25.
+- **Known untested or open:** UI never clicked through in a real browser (`docs/UI_CHECKLIST.md` is the manual procedure); `EMBEDDER=sentence-transformers` never run; only one small model tried; CAPL exports never run in CANoe; no real ECU; synthetic spec; small samples (15 bugs, 16 requirements).
 - **Python 3.13** (3.13.6) is what the project was built and tested on; code is kept 3.11-syntax-compatible.
-- More: `docs/RECONCILIATION.md` (no older doc set found), `docs/CODE_TOUR.md`, `docs/ARCHITECTURE.md`, `docs/RESULTS.md`, `docs/DEMO_SCRIPT.md`.
+- More: `docs/RECONCILIATION.md` (no older doc set found), `docs/CODE_TOUR.md`, `docs/ARCHITECTURE.md`, `docs/RESULTS.md`, `docs/DEMO_SCRIPT.md`, `docs/UI_CHECKLIST.md`, `outputs/partC/interpretation.md`, `outputs/partC/before_after.md`.
 
 ---
 
@@ -65,9 +67,9 @@ Because of this, the system stays correct with a small 3B local model, and it ru
 | 2 | **ECU spec** (`spec/`, `data/bcm_spec.yaml`) | Pydantic model of a Body Control Module: sessions, security levels, DIDs, routines, DTCs, timing (P2, P2*, S3) |
 | 3 | **Rules engine** (`rules/`) | The oracle: (spec, state, request) → exact expected response + reason trace. Explicit NRC evaluation order |
 | 4 | **ECU simulator** (`simulator/`) | Independent stateful ECU implementation, bug injection, in-process and virtual-CAN/ISO-TP transports |
-| 5 | **Test model and templates** (`testgen/`) | `TestCase` schema, 23 reusable parameterized templates (originally planned 8–12; v1 14 + v2 9, frozen) |
+| 5 | **Test model and templates** (`testgen/`) | `TestCase` schema, 27 reusable parameterized templates (originally planned 8–12; v1 14 + v2 9 + v3 4, frozen at the Part C freeze) |
 | 6 | **Gold set** (`data/gold/`) | 60 hand-authored tests that must pass on the bug-free simulator |
-| 7 | **Bug catalog** (`data/bugs/`) | 26 in-sample injectable faults (`bug_catalog.yaml`) + 12 held-out faults (`heldout_catalog.yaml`) |
+| 7 | **Bug catalog** (`data/bugs/`) | 26 in-sample injectable faults (`bug_catalog.yaml`) + 12 held-out v1 faults (`heldout_catalog.yaml`, seen) + 15 held-out v2 faults (`heldout_v2_catalog.yaml`, fresh) |
 | 8 | **Retrieval** (`rag/`) | Layered collections (standard / ecu_spec / project), citations. Backends: BM25 (offline) and ChromaDB + embeddings |
 | 9 | **LLM layer** (`llm/`) | Pluggable: `mock` (deterministic), `ollama` (local Qwen2.5-3B Q4_K_M) |
 | 10 | **Agent** (`agent/`) | LangGraph pipeline, with a plain-Python fallback using the same node functions |
@@ -112,7 +114,7 @@ Because of this, the system stays correct with a small 3B local model, and it ru
 
 All data is small and self-authored. Correctness comes from **triangulation**, not volume:
 
-1. Rules cite the AUTOSAR Dcm SWS (R24-11; 38 distinct SWS IDs cited, 9 documented disagreements in `docs/SWS_DISAGREEMENTS.md`) or are logged as design decisions.
+1. Rules cite the AUTOSAR Dcm SWS (R24-11; 38 distinct SWS IDs cited, 9 documented disagreements in `docs/SWS_DISAGREEMENTS.md`, 4 fixed in Part C and 5 open) or are logged as design decisions.
 2. Every encoded request must round-trip identically through `udsoncan`.
 3. Every gold test must pass on the bug-free simulator.
 4. The simulator and the rules engine are written independently and must agree on 100% of randomized requests.
@@ -121,33 +123,28 @@ The ECU spec is **synthetic, in a realistic OEM style**, and this is stated open
 
 ## 7. Evaluation metrics
 
-The original metric list (request validity, expected-response accuracy, coverage, template reuse, citation validity, bug detection, gold baseline) is retained in `outputs/eval_report.md`, but several of them were circular or in-sample, so the headline is now a 7-row table. Numbers are exactly those in `outputs/eval_report.md` (modes `mock` and `ollama`, one invocation).
+The original metric list (request validity, expected-response accuracy, coverage, template reuse, citation validity, bug detection, gold baseline) is retained in `outputs/eval_report.md`, but several of them were circular or in-sample, so the headline is a table whose first two rows are fresh. Numbers are exactly those in `outputs/eval_report.md` (report version 3; modes `mock` and `ollama`, one invocation).
 
 | Metric | mock | ollama |
 |---|---|---|
-| 1. Simulator <-> rules-engine agreement (seeded random sample, live) | 5000/5000 (100.0%) | same (LLM-independent) |
-| 2. Gold tests passing on the bug-free simulator | 60/60 (100.0%) | same (LLM-independent) |
-| 3. udsoncan virtual-CAN sequence | PASS | same (LLM-independent) |
-| **4. Held-out bug detection (12 bugs; HEADLINE = generated)** | **generated 3/12 (25.0%)**, gold 3/12 (25.0%), union 5/12 (41.7%) | **generated 3/12 (25.0%)**, gold 3/12 (25.0%), union 5/12 (41.7%) |
-| 5. Requirement understanding (natural requirements, test split n=12) | target exact match parsed 5/12 (F1 0.700), exercised 2/12 (F1 0.449); category recall 67.9% micro / 69.7% macro; precondition recall 80.0% micro / 75.0% macro; fallback/nothing 3/12 (2 excl. NAT-020-style empty-label rows) | target exact match parsed 4/12 (F1 0.647), exercised 0/12 (F1 0.435); category recall 64.3% micro / 64.4% macro; precondition recall 73.3% micro / 75.0% macro; fallback/nothing 1/12 (1 excl. NAT-020-style empty-label rows) |
-| 6. Coverage (seed requirements) | positive 36, negative 70, session 21, security 18, timing 26; 15/15 requirements with at least 1 test | positive 29, negative 19, session 7, security 8, timing 5; 15/15 requirements with at least 1 test |
-| 7. Citation validity | 774/774 (100.0%) | 335/335 (100.0%) |
+| **1. Held-out v2 bug detection, FRESH (15 bugs; HEADLINE = generated)** | **generated 2/15 (13.3%)**, gold 5/15 (33.3%), union 5/15 (33.3%) | **generated 2/15 (13.3%)**, gold 5/15 (33.3%), union 5/15 (33.3%) |
+| **2. Natural v2 requirement understanding, FRESH (test2, n=16)** | parsed exact 0/16, P/R/F1 1.000/0.225/0.367; exercised F1 0.450; category recall 48.0% micro; precondition recall 55.6% micro; fallback/nothing 7/16 (6 excl. empty-label rows) | parsed exact 4/16, P/R/F1 0.565/0.796/0.661 (3-run mean 0.565/0.796/0.661); exercised F1 0.583 (mean 0.602, range 0.583-0.611); category recall 74.0% micro (mean 75.3%, range 74.0%-76.0%); precondition recall 77.8% micro (mean 82.7%, range 77.8%-85.2%) |
+| 3. Simulator <-> rules-engine agreement (seeded random sample, live) | 5000/5000 (100.0%) | same (LLM-independent) |
+| 4. Gold tests passing on the bug-free simulator | 60/60 (100.0%) | same (LLM-independent) |
+| 5. udsoncan virtual-CAN sequence | PASS | same (LLM-independent) |
+| 6. Coverage (seed requirements) | positive 43, negative 77, session 25, security 30, timing 31; 15/15 requirements with at least 1 test | positive 26, negative 18, session 9, security 9, timing 4; 15/15 requirements with at least 1 test |
+| 7. Citation validity | 967/967 (100.0%) | 315/315 (100.0%) |
+| **SEEN** 8. Held-out v1 bug detection (12 bugs; templates designed against these misses) | generated 10/12 (83.3%), gold 3/12 (25.0%), union 11/12 (91.7%) | generated 5/12 (41.7%), gold 3/12 (25.0%), union 6/12 (50.0%) |
+| **SEEN** 9. Natural v1 test split (n=12) | parsed exact 5/12, P/R/F1 0.933/0.560/0.700; exercised F1 0.425; category recall 67.9%; precondition recall 80.0% | parsed exact 3/12, P/R/F1 0.500/0.840/0.627; exercised F1 0.416; category recall 82.1%; precondition recall 73.3% |
+| **In-sample (templates tuned on these)** 10. 26-bug detection | generated 25/26 (96.2%), gold 24/26 (92.3%), union 26/26 (100.0%) | generated 19/26 (73.1%), gold 24/26 (92.3%), union 26/26 (100.0%) |
 
-Part B comparison extras (same report): planner choices rejected 0 (mock) vs 10 (ollama); re-plans 0 vs 0; fallback and truncation events 0 vs 0; wall-clock per requirement mean 0.254 s / p95 0.445 s (mock) vs 30.785 s / p95 43.405 s (ollama); byte provenance 343/343 vs 158/158. Retrieval, BM25 vs Chroma, test split (n=11): hit@1 36.4% vs 18.2%, hit@3 63.6% vs 63.6%, MRR 0.552 vs 0.462.
+Part C comparison extras (same report): planner choices rejected on the 35 old requirements 0 (mock) vs 15 (ollama; 10 before Part C), on v2 0 vs 12; parsed precision / false positives on v2 1.000 / 0 vs 0.565 / 30; explain LLM calls per requirement 0.89 (mock) vs 1.00 (ollama, 4.51 before); wall-clock per requirement mean / p95 0.27 s / 0.46 s (mock) vs 21.37 s / 28.52 s (ollama; 30.79 s / 43.41 s before); byte provenance 511/511 vs 418/418; SWS disagreements open 5 (9 before). Retrieval, BM25 vs Chroma, test split (n=11): hit@1 27.3% vs 18.2%, hit@3 63.6% vs 63.6%, MRR 0.506 vs 0.458.
 
-Secondary and appendix numbers:
+Secondary and appendix labels: the in-sample row is optimistic and non-independent; the v1 rows are seen; expected-response accuracy versus the oracle is 100% by construction (circular) and appears only in the appendix of the report; template reuse is 100% by construction (byte-identical re-instantiation).
 
-| Metric | Value | Label |
-|---|---|---|
-| In-sample bug detection (26 bugs): generated / gold / union | 25/26 (96.2%) / 24/26 (92.3%) / 26/26 (100.0%) | **in-sample (templates tuned on these)**; optimistic, non-independent |
-| In-sample baseline, template set v1 (14 templates), generated | 17/26 (65.4%) | before the Phase 7 additions |
-| Request validity (adjusted for intentional format probes) | 445/445 (100.0%); unadjusted 404/445 (90.8%) | |
-| Expected-response accuracy vs oracle | 445/445 (100.0%) | **self-consistency, circular by construction**; appendix only |
-| Template reuse | 171/171 (100.0%) | true by construction (byte-identical re-instantiation) |
+Requirement-understanding detail (per split and per requirement), the held-out per-bug tables with the reason for each miss, the before/after table, the noise check, and metric definitions are in `outputs/eval_report.md`, `outputs/partC/before_after.md` and `outputs/partC/interpretation.md`. The Streamlit UI shows the same tables from the JSON report.
 
-Requirement-understanding detail (per split and per requirement), the held-out per-bug table with reasons for each miss, the mock vs ollama comparison and its interpretation, and metric definitions are in `outputs/eval_report.md` and `outputs/eval_interpretation.md`. The Streamlit UI shows the side-by-side headline table, the comparison, the held-out table, the understanding results and the retrieval comparison.
-
-Each LLM-dependent metric is reported separately for `mock` and `ollama` modes. The ollama numbers are from a single run per requirement on a GPU whose greedy decoding is not bit-reproducible (about +-0.05 F1), on a 12-requirement test split.
+Each LLM-dependent metric is reported separately for `mock` and `ollama` modes. The mock is deterministic. For ollama, the parsed numbers were identical across three noise runs on natural v2, while exercised F1, category recall and precondition recall varied (ranges above); three runs is a small sample, and the sets are small (15 bugs, 16 requirements).
 
 ## 8. Tech stack
 

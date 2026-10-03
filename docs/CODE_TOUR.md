@@ -174,7 +174,7 @@ Variants are appended after the base options, so earlier option indices and test
 **Data in/out.** In: system prompt + JSON context + a pydantic schema. Out: a validated instance of that schema.
 
 **Likely questions**
-1. *Have you run a real model?* Yes: Qwen2.5-3B (Q4_K_M) via Ollama, compared with the mock on the same inputs in Part B and again after the Part C fixes. The Part B result was that it did not beat the mock on any headline metric; the Part C numbers on the fresh v2 sets are in the evaluation report and `docs/RESULTS.md`. The mock stays the default unless those numbers say otherwise.
+1. *Have you run a real model?* Yes: Qwen2.5-3B (Q4_K_M) via Ollama, compared with the mock on the same inputs in Part B and again after the Part C fixes. The Part B result was that it did not beat the mock on any headline metric. On the fresh v2 sets (Part C) it is better at requirement understanding (parsed F1 0.661 vs 0.367, category recall 74.0% vs 48.0%, precondition recall 77.8% vs 55.6%) but its precision is 0.565 with 30 false positives (the mock's is 1.000, recall 0.225), and held-out v2 bug detection is 2/15 in both modes. The mock stays the default.
 2. *Can the LLM inject bytes?* No: its output is re-validated against a schema with no byte fields, and plan choices must be registered template ids.
 3. *What if Ollama is down?* The config falls back to mock with a warning.
 4. *Why placeholders in the prompt examples?* A small model copies concrete examples. The old examples named real DIDs and they showed up in unrelated parses; placeholders remove the thing to copy, and the grounding check in `agent/` catches the rest.

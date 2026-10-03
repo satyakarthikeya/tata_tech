@@ -715,3 +715,14 @@ The validation output, the count of requirements containing hex IDs, which are a
   - Ollama's parsed precision did not improve (0.565 on v2, 0.500 on the seen v1 test split). Most false positives are services, which the new identifier check does not cover.
   - Rejected planner choices rose: 15 across the 35 old requirements (10 before) and 12 on v2. The template-id normalisation fired 0 times.
 - **Improvements:** explain now makes 1 call per requirement (it was 4.51), and mean latency fell from 30.8 s to 21.4 s.
+
+## C6 — finished (2026-10-04T02:52:46+05:30)
+
+- UI, checklist, code tour and demo updates (C6a) and the final docs with real numbers (C6b) are done.
+- Two stale UI and demo tests were updated to the version 3 report layout.
+- **Final checks:**
+  - ruff: clean.
+  - Default pytest: 1167 passed, 14 skipped in 303.53 s (13 skips are `needs_model`, 1 is a UI test for version 2 reports). 1181 tests collected.
+  - `RUN_MODEL_TESTS=1 pytest -m needs_model` with the real Ollama server and Chroma/fastembed: 13 passed in 123.61 s.
+  - Freeze: the testgen, llm and agent trees, the prompts file and `data/gold` match the Part C freeze hashes, and `git diff` over the frozen code paths is empty.
+- **Not done, listed in FINAL_REPORT.md:** the UI has not been opened in a real browser by a person, only one model was tested, no real ECU was used, and 5 SWS disagreements remain open (D1, D3, D4, D8, D9).
