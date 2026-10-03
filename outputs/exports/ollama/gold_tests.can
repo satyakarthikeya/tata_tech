@@ -1164,17 +1164,17 @@ testcase TC_gold_ecu_reset_suppressed()
   }
 }
 
-/* Multi-DID read where one DID is unknown fails the whole request
- * category=negative template=None requirements=REQ-002 origin=gold
+/* Multi-DID read skips an unknown DID and answers the readable one
+ * category=positive template=None requirements=REQ-002 origin=gold
  */
 testcase TC_gold_multi_did_read_one_bad()
 {
-  testCaseTitle("gold_multi_did_read_one_bad", "Multi-DID read where one DID is unknown fails the whole request");
+  testCaseTitle("gold_multi_did_read_one_bad", "Multi-DID read skips an unknown DID and answers the readable one");
   // step 0: send request
   {
     byte req0[5] = {0x22, 0xF1, 0x90, 0x99, 0x99};
-    byte exp0[3] = {0x7F, 0x22, 0x31};
-    SendAndCheck(req0, 5, exp0, 3, "step 0");
+    byte exp0[20] = {0x62, 0xF1, 0x90, 0x53, 0x59, 0x4E, 0x54, 0x48, 0x45, 0x54, 0x49, 0x43, 0x42, 0x4D, 0x30, 0x30, 0x30, 0x30, 0x30, 0x31};
+    SendAndCheck(req0, 5, exp0, 20, "step 0");
   }
 }
 

@@ -32,21 +32,83 @@
     quote: 'REQ-001 (read_did): The tester shall be able to read the VIN (DID 0xF190)
       in any diagnostic session.'
   - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
   review_status: validated
-  explanation: This test checks if the ECU can read the Vehicle Identification Number
-    (VIN) DID 0xF190 in diagnostic session 0x01. It matters because it verifies the
-    ECU's ability to access this critical information in the correct diagnostic session.
-    The expected outcome is that the ECU successfully reads the VIN DID 0xF190 in
-    session 0x01, confirming compliance with the requirement.
+  explanation: This test checks if the tester can successfully read the Vehicle Identification
+    Number (VIN) DID 0xF190 in a valid diagnostic session (0x01). The VIN is a critical
+    identifier for identifying a vehicle, and ensuring its availability in a diagnostic
+    session is crucial for compliance and data integrity. The expected outcome is
+    that the VIN is read correctly without any errors, confirming the ECU's ability
+    to provide this essential information.
   origin: generated
-- id: req_001__tpl_read_did_positive_f190_02
-  title: Read DID VIN (0xf190) positively in session 0x2
+- id: req_001__tpl_read_badlen_f190_01
+  title: Malformed-length reads of DID VIN (0xf190) are rejected
   requirement_ids:
   - REQ-001
-  category: positive
-  template_id: read_did_positive
+  category: negative
+  template_id: read_did_invalid_length
+  parameters:
+    did: 61840
+    session: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '22'
+    expected_responses_hex:
+    - 7f2213
+    description: ReadDataByIdentifier without any DID -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f1
+    expected_responses_hex:
+    - 7f2213
+    description: Only the first byte of DID 0xf190 -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f19000
+    expected_responses_hex:
+    - 7f2213
+    description: DID 0xf190 plus one dangling byte -> length NRC, no partial answer.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f190
+    expected_responses_hex:
+    - 62f19053594e544845544943424d303030303031
+    description: Well-formed read of the same DID -> served normally.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: did:VIN
+    quote: 'DID 0xF190 VIN: length 17 bytes, encoding ascii, readable in sessions
+      [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x22
+    quote: 0x22 ReadDataByIdentifier
+  - source: data/requirements_seed.csv
+    ref: REQ-001
+    quote: 'REQ-001 (read_did): The tester shall be able to read the VIN (DID 0xF190)
+      in any diagnostic session.'
+  - source: docs/behaviour_contract.md
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
+  review_status: validated
+  explanation: This test verifies that the tester can identify and reject malformed-length
+    reads of the VIN DID 0xF190 in a valid diagnostic session (0x01). The expected
+    outcome is that the tester receives a Non-Recognized Command (NRC) error when
+    attempting to read the VIN with incorrect lengths, ensuring the system's robustness
+    against invalid input.
+  origin: generated
+- id: req_001__tpl_write_readonly_f190
+  title: Write to read-only DID VIN (0xf190) is rejected
+  requirement_ids:
+  - REQ-001
+  category: negative
+  template_id: write_readonly_did
   parameters:
     did: 61840
     session: 2
@@ -59,10 +121,16 @@
     description: Switch to session 0x2.
     max_response_time_ms: null
   - kind: send
+    request_hex: 2ef1900000000000000000000000000000000000
+    expected_responses_hex:
+    - 7f2e31
+    description: Write a read-only DID -> expect NRC 0x31 (identifier not writable).
+    max_response_time_ms: null
+  - kind: send
     request_hex: 22f190
     expected_responses_hex:
     - 62f19053594e544845544943424d303030303031
-    description: Read DID 0xf190 (VIN) in session 0x2.
+    description: Read back -> value unchanged.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
@@ -74,164 +142,21 @@
     quote: 'Session 0x02 programming: allowed services [0x10, 0x11, 0x22, 0x27, 0x2E,
       0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: svc-0x22
-    quote: 0x22 ReadDataByIdentifier
+    ref: svc-0x2e
+    quote: 0x2E WriteDataByIdentifier
   - source: data/requirements_seed.csv
     ref: REQ-001
     quote: 'REQ-001 (read_did): The tester shall be able to read the VIN (DID 0xF190)
       in any diagnostic session.'
   - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
+    ref: 3-generic-length-0x13
+    quote: '| 0x2E, 0x31 | at least 4 |'
   review_status: validated
-  explanation: This test checks if the ECU can read the Vehicle Identification Number
-    (VIN) DID 0xF190 in a programming session (session 0x2). It verifies that the
-    requirement to read the VIN in any diagnostic session is met. The expected outcome
-    is that the ECU successfully reads the VIN DID 0xF190 without errors, confirming
-    compliance with the requirement.
-  origin: generated
-- id: req_001__tpl_read_did_positive_f190_03
-  title: Read DID VIN (0xf190) positively in session 0x3
-  requirement_ids:
-  - REQ-001
-  category: positive
-  template_id: read_did_positive
-  parameters:
-    did: 61840
-    session: 3
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 22f190
-    expected_responses_hex:
-    - 62f19053594e544845544943424d303030303031
-    description: Read DID 0xf190 (VIN) in session 0x3.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:VIN
-    quote: 'DID 0xF190 VIN: length 17 bytes, encoding ascii, readable in sessions
-      [''0x01'', ''0x02'', ''0x03''], read-only.'
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x22
-    quote: 0x22 ReadDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-001
-    quote: 'REQ-001 (read_did): The tester shall be able to read the VIN (DID 0xF190)
-      in any diagnostic session.'
-  - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU can read the Vehicle Identification Number
-    (VIN) DID 0xF190 in an extended diagnostic session (session 0x3). It verifies
-    that the requirement to read the VIN in any diagnostic session is met. The expected
-    outcome is that the ECU successfully reads the VIN DID 0xF190 without any errors,
-    confirming the service works as intended in an extended session.
-  origin: generated
-- id: req_002__tpl_read_multi_f187_f190_01
-  title: Multi-DID read manufacturer_part_number + VIN in session 0x1
-  requirement_ids:
-  - REQ-002
-  category: positive
-  template_id: read_multiple_dids
-  parameters:
-    dids:
-    - 61831
-    - 61840
-    session: 1
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: 22f187f190
-    expected_responses_hex:
-    - 62f18742434d2d31323334352df19053594e544845544943424d303030303031
-    description: Read DIDs 0xf187, 0xf190 in one request -> every record, in order.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:manufacturer_part_number
-    quote: 'DID 0xF187 manufacturer_part_number: length 10 bytes, encoding ascii,
-      readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
-  - source: data/bcm_spec.yaml
-    ref: did:VIN
-    quote: 'DID 0xF190 VIN: length 17 bytes, encoding ascii, readable in sessions
-      [''0x01'', ''0x02'', ''0x03''], read-only.'
-  - source: data/bcm_spec.yaml
-    ref: session:default
-    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x22
-    quote: 0x22 ReadDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-002
-    quote: 'REQ-002 (read_did): The tester shall be able to read the ECU part number
-      (DID 0xF187) and serial number (DID 0xF18C) in any session.'
-  - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU can successfully read two different DID
-    values, specifically the manufacturer_part_number (DID 0xF187) and the VIN (DID
-    0xF190), in a single ReadDataByIdentifier request. It matters for the requirement
-    as it verifies the ECU's capability to read multiple DIDs in one request, which
-    is crucial for the tester to read both the part number and serial number in any
-    session. The expected outcome is that the ECU responds correctly with both DID
-    values in the specified order.
-  origin: generated
-- id: req_002__tpl_read_did_positive_f187_01
-  title: Read DID manufacturer_part_number (0xf187) positively in session 0x1
-  requirement_ids:
-  - REQ-002
-  category: positive
-  template_id: read_did_positive
-  parameters:
-    did: 61831
-    session: 1
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: 22f187
-    expected_responses_hex:
-    - 62f18742434d2d31323334352d
-    description: Read DID 0xf187 (manufacturer_part_number) in session 0x1.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:manufacturer_part_number
-    quote: 'DID 0xF187 manufacturer_part_number: length 10 bytes, encoding ascii,
-      readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
-  - source: data/bcm_spec.yaml
-    ref: session:default
-    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x22
-    quote: 0x22 ReadDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-002
-    quote: 'REQ-002 (read_did): The tester shall be able to read the ECU part number
-      (DID 0xF187) and serial number (DID 0xF18C) in any session.'
-  - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU can read the manufacturer part number (DID
-    0xF187) in session 0x01, which is a requirement to ensure the ECU can access read-only
-    data in the correct session. The expected outcome is that the ECU successfully
-    reads the manufacturer part number without any errors, confirming its ability
-    to comply with the requirement.
+  explanation: This test ensures that the tester cannot write to the read-only VIN
+    DID 0xF190 in a programming session (0x02). The expected outcome is that the tester
+    receives a Non-Recognized Command (NRC) error 0x31 when attempting to write to
+    the VIN, confirming the ECU's protection against unauthorized modifications to
+    this critical identifier.
   origin: generated
 - id: req_002__tpl_read_did_positive_f18c_01
   title: Read DID ecu_serial_number (0xf18c) positively in session 0x1
@@ -267,72 +192,21 @@
     quote: 'REQ-002 (read_did): The tester shall be able to read the ECU part number
       (DID 0xF187) and serial number (DID 0xF18C) in any session.'
   - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
   review_status: validated
-  explanation: This test checks if the ECU can read the ECU serial number (DID 0xF18C)
-    in session 0x01, which is a positive test as it verifies the ability to read a
-    read-only DID in the correct session. This is important for REQ-002, ensuring
-    the ECU can access this information in any session. The expected outcome is successful
-    communication with the ECU to read the ECU serial number in session 0x01.
+  explanation: Read DID ecu_serial_number (0xf18c) positively in session 0x1 (positive
+    test, template read_did_positive). Read a DID in a session where it is allowed.
+    Expected responses come from the rules engine.
   origin: generated
-- id: req_002__tpl_read_did_positive_f187_02
-  title: Read DID manufacturer_part_number (0xf187) positively in session 0x2
+- id: req_002__tpl_read_did_positive_f18c_03
+  title: Read DID ecu_serial_number (0xf18c) positively in session 0x3
   requirement_ids:
   - REQ-002
   category: positive
   template_id: read_did_positive
   parameters:
-    did: 61831
-    session: 2
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1002'
-    expected_responses_hex:
-    - 5002003201f4
-    description: Switch to session 0x2.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 22f187
-    expected_responses_hex:
-    - 62f18742434d2d31323334352d
-    description: Read DID 0xf187 (manufacturer_part_number) in session 0x2.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:manufacturer_part_number
-    quote: 'DID 0xF187 manufacturer_part_number: length 10 bytes, encoding ascii,
-      readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
-  - source: data/bcm_spec.yaml
-    ref: session:programming
-    quote: 'Session 0x02 programming: allowed services [0x10, 0x11, 0x22, 0x27, 0x2E,
-      0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x22
-    quote: 0x22 ReadDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-002
-    quote: 'REQ-002 (read_did): The tester shall be able to read the ECU part number
-      (DID 0xF187) and serial number (DID 0xF18C) in any session.'
-  - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU can read the manufacturer part number (DID
-    0xF187) in session 0x02, which is a required capability to verify the ECU's ability
-    to access read-only data in the correct session. The expected outcome is that
-    the ECU successfully reads the manufacturer part number in session 0x2, confirming
-    compliance with the requirement.
-  origin: generated
-- id: req_002__tpl_read_did_positive_f187_03
-  title: Read DID manufacturer_part_number (0xf187) positively in session 0x3
-  requirement_ids:
-  - REQ-002
-  category: positive
-  template_id: read_did_positive
-  parameters:
-    did: 61831
+    did: 61836
     session: 3
   preconditions: []
   steps:
@@ -343,16 +217,16 @@
     description: Switch to session 0x3.
     max_response_time_ms: null
   - kind: send
-    request_hex: 22f187
+    request_hex: 22f18c
     expected_responses_hex:
-    - 62f18742434d2d31323334352d
-    description: Read DID 0xf187 (manufacturer_part_number) in session 0x3.
+    - 62f18c5345303030303031
+    description: Read DID 0xf18c (ecu_serial_number) in session 0x3.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
-    ref: did:manufacturer_part_number
-    quote: 'DID 0xF187 manufacturer_part_number: length 10 bytes, encoding ascii,
-      readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
+    ref: did:ecu_serial_number
+    quote: 'DID 0xF18C ecu_serial_number: length 8 bytes, encoding ascii, readable
+      in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
   - source: data/bcm_spec.yaml
     ref: session:extended
     quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
@@ -365,36 +239,40 @@
     quote: 'REQ-002 (read_did): The tester shall be able to read the ECU part number
       (DID 0xF187) and serial number (DID 0xF18C) in any session.'
   - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
   review_status: validated
-  explanation: This test checks if the ECU can read the manufacturer part number (DID
-    0xF187) in session 0x03, which is a required capability to verify the ECU's ability
-    to access read-only data in the correct session. The outcome expected is successful
-    reading of the manufacturer part number, confirming the ECU's compliance with
-    the requirement to read DID 0xF187 in any session.
+  explanation: Read DID ecu_serial_number (0xf18c) positively in session 0x3 (positive
+    test, template read_did_positive). Read a DID in a session where it is allowed.
+    Expected responses come from the rules engine.
   origin: generated
-- id: req_003__tpl_read_did_positive_f186_01
-  title: Read DID active_diagnostic_session (0xf186) positively in session 0x1
+- id: req_002__tpl_read_multi_f190_f187_01
+  title: Multi-DID read VIN + manufacturer_part_number in session 0x1
   requirement_ids:
-  - REQ-003
+  - REQ-002
   category: positive
-  template_id: read_did_positive
+  template_id: read_multiple_dids
   parameters:
-    did: 61830
+    dids:
+    - 61840
+    - 61831
     session: 1
   preconditions: []
   steps:
   - kind: send
-    request_hex: 22f186
+    request_hex: 22f190f187
     expected_responses_hex:
-    - 62f18601
-    description: Read DID 0xf186 (active_diagnostic_session) in session 0x1.
+    - 62f19053594e544845544943424d303030303031f18742434d2d31323334352d
+    description: Read DIDs 0xf190, 0xf187 in one request -> every record, in order.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
-    ref: did:active_diagnostic_session
-    quote: 'DID 0xF186 active_diagnostic_session: length 1 bytes, encoding uint8,
+    ref: did:VIN
+    quote: 'DID 0xF190 VIN: length 17 bytes, encoding ascii, readable in sessions
+      [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: did:manufacturer_part_number
+    quote: 'DID 0xF187 manufacturer_part_number: length 10 bytes, encoding ascii,
       readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
   - source: data/bcm_spec.yaml
     ref: session:default
@@ -404,28 +282,148 @@
     ref: svc-0x22
     quote: 0x22 ReadDataByIdentifier
   - source: data/requirements_seed.csv
-    ref: REQ-003
-    quote: 'REQ-003 (session): The tester shall be able to switch the BCM into extended
-      diagnostic session (0x03) and back to default session (0x01).'
+    ref: REQ-002
+    quote: 'REQ-002 (read_did): The tester shall be able to read the ECU part number
+      (DID 0xF187) and serial number (DID 0xF18C) in any session.'
   - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
   review_status: validated
-  explanation: This test checks if the BCM (Body Control Module) can switch between
-    the default diagnostic session (0x01) and the extended diagnostic session (0x03).
-    It ensures that the BCM can read the active diagnostic session DID (0xF186) in
-    the default session, which is crucial for verifying the ability to switch sessions.
-    The expected outcome is that the BCM successfully reads the active diagnostic
-    session as 0x01 in the default session.
+  explanation: This test checks if the ECU can read both the ECU part number (DID
+    0xF187) and serial number (DID 0xF18C) in a single session. It is important for
+    ensuring the ECU can provide all required information in a single request, which
+    can save time and resources. The expected outcome is that the ECU will return
+    both the part number and serial number in the correct order.
   origin: generated
-- id: req_003__tpl_session_relock_01
-  title: Session change re-locks security level 0x1
+- id: req_002__tpl_read_badlen_f187_01
+  title: Malformed-length reads of DID manufacturer_part_number (0xf187) are rejected
+  requirement_ids:
+  - REQ-002
+  category: negative
+  template_id: read_did_invalid_length
+  parameters:
+    did: 61831
+    session: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '22'
+    expected_responses_hex:
+    - 7f2213
+    description: ReadDataByIdentifier without any DID -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f1
+    expected_responses_hex:
+    - 7f2213
+    description: Only the first byte of DID 0xf187 -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f18700
+    expected_responses_hex:
+    - 7f2213
+    description: DID 0xf187 plus one dangling byte -> length NRC, no partial answer.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f187
+    expected_responses_hex:
+    - 62f18742434d2d31323334352d
+    description: Well-formed read of the same DID -> served normally.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: did:manufacturer_part_number
+    quote: 'DID 0xF187 manufacturer_part_number: length 10 bytes, encoding ascii,
+      readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x22
+    quote: 0x22 ReadDataByIdentifier
+  - source: data/requirements_seed.csv
+    ref: REQ-002
+    quote: 'REQ-002 (read_did): The tester shall be able to read the ECU part number
+      (DID 0xF187) and serial number (DID 0xF18C) in any session.'
+  - source: docs/behaviour_contract.md
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
+  review_status: validated
+  explanation: This test checks the ECU's response to a request with an invalid DID
+    list length for the ECU part number (DID 0xF187). The expected outcome is that
+    the ECU will reject the request, as it is not a valid request according to the
+    UDS specification.
+  origin: generated
+- id: req_002__tpl_read_badlen_f18c_01
+  title: Malformed-length reads of DID ecu_serial_number (0xf18c) are rejected
+  requirement_ids:
+  - REQ-002
+  category: negative
+  template_id: read_did_invalid_length
+  parameters:
+    did: 61836
+    session: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '22'
+    expected_responses_hex:
+    - 7f2213
+    description: ReadDataByIdentifier without any DID -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f1
+    expected_responses_hex:
+    - 7f2213
+    description: Only the first byte of DID 0xf18c -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f18c00
+    expected_responses_hex:
+    - 7f2213
+    description: DID 0xf18c plus one dangling byte -> length NRC, no partial answer.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f18c
+    expected_responses_hex:
+    - 62f18c5345303030303031
+    description: Well-formed read of the same DID -> served normally.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: did:ecu_serial_number
+    quote: 'DID 0xF18C ecu_serial_number: length 8 bytes, encoding ascii, readable
+      in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x22
+    quote: 0x22 ReadDataByIdentifier
+  - source: data/requirements_seed.csv
+    ref: REQ-002
+    quote: 'REQ-002 (read_did): The tester shall be able to read the ECU part number
+      (DID 0xF187) and serial number (DID 0xF18C) in any session.'
+  - source: docs/behaviour_contract.md
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
+  review_status: validated
+  explanation: This test checks the ECU's response to a request with an invalid DID
+    list length for the ECU serial number (DID 0xF18C). The expected outcome is that
+    the ECU will reject the request, as it is not a valid request according to the
+    UDS specification.
+  origin: generated
+- id: req_003__tpl_read_did_positive_f186_03
+  title: Read DID active_diagnostic_session (0xf186) positively in session 0x3
   requirement_ids:
   - REQ-003
-  category: security
-  template_id: session_change_relocks_security
+  category: positive
+  template_id: read_did_positive
   parameters:
-    level: 1
+    did: 61830
+    session: 3
   preconditions: []
   steps:
   - kind: send
@@ -435,66 +433,38 @@
     description: Switch to session 0x3.
     max_response_time_ms: null
   - kind: send
-    request_hex: '2701'
+    request_hex: 22f186
     expected_responses_hex:
-    - 6701950677e8
-    description: Request seed for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 27029a068f73
-    expected_responses_hex:
-    - '6702'
-    description: Send computed key for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Re-enter the same session -> security must be locked again.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e010000
-    expected_responses_hex:
-    - 7f2e33
-    description: Secured write to 0x0100 after re-entry -> expect NRC 0x33.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 670132a31485
-    description: Request seed -> a fresh non-zero seed (level is locked again).
+    - 62f18603
+    description: Read DID 0xf186 (active_diagnostic_session) in session 0x3.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
+    ref: did:active_diagnostic_session
+    quote: 'DID 0xF186 active_diagnostic_session: length 1 bytes, encoding uint8,
+      readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
   - source: data/bcm_spec.yaml
     ref: session:extended
     quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: svc-0x27
-    quote: 0x27 SecurityAccess
+    ref: svc-0x2e
+    quote: DID must hold (otherwise NRC 0x22); the value, read as a plain unsigned
   - source: data/requirements_seed.csv
     ref: REQ-003
     quote: 'REQ-003 (session): The tester shall be able to switch the BCM into extended
       diagnostic session (0x03) and back to default session (0x01).'
   - source: docs/behaviour_contract.md
-    ref: 5b-subfunction-specific-length-0x13
-    quote: '| 0x27 seed request | exactly 2 |'
+    ref: 0x2e-writedatabyidentifier
+    quote: '6. A required condition is not met → 0x22:'
   review_status: validated
-  explanation: "{\n  \"test\": {\n    \"description\": \"This test checks if switching\
-    \ the BCM into extended diagnostic session (0x03) and then back to default session\
-    \ (0x01) re-locks security at level 0x1. It ensures that after the security level\
-    \ is initially locked, it remains secure even after re-entering the default session.\
-    \ The expected outcome is that the Non-Response Code (NRC) will be 0x33, indicating\
-    \ that the security level is locked again after the session change.\",\n    \"\
-    importance\": \"It matters for the requirement as it verifies compliance with\
-    \ REQ-003, which requires the tester to be able to switch the BCM into extended\
-    \ diagnostic session and back to default session, and confirm that security remains\
-    \ locked at level 0x1.\",\n    \"expected_outcome\": \"NRC 0x33\"\n  }\n}"
+  explanation: This test checks if the BCM can switch to an extended diagnostic session
+    (0x03) and then read the active diagnostic session identifier (DID 0xF186) to
+    confirm it is in the extended session. This is important for verifying the BCM's
+    ability to enter extended diagnostic sessions and read session status, which is
+    crucial for diagnostic tools to access specific data. The expected outcome is
+    that the DID 0xF186 will show as 0x03, indicating the BCM is in the extended diagnostic
+    session.
   origin: generated
 - id: req_003__tpl_s3_timeout_03
   title: S3 timeout drops session 0x3 back to default
@@ -537,183 +507,110 @@
     ref: 0x10-diagnosticsessioncontrol
     quote: 0x10 DiagnosticSessionControl
   review_status: validated
-  explanation: "{\n  \"test_description\": \"This test checks if switching the BCM\
-    \ into an extended diagnostic session (0x03) and then advancing past the session\
-    \ timeout (S3 timer) will revert the session back to the default session (0x01).\
-    \ It matters for the requirement as it verifies the system's ability to switch\
-    \ between sessions and ensure that the session reverts correctly when the extended\
-    \ session is not maintained. The expected outcome is that after advancing past\
-    \ the S3 timer, the active session DID will report the default session (0x01).\"\
-    \n}"
+  explanation: This test ensures that the BCM will revert to the default diagnostic
+    session (0x01) after staying in an extended diagnostic session (0x03) for more
+    than the S3 timeout period. The steps involve switching to the extended session,
+    waiting beyond the S3 timeout, and then reading the active diagnostic session
+    identifier (DID 0xF186) to confirm it has returned to the default session. The
+    expected outcome is that the DID 0xF186 will show as 0x01, indicating the BCM
+    has reverted to the default session.
   origin: generated
-- id: req_003__tpl_suppress_positive_10_01
-  title: Suppress positive response for service 0x10 in session 0x1
+- id: req_004__tpl_read_did_positive_f186_01
+  title: Read DID active_diagnostic_session (0xf186) positively in session 0x1
   requirement_ids:
-  - REQ-003
+  - REQ-004
   category: positive
-  template_id: suppress_positive_response
+  template_id: read_did_positive
   parameters:
-    sid: 16
+    did: 61830
     session: 1
   preconditions: []
   steps:
   - kind: send
-    request_hex: '1081'
-    expected_responses_hex: []
-    description: Suppress-positive-response bit set -> expect no response frame.
+    request_hex: 22f186
+    expected_responses_hex:
+    - 62f18601
+    description: Read DID 0xf186 (active_diagnostic_session) in session 0x1.
     max_response_time_ms: null
   citations:
+  - source: data/bcm_spec.yaml
+    ref: did:active_diagnostic_session
+    quote: 'DID 0xF186 active_diagnostic_session: length 1 bytes, encoding uint8,
+      readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
   - source: data/bcm_spec.yaml
     ref: session:default
     quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
+    ref: svc-0x31
+    quote: 0x22); and the operation must make sense given the routine's current
+  - source: data/requirements_seed.csv
+    ref: REQ-004
+    quote: 'REQ-004 (session): The tester shall be able to switch the BCM into programming
+      session (0x02) only when required preconditions are met.'
+  - source: docs/behaviour_contract.md
+    ref: 0x2e-writedatabyidentifier
+    quote: '6. A required condition is not met → 0x22:'
+  review_status: validated
+  explanation: This test checks if the BCM can enter programming session (0x02) when
+    the active diagnostic session (DID 0xF186) is in session 0x1. It ensures that
+    the BCM only allows switching to programming session when the active diagnostic
+    session is allowed, which is crucial for maintaining security and preventing unauthorized
+    access to the ECU.
+  origin: generated
+- id: req_004__tpl_negative_suppress_10_03
+  title: Negative response not suppressed for service 0x10 in session 0x3
+  requirement_ids:
+  - REQ-004
+  category: negative
+  template_id: negative_response_with_suppress_bit
+  parameters:
+    sid: 16
+    session: 3
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Switch to session 0x3.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1087'
+    expected_responses_hex:
+    - 7f1012
+    description: Unsupported subfunction 0x7 with the suppress bit set -> the NRC
+      is still sent.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: session:extended
+    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
     ref: svc-0x10
     quote: 0x10 DiagnosticSessionControl
   - source: data/requirements_seed.csv
-    ref: REQ-003
-    quote: 'REQ-003 (session): The tester shall be able to switch the BCM into extended
-      diagnostic session (0x03) and back to default session (0x01).'
+    ref: REQ-004
+    quote: 'REQ-004 (session): The tester shall be able to switch the BCM into programming
+      session (0x02) only when required preconditions are met.'
   - source: docs/behaviour_contract.md
     ref: 0x10-diagnosticsessioncontrol
     quote: 0x10 DiagnosticSessionControl
   review_status: validated
-  explanation: This test checks if the suppress bit on the TesterPresent service (0x10)
-    in extended diagnostic session (0x03) works as expected. It ensures that when
-    the suppress bit is set, no response frame is received, which is crucial for confirming
-    the functionality of the suppress bit. The outcome expected is no response frame
-    when the suppress bit is set, indicating the suppress bit is functioning correctly.
+  explanation: This test aims to verify that a negative response to a service (0x10)
+    in session 0x3 extended is suppressed. If the service is not allowed in session
+    0x3, the response should indicate a suppression bit, ensuring that the BCM does
+    not allow unauthorized services in the extended session.
   origin: generated
-- id: req_004__tpl_write_nosec_0100
-  title: Write DID interior_lighting_brightness_pct (0x0100) without unlocking security
+- id: req_004__tpl_session_relock_03
+  title: Session change re-locks security level 0x3
   requirement_ids:
   - REQ-004
-  category: negative
-  template_id: write_did_without_security
+  category: security
+  template_id: session_change_relocks_security
   parameters:
-    did: 256
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e010000
-    expected_responses_hex:
-    - 7f2e33
-    description: Write without unlocking security -> expect NRC 0x33.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:interior_lighting_brightness_pct
-    quote: 'DID 0x0100 interior_lighting_brightness_pct: length 1 bytes, encoding
-      uint8, readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions
-      [''0x03''] requiring security level 0x01. Value range 0-100.'
-  - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-004
-    quote: 'REQ-004 (session): The tester shall be able to switch the BCM into programming
-      session (0x02) only when required preconditions are met.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the BCM (Body Control Module) can only write the
-    interior lighting brightness percentage (DID 0x0100) when the security level is
-    unlocked, ensuring that the requirement for programming session (0x02) can only
-    be met with proper security measures. The expected outcome is a Negative Response
-    Code (NRC) 0x33, indicating that the write operation was unsuccessful due to the
-    security level not being unlocked.
-  origin: generated
-- id: req_004__tpl_write_oor_0100
-  title: Write out-of-range value to DID interior_lighting_brightness_pct (0x0100)
-  requirement_ids:
-  - REQ-004
-  category: negative
-  template_id: write_did_out_of_range
-  parameters:
-    did: 256
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 6701950677e8
-    description: Request seed for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 27029a068f73
-    expected_responses_hex:
-    - '6702'
-    description: Send computed key for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e010065
-    expected_responses_hex:
-    - 7f2e31
-    description: Write out-of-range value 101 -> expect NRC 0x31.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:interior_lighting_brightness_pct
-    quote: 'DID 0x0100 interior_lighting_brightness_pct: length 1 bytes, encoding
-      uint8, readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions
-      [''0x03''] requiring security level 0x01. Value range 0-100.'
-  - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-004
-    quote: 'REQ-004 (session): The tester shall be able to switch the BCM into programming
-      session (0x02) only when required preconditions are met.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU correctly rejects an out-of-range value
-    for the interior lighting brightness percentage (DID 0x0100). It matters because
-    it ensures the ECU properly enforces security levels and only allows writing valid
-    values for this parameter. The expected outcome is a Negative Response Code (NRC)
-    0x31, indicating that the out-of-range value was rejected.
-  origin: generated
-- id: req_004__tpl_condition_not_met_did_0150
-  title: Write DID factory_reset_flag while vehicle is moving
-  requirement_ids:
-  - REQ-004
-  category: negative
-  template_id: condition_not_met
-  parameters:
-    kind: did
-    target: 336
+    level: 3
   preconditions: []
   steps:
   - kind: send
@@ -722,10 +619,6 @@
     - 5002003201f4
     description: Switch to session 0x2.
     max_response_time_ms: null
-  - kind: set_environment
-    vehicle_speed_kph: 10
-    nvm_write_fault: null
-    description: Vehicle moving.
   - kind: send
     request_hex: '2703'
     expected_responses_hex:
@@ -739,17 +632,24 @@
     description: Send computed key for level 0x3.
     max_response_time_ms: null
   - kind: send
-    request_hex: 2e015000
+    request_hex: '1002'
     expected_responses_hex:
-    - 7f2e22
-    description: Write while vehicle is moving -> expect NRC 0x22.
+    - 5002003201f4
+    description: Re-enter the same session -> security must be locked again.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e01600000
+    expected_responses_hex:
+    - 7f2e33
+    description: Secured write to 0x0160 after re-entry -> expect NRC 0x33.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2703'
+    expected_responses_hex:
+    - 6703a8198afb
+    description: Request seed -> a fresh non-zero seed (level is locked again).
     max_response_time_ms: null
   citations:
-  - source: data/bcm_spec.yaml
-    ref: did:factory_reset_flag
-    quote: 'DID 0x0150 factory_reset_flag: length 1 bytes, encoding uint8, readable
-      in sessions [''0x03''], writable in sessions [''0x02''] requiring security level
-      0x03. Value range 0-1.'
   - source: data/bcm_spec.yaml
     ref: security_level:programming
     quote: 'Security level 0x03 programming: seed sub-function 0x03, key sub-function
@@ -760,51 +660,69 @@
     quote: 'Session 0x02 programming: allowed services [0x10, 0x11, 0x22, 0x27, 0x2E,
       0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
+    ref: svc-0x27
+    quote: 0x27 SecurityAccess
   - source: data/requirements_seed.csv
     ref: REQ-004
     quote: 'REQ-004 (session): The tester shall be able to switch the BCM into programming
       session (0x02) only when required preconditions are met.'
   - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
+    ref: 5b-subfunction-specific-length-0x13
+    quote: '| 0x27 seed request (odd subfunction, with or without bit 7) | exactly
+      2 |'
   review_status: validated
-  explanation: This test checks if the BCM (Body Control Module) can prevent writing
-    the interior lighting brightness (represented by DID 0x2E) while the vehicle is
-    moving, which is a requirement to ensure security and prevent unauthorized changes.
-    The outcome expected is a Negative Response Code (NRC) 0x22, indicating that the
-    write operation was not successful due to the vehicle being in motion.
+  explanation: This test checks if changing the session from 0x2 to 0x3 relocks the
+    security level to 0x3. It ensures that the BCM locks the security level when switching
+    sessions, maintaining the security protocol and preventing unauthorized access
+    to the ECU.
   origin: generated
-- id: req_004__tpl_read_did_positive_f190_01
-  title: Read DID VIN (0xf190) positively in session 0x1
+- id: req_004__tpl_read_badlen_f186_01
+  title: Malformed-length reads of DID active_diagnostic_session (0xf186) are rejected
   requirement_ids:
   - REQ-004
-  category: positive
-  template_id: read_did_positive
+  category: negative
+  template_id: read_did_invalid_length
   parameters:
-    did: 61840
+    did: 61830
     session: 1
   preconditions: []
   steps:
   - kind: send
-    request_hex: 22f190
+    request_hex: '22'
     expected_responses_hex:
-    - 62f19053594e544845544943424d303030303031
-    description: Read DID 0xf190 (VIN) in session 0x1.
+    - 7f2213
+    description: ReadDataByIdentifier without any DID -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f1
+    expected_responses_hex:
+    - 7f2213
+    description: Only the first byte of DID 0xf186 -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f18600
+    expected_responses_hex:
+    - 7f2213
+    description: DID 0xf186 plus one dangling byte -> length NRC, no partial answer.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 22f186
+    expected_responses_hex:
+    - 62f18601
+    description: Well-formed read of the same DID -> served normally.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
-    ref: did:VIN
-    quote: 'DID 0xF190 VIN: length 17 bytes, encoding ascii, readable in sessions
-      [''0x01'', ''0x02'', ''0x03''], read-only.'
+    ref: did:active_diagnostic_session
+    quote: 'DID 0xF186 active_diagnostic_session: length 1 bytes, encoding uint8,
+      readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
   - source: data/bcm_spec.yaml
     ref: session:default
     quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: DID must hold (otherwise NRC 0x22); the value, read as a plain unsigned
+    ref: svc-0x31
+    quote: 0x22); and the operation must make sense given the routine's current
   - source: data/requirements_seed.csv
     ref: REQ-004
     quote: 'REQ-004 (session): The tester shall be able to switch the BCM into programming
@@ -813,13 +731,48 @@
     ref: 0x2e-writedatabyidentifier
     quote: '6. A required condition is not met → 0x22:'
   review_status: validated
-  explanation: This test checks if the BCM (Body Control Module) can enter programming
-    session (0x02) and successfully read the Vehicle Identification Number (VIN) DID
-    (Data Identifier) 0xf190. It matters because it verifies that the BCM can switch
-    to the correct session to read critical vehicle information. The expected outcome
-    is that the BCM allows the read of the VIN DID in session 0x1, confirming the
-    requirement that the BCM can only enter programming session when required preconditions
-    are met.
+  explanation: This test verifies that a negative response is given when attempting
+    to read DID 0xF186 with a malformed DID list in session 0x01. It ensures that
+    the BCM does not allow invalid or incomplete data to be processed, maintaining
+    data integrity and security.
+  origin: generated
+- id: req_004__tpl_service_not_in_session_2e_01
+  title: Service 0x2e rejected in session 0x1
+  requirement_ids:
+  - REQ-004
+  category: session
+  template_id: service_not_in_session
+  parameters:
+    sid: 46
+    session: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 2e010000
+    expected_responses_hex:
+    - 7f2e7f
+    description: Service 0x2e not allowed in session 0x1 -> expect NRC 0x7F.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x2e
+    quote: 0x2E WriteDataByIdentifier
+  - source: data/requirements_seed.csv
+    ref: REQ-004
+    quote: 'REQ-004 (session): The tester shall be able to switch the BCM into programming
+      session (0x02) only when required preconditions are met.'
+  - source: docs/behaviour_contract.md
+    ref: 0x2e-writedatabyidentifier
+    quote: 0x2E WriteDataByIdentifier
+  review_status: validated
+  explanation: This test checks if a negative response is given when attempting to
+    use a service (0x2E WriteDataByIdentifier) not allowed in session 0x1. It ensures
+    that the BCM does not allow unauthorized services in the session, maintaining
+    security and preventing unauthorized modifications to the ECU.
   origin: generated
 - id: req_005__tpl_write_secured_0100
   title: Write DID interior_lighting_brightness_pct (0x0100) after unlocking level
@@ -888,12 +841,13 @@
     ref: 0x2e-writedatabyidentifier
     quote: 0x2E WriteDataByIdentifier
   review_status: validated
-  explanation: This test checks if the interior lighting brightness can be written
-    successfully when the ECU is in an extended session with security level 0x01.
-    It matters because it verifies compliance with the requirement that writing the
-    interior lighting brightness DID (0x0100) requires an extended session and security
-    level 0x01. The expected outcome is that after writing 0 to DID 0x0100 and reading
-    back, the system confirms the write was successful.
+  explanation: This test checks if interior lighting brightness can be written and
+    read back in an extended session with security level 0x01. It ensures that the
+    ECU correctly handles the DID 0x0100, which represents the interior lighting brightness
+    percentage, and that the security level remains at 0x01 during the session. The
+    expected outcome is that the interior lighting brightness can be successfully
+    written and read back, confirming the requirement for extended session and security
+    level 0x01.
   origin: generated
 - id: req_005__tpl_read_did_positive_0100_03
   title: Read DID interior_lighting_brightness_pct (0x0100) positively in session
@@ -940,112 +894,12 @@
     ref: 0x2e-writedatabyidentifier
     quote: '6. A required condition is not met → 0x22:'
   review_status: validated
-  explanation: This test checks if the ECU can read the interior lighting brightness
-    percentage (DID 0x0100) in an extended session with a security level of 0x01,
-    which is required by the requirement. The expected outcome is that the ECU successfully
-    reads the interior lighting brightness value in this session, confirming compliance
-    with the requirement.
-  origin: generated
-- id: req_005__tpl_security_lockout_01
-  title: SecurityAccess level 0x1 lockout after 3 wrong keys
-  requirement_ids:
-  - REQ-005
-  category: security
-  template_id: security_invalid_key_lockout
-  parameters:
-    level: 1
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 6701950677e8
-    description: Request seed, attempt 1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2702960778e9
-    expected_responses_hex:
-    - 7f2735
-    description: Send wrong key, attempt 1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 670132a31485
-    description: Request seed, attempt 2.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 270233a41586
-    expected_responses_hex:
-    - 7f2735
-    description: Send wrong key, attempt 2.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 6701cf40b122
-    description: Request seed, attempt 3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2702d041b223
-    expected_responses_hex:
-    - 7f2736
-    description: Send wrong key, attempt 3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 7f2737
-    description: Request seed during lockout -> expect NRC 0x37.
-    max_response_time_ms: null
-  - kind: advance_time
-    ms: 10001
-    description: Advance past the lockout delay.
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Re-enter the session (S3 expired during the wait).
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 67016cdd4ebf
-    description: Request seed after delay expiry -> seed issued again.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: security-concept
-    quote: SecurityAccess (0x27) protects sensitive operations (writing calibration
-  - source: data/requirements_seed.csv
-    ref: REQ-005
-    quote: 'REQ-005 (security): Writing the interior lighting brightness DID (0x0100)
-      shall require extended session and security level 0x01.'
-  - source: docs/behaviour_contract.md
-    ref: 5b-subfunction-specific-length-0x13
-    quote: '| 0x27 seed request | exactly 2 |'
-  review_status: validated
-  explanation: This test checks if the ECU properly locks out extended session access
-    after three incorrect security key attempts. It matters for ensuring security
-    requirements are met, specifically REQ-005 which requires extended session and
-    security level 0x01 for writing interior lighting brightness DID. The expected
-    outcome is to see a Non-Response Code (NRC) of 0x37, indicating the session has
-    been locked out due to invalid security keys.
+  explanation: This test verifies that interior lighting brightness can be read in
+    an extended session with security level 0x01. It confirms that the ECU correctly
+    reads the DID 0x0100, representing the interior lighting brightness percentage,
+    in an extended session. The expected outcome is that the interior lighting brightness
+    can be successfully read back, ensuring the requirement for extended session and
+    security level 0x01.
   origin: generated
 - id: req_005__tpl_session_relock_01
   title: Session change re-locks security level 0x1
@@ -1104,23 +958,115 @@
     quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: security-concept
-    quote: SecurityAccess (0x27) protects sensitive operations (writing calibration
+    ref: svc-0x27
+    quote: 0x27 SecurityAccess
   - source: data/requirements_seed.csv
     ref: REQ-005
     quote: 'REQ-005 (security): Writing the interior lighting brightness DID (0x0100)
       shall require extended session and security level 0x01.'
   - source: docs/behaviour_contract.md
     ref: 5b-subfunction-specific-length-0x13
-    quote: '| 0x27 seed request | exactly 2 |'
+    quote: '| 0x27 seed request (odd subfunction, with or without bit 7) | exactly
+      2 |'
   review_status: validated
-  explanation: This test checks if switching to an extended session with security
-    level 0x01 and then re-entering the session relocks the security, ensuring that
-    the session cannot be used for unauthorized operations. It matters because the
-    requirement specifies that writing the interior lighting brightness DID (0x0100)
-    requires an extended session and security level 0x01. The expected outcome is
-    a Non-Response Code (NRC) of 0x33 after re-entering the session, confirming that
-    security has been re-locked.
+  explanation: This test checks that changing sessions from default to extended locks
+    security to level 0x1. It ensures that the ECU correctly locks the security level
+    to 0x1 when switching to an extended session. The expected outcome is that the
+    security level is locked to 0x1, confirming the requirement for extended session
+    and security level 0x01.
+  origin: generated
+- id: req_005__tpl_negative_suppress_10_03
+  title: Negative response not suppressed for service 0x10 in session 0x3
+  requirement_ids:
+  - REQ-005
+  category: negative
+  template_id: negative_response_with_suppress_bit
+  parameters:
+    sid: 16
+    session: 3
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Switch to session 0x3.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1087'
+    expected_responses_hex:
+    - 7f1012
+    description: Unsupported subfunction 0x7 with the suppress bit set -> the NRC
+      is still sent.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: session:extended
+    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x10
+    quote: 0x10 DiagnosticSessionControl
+  - source: data/requirements_seed.csv
+    ref: REQ-005
+    quote: 'REQ-005 (security): Writing the interior lighting brightness DID (0x0100)
+      shall require extended session and security level 0x01.'
+  - source: docs/behaviour_contract.md
+    ref: 0x10-diagnosticsessioncontrol
+    quote: 0x10 DiagnosticSessionControl
+  review_status: validated
+  explanation: 'Negative response not suppressed for service 0x10 in session 0x3 (negative
+    test, template negative_response_with_suppress_bit). Unsupported subfunction with
+    the suppress bit set: the NRC must still be sent. Expected responses come from
+    the rules engine.'
+  origin: generated
+- id: req_005__tpl_read_multi_0100_f190_01
+  title: Multi-DID read interior_lighting_brightness_pct + VIN in session 0x1
+  requirement_ids:
+  - REQ-005
+  category: positive
+  template_id: read_multiple_dids
+  parameters:
+    dids:
+    - 256
+    - 61840
+    session: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 220100f190
+    expected_responses_hex:
+    - 62010032f19053594e544845544943424d303030303031
+    description: Read DIDs 0x0100, 0xf190 in one request -> every record, in order.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: did:interior_lighting_brightness_pct
+    quote: 'DID 0x0100 interior_lighting_brightness_pct: length 1 bytes, encoding
+      uint8, readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions
+      [''0x03''] requiring security level 0x01. Value range 0-100.'
+  - source: data/bcm_spec.yaml
+    ref: did:VIN
+    quote: 'DID 0xF190 VIN: length 17 bytes, encoding ascii, readable in sessions
+      [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x2e
+    quote: DID must hold (otherwise NRC 0x22); the value, read as a plain unsigned
+  - source: data/requirements_seed.csv
+    ref: REQ-005
+    quote: 'REQ-005 (security): Writing the interior lighting brightness DID (0x0100)
+      shall require extended session and security level 0x01.'
+  - source: docs/behaviour_contract.md
+    ref: 0x2e-writedatabyidentifier
+    quote: '6. A required condition is not met → 0x22:'
+  review_status: validated
+  explanation: Multi-DID read interior_lighting_brightness_pct + VIN in session 0x1
+    (positive test, template read_multiple_dids). Read two DIDs in one ReadDataByIdentifier
+    request. Expected responses come from the rules engine.
   origin: generated
 - id: req_005__tpl_service_not_in_session_27_01
   title: Service 0x27 rejected in session 0x1
@@ -1145,21 +1091,20 @@
     quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: security-concept
-    quote: SecurityAccess (0x27) protects sensitive operations (writing calibration
+    ref: svc-0x27
+    quote: 0x27 SecurityAccess
   - source: data/requirements_seed.csv
     ref: REQ-005
     quote: 'REQ-005 (security): Writing the interior lighting brightness DID (0x0100)
       shall require extended session and security level 0x01.'
   - source: docs/behaviour_contract.md
     ref: 5b-subfunction-specific-length-0x13
-    quote: '| 0x27 seed request | exactly 2 |'
+    quote: '| 0x27 seed request (odd subfunction, with or without bit 7) | exactly
+      2 |'
   review_status: validated
-  explanation: This test checks if writing the interior lighting brightness (DID 0x0100)
-    is restricted in the default session with security level 0x01, as per requirement
-    REQ-005. It ensures that the ECU correctly rejects this write request with a Non-Response
-    Code (NRC) of 0x7F, indicating that the service is not allowed in the current
-    session.
+  explanation: Service 0x27 rejected in session 0x1 (session test, template service_not_in_session).
+    Send a globally-supported service not allowed in this session. Expected responses
+    come from the rules engine.
   origin: generated
 - id: req_005__tpl_s3_timeout_03
   title: S3 timeout drops session 0x3 back to default
@@ -1202,12 +1147,82 @@
     ref: 0x10-diagnosticsessioncontrol
     quote: 0x10 DiagnosticSessionControl
   review_status: validated
-  explanation: This test checks if the session reverts to the default session (0x01)
-    when the extended session (0x3) times out. It matters for the requirement as it
-    verifies that the session control can revert due to a timeout, ensuring the system
-    handles extended sessions securely. The expected outcome is that after advancing
-    past the S3 timer with no requests, the active session DID will report the default
-    session 0x01.
+  explanation: S3 timeout drops session 0x3 back to default (timing test, template
+    s3_timeout_reverts_session). Idle past s3_ms and confirm the session reverted.
+    Expected responses come from the rules engine.
+  origin: generated
+- id: req_005__tpl_seed_while_unlocked_01
+  title: Seed request while security level 0x1 is already unlocked
+  requirement_ids:
+  - REQ-005
+  category: security
+  template_id: seed_request_while_unlocked
+  parameters:
+    level: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Switch to session 0x3.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: Request seed for level 0x1.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: Send computed key for level 0x1.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - '670100000000'
+    description: Request a seed again while the level is unlocked -> 'already unlocked'
+      seed.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e010000
+    expected_responses_hex:
+    - 6e0100
+    description: Protected write to 0x0100 -> still accepted (level stays unlocked).
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - '670100000000'
+    description: Request a seed once more -> still the 'already unlocked' answer.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: security_level:extended_diag
+    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
+      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
+      sessions [''0x03''].'
+  - source: data/bcm_spec.yaml
+    ref: session:extended
+    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x27
+    quote: 0x27 SecurityAccess
+  - source: data/requirements_seed.csv
+    ref: REQ-005
+    quote: 'REQ-005 (security): Writing the interior lighting brightness DID (0x0100)
+      shall require extended session and security level 0x01.'
+  - source: docs/behaviour_contract.md
+    ref: 5b-subfunction-specific-length-0x13
+    quote: '| 0x27 seed request (odd subfunction, with or without bit 7) | exactly
+      2 |'
+  review_status: validated
+  explanation: 'Seed request while security level 0x1 is already unlocked (security
+    test, template seed_request_while_unlocked). Unlock, request a seed again: zero
+    seed, level stays unlocked. Expected responses come from the rules engine.'
   origin: generated
 - id: req_006__tpl_write_secured_0101
   title: Write DID ambient_lighting_color_index (0x0101) after unlocking level 0x1
@@ -1275,12 +1290,10 @@
     ref: 0x2e-writedatabyidentifier
     quote: 0x2E WriteDataByIdentifier
   review_status: validated
-  explanation: This test checks if the ECU correctly writes the ambient lighting color
-    index DID (0x0101) in an extended session with security level 0x01. It matters
-    because the requirement specifies that this write operation requires an extended
-    session and security level 0x01. The expected outcome is that the ECU successfully
-    writes 0 to the ambient lighting color index DID and confirms the write by reading
-    it back.
+  explanation: This test checks if the ambient lighting color index DID (0x0101) can
+    be successfully written with security level 0x01 in an extended session. It ensures
+    that the ECU correctly handles the security level and session type, preventing
+    unauthorized access to the ambient lighting color index setting.
   origin: generated
 - id: req_006__tpl_read_did_positive_0101_03
   title: Read DID ambient_lighting_color_index (0x0101) positively in session 0x3
@@ -1326,11 +1339,10 @@
     ref: 0x2e-writedatabyidentifier
     quote: '6. A required condition is not met → 0x22:'
   review_status: validated
-  explanation: This test checks if the ECU can read the ambient lighting color index
-    DID (0x0101) during an extended session with a security level of 0x01. It matters
-    because the requirement specifies that writing this DID requires an extended session
-    and security level 0x01. The expected outcome is that the ECU successfully reads
-    the ambient lighting color index DID without any errors.
+  explanation: This test verifies that the ambient lighting color index DID (0x0101)
+    can be read in session 0x3, which is extended. It confirms that the ECU correctly
+    supports reading the ambient lighting color index in this session type, allowing
+    for the correct configuration of the vehicle's lighting settings.
   origin: generated
 - id: req_006__tpl_security_lockout_01
   title: SecurityAccess level 0x1 lockout after 3 wrong keys
@@ -1340,6 +1352,7 @@
   template_id: security_invalid_key_lockout
   parameters:
     level: 1
+    recovery: delay
   preconditions: []
   steps:
   - kind: send
@@ -1416,22 +1429,161 @@
     quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: security-concept
-    quote: SecurityAccess (0x27) protects sensitive operations (writing calibration
+    ref: svc-0x27
+    quote: 0x27 SecurityAccess
   - source: data/requirements_seed.csv
     ref: REQ-006
     quote: 'REQ-006 (security): Writing the ambient lighting color index DID (0x0101)
       shall require extended session and security level 0x01.'
   - source: docs/behaviour_contract.md
     ref: 5b-subfunction-specific-length-0x13
-    quote: '| 0x27 seed request | exactly 2 |'
+    quote: '| 0x27 seed request (odd subfunction, with or without bit 7) | exactly
+      2 |'
   review_status: validated
-  explanation: This test checks the system's security mechanism when attempting to
-    write the ambient lighting color index with an invalid security key. It ensures
-    that the system correctly locks out the attempt after three incorrect keys are
-    sent, preventing unauthorized access. The expected outcome is to see a Non-Response
-    Code (NRC) of 0x37, indicating a lockout, and then for the system to issue a new
-    seed after the lockout delay expires.
+  explanation: This test evaluates the lockout behavior when attempting to write with
+    an invalid key in security level 0x01. It ensures that the ECU correctly locks
+    the session when an invalid key is used, preventing unauthorized changes to the
+    ambient lighting color index setting.
+  origin: generated
+- id: req_006__tpl_s3_timeout_03
+  title: S3 timeout drops session 0x3 back to default
+  requirement_ids:
+  - REQ-006
+  category: timing
+  template_id: s3_timeout_reverts_session
+  parameters:
+    session: 3
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Switch to session 0x3.
+    max_response_time_ms: null
+  - kind: advance_time
+    ms: 5001
+    description: Advance past the S3 timer with no requests.
+  - kind: send
+    request_hex: 22f186
+    expected_responses_hex:
+    - 62f18601
+    description: Read active session DID -> expect it reports default session 0x01.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: session:extended
+    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x10
+    quote: 0x10 DiagnosticSessionControl
+  - source: data/requirements_seed.csv
+    ref: REQ-006
+    quote: 'REQ-006 (security): Writing the ambient lighting color index DID (0x0101)
+      shall require extended session and security level 0x01.'
+  - source: docs/behaviour_contract.md
+    ref: 0x10-diagnosticsessioncontrol
+    quote: 0x10 DiagnosticSessionControl
+  review_status: validated
+  explanation: This test checks if writing in session 0x03 extended and then idling
+    past the S3 timeout reverts the session to the default. It confirms that the ECU
+    correctly handles the session timeout and reverts to the default session type,
+    ensuring the system remains secure and operational.
+  origin: generated
+- id: req_006__tpl_read_multi_0101_f190_01
+  title: Multi-DID read ambient_lighting_color_index + VIN in session 0x1
+  requirement_ids:
+  - REQ-006
+  category: positive
+  template_id: read_multiple_dids
+  parameters:
+    dids:
+    - 257
+    - 61840
+    session: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 220101f190
+    expected_responses_hex:
+    - 62010100f19053594e544845544943424d303030303031
+    description: Read DIDs 0x0101, 0xf190 in one request -> every record, in order.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: did:ambient_lighting_color_index
+    quote: 'DID 0x0101 ambient_lighting_color_index: length 1 bytes, encoding uint8,
+      readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions [''0x03'']
+      requiring security level 0x01. Value range 0-15.'
+  - source: data/bcm_spec.yaml
+    ref: did:VIN
+    quote: 'DID 0xF190 VIN: length 17 bytes, encoding ascii, readable in sessions
+      [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x2e
+    quote: DID must hold (otherwise NRC 0x22); the value, read as a plain unsigned
+  - source: data/requirements_seed.csv
+    ref: REQ-006
+    quote: 'REQ-006 (security): Writing the ambient lighting color index DID (0x0101)
+      shall require extended session and security level 0x01.'
+  - source: docs/behaviour_contract.md
+    ref: 0x2e-writedatabyidentifier
+    quote: '6. A required condition is not met → 0x22:'
+  review_status: validated
+  explanation: This test validates that both the ambient lighting color index (0x0101)
+    and the VIN (0xf190) can be read in session 0x1, the default session type. It
+    ensures that the ECU correctly supports reading multiple DIDs in the default session,
+    allowing for the correct configuration of the vehicle's settings.
+  origin: generated
+- id: req_006__tpl_negative_suppress_10_03
+  title: Negative response not suppressed for service 0x10 in session 0x3
+  requirement_ids:
+  - REQ-006
+  category: negative
+  template_id: negative_response_with_suppress_bit
+  parameters:
+    sid: 16
+    session: 3
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Switch to session 0x3.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1087'
+    expected_responses_hex:
+    - 7f1012
+    description: Unsupported subfunction 0x7 with the suppress bit set -> the NRC
+      is still sent.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: session:extended
+    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x10
+    quote: 0x10 DiagnosticSessionControl
+  - source: data/requirements_seed.csv
+    ref: REQ-006
+    quote: 'REQ-006 (security): Writing the ambient lighting color index DID (0x0101)
+      shall require extended session and security level 0x01.'
+  - source: docs/behaviour_contract.md
+    ref: 0x10-diagnosticsessioncontrol
+    quote: 0x10 DiagnosticSessionControl
+  review_status: validated
+  explanation: This test tests the negative response with the suppress bit set for
+    a globally-supported service not allowed in session 0x03 extended. It ensures
+    that the ECU correctly handles the suppression bit, preventing the service from
+    being executed and sending the NRC (Negative Response Code) as expected.
   origin: generated
 - id: req_006__tpl_session_relock_01
   title: Session change re-locks security level 0x1
@@ -1490,76 +1642,30 @@
     quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: security-concept
-    quote: SecurityAccess (0x27) protects sensitive operations (writing calibration
+    ref: svc-0x27
+    quote: 0x27 SecurityAccess
   - source: data/requirements_seed.csv
     ref: REQ-006
     quote: 'REQ-006 (security): Writing the ambient lighting color index DID (0x0101)
       shall require extended session and security level 0x01.'
   - source: docs/behaviour_contract.md
     ref: 5b-subfunction-specific-length-0x13
-    quote: '| 0x27 seed request | exactly 2 |'
+    quote: '| 0x27 seed request (odd subfunction, with or without bit 7) | exactly
+      2 |'
   review_status: validated
-  explanation: "{\n  \"test\": {\n    \"description\": \"This test checks if changing\
-    \ the session from a higher security level (0x03) to a lower security level (0x01)\
-    \ locks out the ability to write the ambient lighting color index (DID 0x0101).\
-    \ It ensures that the requirement REQ-006, which states that writing this DID\
-    \ requires an extended session and security level 0x01, is met. The expected outcome\
-    \ is that after re-entering the session with security level 0x01, the Non-Response\
-    \ Code (NRC) will be 0x33, indicating that the security level is locked and the\
-    \ write operation is not allowed.\",\n    \"rationale\": \"The test is crucial\
-    \ because it verifies that the system correctly enforces security levels, preventing\
-    \ unauthorized writes to sensitive data like ambient lighting settings when the\
-    \ session security is lowered.\",\n    \"outcome\": \"NRC 0x33\"\n  }\n}"
+  explanation: This test checks the behavior of re-entering session 0x3 with security
+    level 0x01 after unlocking it. It ensures that the ECU correctly locks the session
+    when re-entered, preventing unauthorized changes to the ambient lighting color
+    index setting.
   origin: generated
-- id: req_006__tpl_service_not_in_session_27_01
-  title: Service 0x27 rejected in session 0x1
+- id: req_006__tpl_seed_while_unlocked_01
+  title: Seed request while security level 0x1 is already unlocked
   requirement_ids:
   - REQ-006
-  category: session
-  template_id: service_not_in_session
+  category: security
+  template_id: seed_request_while_unlocked
   parameters:
-    sid: 39
-    session: 1
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 7f277f
-    description: Service 0x27 not allowed in session 0x1 -> expect NRC 0x7F.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: session:default
-    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: security-concept
-    quote: SecurityAccess (0x27) protects sensitive operations (writing calibration
-  - source: data/requirements_seed.csv
-    ref: REQ-006
-    quote: 'REQ-006 (security): Writing the ambient lighting color index DID (0x0101)
-      shall require extended session and security level 0x01.'
-  - source: docs/behaviour_contract.md
-    ref: 5b-subfunction-specific-length-0x13
-    quote: '| 0x27 seed request | exactly 2 |'
-  review_status: validated
-  explanation: This test checks if the ECU correctly refuses a service (0x27) that
-    is not allowed in the default session (0x1). It matters because it verifies that
-    the ECU adheres to the requirement that writing the ambient lighting color index
-    DID (0x0101) requires an extended session and security level 0x01. The expected
-    outcome is a Non-Response Code (NRC) of 0x7F, indicating that the service is not
-    allowed in the specified session.
-  origin: generated
-- id: req_006__tpl_s3_timeout_03
-  title: S3 timeout drops session 0x3 back to default
-  requirement_ids:
-  - REQ-006
-  category: timing
-  template_id: s3_timeout_reverts_session
-  parameters:
-    session: 3
+    level: 1
   preconditions: []
   steps:
   - kind: send
@@ -1568,37 +1674,63 @@
     - 5003003201f4
     description: Switch to session 0x3.
     max_response_time_ms: null
-  - kind: advance_time
-    ms: 5001
-    description: Advance past the S3 timer with no requests.
   - kind: send
-    request_hex: 22f186
+    request_hex: '2701'
     expected_responses_hex:
-    - 62f18601
-    description: Read active session DID -> expect it reports default session 0x01.
+    - 6701950677e8
+    description: Request seed for level 0x1.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: Send computed key for level 0x1.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - '670100000000'
+    description: Request a seed again while the level is unlocked -> 'already unlocked'
+      seed.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e010000
+    expected_responses_hex:
+    - 6e0100
+    description: Protected write to 0x0100 -> still accepted (level stays unlocked).
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - '670100000000'
+    description: Request a seed once more -> still the 'already unlocked' answer.
     max_response_time_ms: null
   citations:
+  - source: data/bcm_spec.yaml
+    ref: security_level:extended_diag
+    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
+      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
+      sessions [''0x03''].'
   - source: data/bcm_spec.yaml
     ref: session:extended
     quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: svc-0x10
-    quote: 0x10 DiagnosticSessionControl
+    ref: svc-0x27
+    quote: 0x27 SecurityAccess
   - source: data/requirements_seed.csv
     ref: REQ-006
     quote: 'REQ-006 (security): Writing the ambient lighting color index DID (0x0101)
       shall require extended session and security level 0x01.'
   - source: docs/behaviour_contract.md
-    ref: 0x10-diagnosticsessioncontrol
-    quote: 0x10 DiagnosticSessionControl
+    ref: 5b-subfunction-specific-length-0x13
+    quote: '| 0x27 seed request (odd subfunction, with or without bit 7) | exactly
+      2 |'
   review_status: validated
-  explanation: This test checks if the session reverts to the default session (0x01)
-    when the service (0x10) is idle past the s3 timeout in an extended session. It
-    matters because it ensures that the session control is robust and will revert
-    to a safe state if no diagnostic requests are made for too long. The expected
-    outcome is that after advancing past the s3 timeout with no requests, the active
-    session will revert to the default session (0x01).
+  explanation: This test evaluates the behavior of requesting a seed while in an unlocked
+    state in session 0x1, the default session type. It ensures that the ECU correctly
+    handles the seed request and does not allow unauthorized access to the ambient
+    lighting color index setting.
   origin: generated
 - id: req_007__tpl_read_did_positive_0130_01
   title: Read DID wiper_sensitivity_level (0x0130) positively in session 0x1
@@ -1635,23 +1767,25 @@
     quote: 'REQ-007 (negative): The wiper sensitivity level (DID 0x0130) shall only
       accept values between 1 and 5 inclusive.'
   - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
+    ref: 0x2e-writedatabyidentifier
+    quote: '6. A required condition is not met → 0x22:'
   review_status: validated
-  explanation: This test checks if the wiper sensitivity level (DID 0x0130) can be
-    read in the default session (session 0x1) without security measures interfering.
-    It matters because it verifies that the requirement to only accept values between
-    1 and 5 inclusive for this DID is met. The expected outcome is that the test will
-    successfully read the wiper sensitivity level within the allowed range.
+  explanation: This test checks if the wiper sensitivity level can be read in session
+    0x1. It matters for REQ-007 because it ensures the ECU can communicate the wiper
+    sensitivity level value correctly. The expected outcome is that the wiper sensitivity
+    level value is successfully read back, confirming the ECU's ability to provide
+    this information in the specified session.
   origin: generated
-- id: req_007__tpl_write_secured_0130
-  title: Write DID wiper_sensitivity_level (0x0130) after unlocking level 0x1
+- id: req_007__tpl_write_retained_reset_0130
+  title: Value written to DID wiper_sensitivity_level (0x0130) is kept after an ECU
+    reset
   requirement_ids:
   - REQ-007
   category: positive
-  template_id: write_did_secured_positive
+  template_id: write_did_value_retained
   parameters:
     did: 304
+    after: ecu_reset
   preconditions: []
   steps:
   - kind: send
@@ -1673,16 +1807,28 @@
     description: Send computed key for level 0x1.
     max_response_time_ms: null
   - kind: send
-    request_hex: 2e013001
+    request_hex: 2e013005
     expected_responses_hex:
     - 6e0130
-    description: Write 1 to DID 0x0130.
+    description: Write 05 to DID 0x0130.
     max_response_time_ms: null
   - kind: send
     request_hex: '220130'
     expected_responses_hex:
-    - '62013001'
-    description: Read back to confirm the write.
+    - '62013005'
+    description: Read back -> the same bytes in the same order.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1101'
+    expected_responses_hex:
+    - '5101'
+    description: Reset the ECU.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '220130'
+    expected_responses_hex:
+    - '62013005'
+    description: Read again after an ECU reset -> the written value is kept.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
@@ -1710,19 +1856,18 @@
     ref: 0x2e-writedatabyidentifier
     quote: 0x2E WriteDataByIdentifier
   review_status: validated
-  explanation: This test checks if the wiper sensitivity level can be securely written
-    to 0x0130 DID in a session where level 0x1 is unlocked. It matters because the
-    requirement specifies that the wiper sensitivity level should only accept values
-    between 1 and 5 inclusive. The expected outcome is that after writing 1 to DID
-    0x0130, the system will read back the same value to confirm the write operation
-    was successful.
+  explanation: This test verifies that the wiper sensitivity level retains its value
+    after an ECU reset. It is crucial for REQ-007 as it confirms the ECU's ability
+    to maintain the wiper sensitivity level setting across a reset. The expected outcome
+    is that the wiper sensitivity level value is the same before and after the reset,
+    demonstrating the ECU's retention capability.
   origin: generated
-- id: req_007__tpl_write_oor_0130
-  title: Write out-of-range value to DID wiper_sensitivity_level (0x0130)
+- id: req_007__tpl_write_nosec_0130
+  title: Write DID wiper_sensitivity_level (0x0130) without unlocking security
   requirement_ids:
   - REQ-007
   category: negative
-  template_id: write_did_out_of_range
+  template_id: write_did_without_security
   parameters:
     did: 304
   preconditions: []
@@ -1734,22 +1879,10 @@
     description: Switch to session 0x3.
     max_response_time_ms: null
   - kind: send
-    request_hex: '2701'
+    request_hex: 2e013001
     expected_responses_hex:
-    - 6701950677e8
-    description: Request seed for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 27029a068f73
-    expected_responses_hex:
-    - '6702'
-    description: Send computed key for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e013006
-    expected_responses_hex:
-    - 7f2e31
-    description: Write out-of-range value 6 -> expect NRC 0x31.
+    - 7f2e33
+    description: Write without unlocking security -> expect NRC 0x33.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
@@ -1777,145 +1910,11 @@
     ref: 0x2e-writedatabyidentifier
     quote: 0x2E WriteDataByIdentifier
   review_status: validated
-  explanation: This test checks if the ECU correctly rejects a wiper sensitivity level
-    value outside its allowed range (1 to 5). It matters because it ensures the ECU
-    adheres to the requirement that the wiper sensitivity level only accepts values
-    between 1 and 5. The expected outcome is a Negative Response Code (NRC) 0x31,
-    indicating the ECU detected an invalid value and refused to process it.
-  origin: generated
-- id: req_007__tpl_write_badlen_0130
-  title: Write wrong-length data to DID wiper_sensitivity_level (0x0130)
-  requirement_ids:
-  - REQ-007
-  category: negative
-  template_id: write_did_invalid_length
-  parameters:
-    did: 304
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e01300000
-    expected_responses_hex:
-    - 7f2e13
-    description: Write with one extra data byte -> expect NRC 0x13.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:wiper_sensitivity_level
-    quote: 'DID 0x0130 wiper_sensitivity_level: length 1 bytes, encoding uint8, readable
-      in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions [''0x03'']
-      requiring security level 0x01. Value range 1-5.'
-  - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-007
-    quote: 'REQ-007 (negative): The wiper sensitivity level (DID 0x0130) shall only
-      accept values between 1 and 5 inclusive.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU correctly rejects a write request for the
-    wiper sensitivity level (DID 0x0130) when an extra data byte is included in the
-    request. It matters because the requirement specifies that the wiper sensitivity
-    level should only accept values between 1 and 5 inclusive. The expected outcome
-    is a Negative Response Code (NRC) 0x13, indicating that the ECU detected an invalid
-    number of data bytes and thus rejected the request.
-  origin: generated
-- id: req_007__tpl_service_not_in_session_2e_01
-  title: Service 0x2e rejected in session 0x1
-  requirement_ids:
-  - REQ-007
-  category: session
-  template_id: service_not_in_session
-  parameters:
-    sid: 46
-    session: 1
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: 2e010000
-    expected_responses_hex:
-    - 7f2e7f
-    description: Service 0x2e not allowed in session 0x1 -> expect NRC 0x7F.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: session:default
-    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-007
-    quote: 'REQ-007 (negative): The wiper sensitivity level (DID 0x0130) shall only
-      accept values between 1 and 5 inclusive.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the WriteDataByIdentifier (0x2e) service is not
-    allowed in the default session (0x1). It matters because it verifies that the
-    requirement to only accept values between 1 and 5 for the wiper sensitivity level
-    (DID 0x0130) is enforced. The expected outcome is a Normal Response Code (NRC)
-    0x7F, indicating that the service is not supported in the current session.
-  origin: generated
-- id: req_007__tpl_nrc_priority_2e_01
-  title: 'NRC priority: service 0x2e + unknown identifier in session 0x1'
-  requirement_ids:
-  - REQ-007
-  category: negative
-  template_id: nrc_priority_session_over_identifier
-  parameters:
-    sid: 46
-    session: 1
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: 2edead00
-    expected_responses_hex:
-    - 7f2e7f
-    description: Unknown DID 0xdead, service 0x2e not allowed in session 0x1 -> the
-      session check (0x7F) wins over the identifier check (0x31).
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: session:default
-    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-007
-    quote: 'REQ-007 (negative): The wiper sensitivity level (DID 0x0130) shall only
-      accept values between 1 and 5 inclusive.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU correctly rejects a service (0x2e) that
-    is not allowed in the current session (0x1) when using a priority identifier (0x7F).
-    It matters because it ensures the ECU follows the correct priority rules for services.
-    The expected outcome is that the ECU should not accept the service request due
-    to the session check winning over the identifier check.
+  explanation: This test checks if writing the wiper sensitivity level without unlocking
+    security is refused. It is important for REQ-007 as it ensures the ECU does not
+    allow unauthorized changes to the wiper sensitivity level. The expected outcome
+    is that the write operation fails with a Non-Request Compliance (NRC) code 0x33,
+    indicating the security level is not met.
   origin: generated
 - id: req_008__tpl_read_did_positive_0100_01
   title: Read DID interior_lighting_brightness_pct (0x0100) positively in session
@@ -1953,24 +1952,26 @@
     quote: 'REQ-008 (negative): The interior lighting brightness (DID 0x0100) shall
       only accept values between 0 and 100 inclusive.'
   - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
   review_status: validated
-  explanation: This test checks if the ECU can correctly read the interior lighting
-    brightness percentage (DID 0x0100) in the default session (session 0x1). It matters
-    because the requirement specifies that this value should only be between 0 and
-    100 inclusive. The expected outcome is that the ECU returns a valid percentage
-    value within this range when the DID is read in the specified session.
+  explanation: This test checks if the interior lighting brightness can be read correctly
+    in session 0x1. It ensures that the ECU can communicate with the diagnostic tool
+    to retrieve the interior lighting brightness value, which is crucial for verifying
+    the system's functionality. The expected outcome is that the ECU returns a valid
+    interior lighting brightness value within the range of 0 to 100, confirming the
+    system's ability to read this diagnostic data correctly.
   origin: generated
-- id: req_008__tpl_write_secured_0100
-  title: Write DID interior_lighting_brightness_pct (0x0100) after unlocking level
-    0x1
+- id: req_008__tpl_write_retained_reset_0100
+  title: Value written to DID interior_lighting_brightness_pct (0x0100) is kept after
+    an ECU reset
   requirement_ids:
   - REQ-008
   category: positive
-  template_id: write_did_secured_positive
+  template_id: write_did_value_retained
   parameters:
     did: 256
+    after: ecu_reset
   preconditions: []
   steps:
   - kind: send
@@ -1992,16 +1993,28 @@
     description: Send computed key for level 0x1.
     max_response_time_ms: null
   - kind: send
-    request_hex: 2e010000
+    request_hex: 2e010012
     expected_responses_hex:
     - 6e0100
-    description: Write 0 to DID 0x0100.
+    description: Write 12 to DID 0x0100.
     max_response_time_ms: null
   - kind: send
     request_hex: '220100'
     expected_responses_hex:
-    - '62010000'
-    description: Read back to confirm the write.
+    - '62010012'
+    description: Read back -> the same bytes in the same order.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1101'
+    expected_responses_hex:
+    - '5101'
+    description: Reset the ECU.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '220100'
+    expected_responses_hex:
+    - '62010012'
+    description: Read again after an ECU reset -> the written value is kept.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
@@ -2026,136 +2039,13 @@
     quote: 'REQ-008 (negative): The interior lighting brightness (DID 0x0100) shall
       only accept values between 0 and 100 inclusive.'
   - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
+    ref: 3-generic-length-0x13
+    quote: '| 0x2E, 0x31 | at least 4 |'
   review_status: validated
-  explanation: This test checks if the interior lighting brightness can be correctly
-    set to 0 using the default session with proper security level. It matters because
-    the requirement specifies that the interior lighting brightness should only accept
-    values between 0 and 100 inclusive. The expected outcome is that after writing
-    0 to DID 0x0100, the system will read back the value successfully, confirming
-    the write operation was performed correctly within the specified security level.
-  origin: generated
-- id: req_008__tpl_write_oor_0100
-  title: Write out-of-range value to DID interior_lighting_brightness_pct (0x0100)
-  requirement_ids:
-  - REQ-008
-  category: negative
-  template_id: write_did_out_of_range
-  parameters:
-    did: 256
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 6701950677e8
-    description: Request seed for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 27029a068f73
-    expected_responses_hex:
-    - '6702'
-    description: Send computed key for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e010065
-    expected_responses_hex:
-    - 7f2e31
-    description: Write out-of-range value 101 -> expect NRC 0x31.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:interior_lighting_brightness_pct
-    quote: 'DID 0x0100 interior_lighting_brightness_pct: length 1 bytes, encoding
-      uint8, readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions
-      [''0x03''] requiring security level 0x01. Value range 0-100.'
-  - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-008
-    quote: 'REQ-008 (negative): The interior lighting brightness (DID 0x0100) shall
-      only accept values between 0 and 100 inclusive.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU correctly rejects an out-of-range value
-    for the interior lighting brightness (DID 0x0100). It matters because the requirement
-    specifies that the value should only accept values between 0 and 100 inclusive.
-    The expected outcome is a Negative Response Code (NRC) 0x31, indicating that the
-    out-of-range value was rejected.
-  origin: generated
-- id: req_008__tpl_write_badlen_0100
-  title: Write wrong-length data to DID interior_lighting_brightness_pct (0x0100)
-  requirement_ids:
-  - REQ-008
-  category: negative
-  template_id: write_did_invalid_length
-  parameters:
-    did: 256
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e01000000
-    expected_responses_hex:
-    - 7f2e13
-    description: Write with one extra data byte -> expect NRC 0x13.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:interior_lighting_brightness_pct
-    quote: 'DID 0x0100 interior_lighting_brightness_pct: length 1 bytes, encoding
-      uint8, readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions
-      [''0x03''] requiring security level 0x01. Value range 0-100.'
-  - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-008
-    quote: 'REQ-008 (negative): The interior lighting brightness (DID 0x0100) shall
-      only accept values between 0 and 100 inclusive.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU correctly rejects an invalid length value
-    for the interior lighting brightness setting (DID 0x0100). It matters because
-    the requirement specifies that the interior lighting brightness should only accept
-    values between 0 and 100 inclusive. The expected outcome is a Negative Response
-    Code (NRC) 0x13, indicating that the ECU has rejected the invalid length value
-    for the interior lighting brightness setting.
+  explanation: Value written to DID interior_lighting_brightness_pct (0x0100) is kept
+    after an ECU reset (positive test, template write_did_value_retained). Write a
+    distinct-byte value, read back, then S3 timeout or ECU reset and read again. Expected
+    responses come from the rules engine.
   origin: generated
 - id: req_009__tpl_read_did_positive_0150_03
   title: Read DID factory_reset_flag (0x0150) positively in session 0x3
@@ -2202,155 +2092,28 @@
     ref: 0x2e-writedatabyidentifier
     quote: '6. A required condition is not met → 0x22:'
   review_status: validated
-  explanation: This test checks if the ECU allows writing the factory_reset_flag (DID
-    0x0150) during a programming session with security level 0x03, which is only allowed
-    when the vehicle is stationary. It matters because it verifies compliance with
-    the requirement that the factory reset flag can only be written in a stationary
-    vehicle with the correct security level. The expected outcome is that the test
-    reads the factory_reset_flag value successfully, confirming the ECU's compliance
-    with the requirement.
+  explanation: This test checks if the factory reset flag (DID 0x0150) can be read
+    in a programming session with security level 0x03, ensuring the requirement that
+    the flag is only writable in such sessions. The expected outcome is that the DID
+    0x0150 can be successfully read in session 0x3, confirming its accessibility for
+    read operations.
   origin: generated
-- id: req_009__tpl_session_relock_03
-  title: Session change re-locks security level 0x3
-  requirement_ids:
-  - REQ-009
-  category: security
-  template_id: session_change_relocks_security
-  parameters:
-    level: 3
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1002'
-    expected_responses_hex:
-    - 5002003201f4
-    description: Switch to session 0x2.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2703'
-    expected_responses_hex:
-    - 67030b7ced5e
-    description: Request seed for level 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 270420a92dba
-    expected_responses_hex:
-    - '6704'
-    description: Send computed key for level 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '1002'
-    expected_responses_hex:
-    - 5002003201f4
-    description: Re-enter the same session -> security must be locked again.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e01600000
-    expected_responses_hex:
-    - 7f2e33
-    description: Secured write to 0x0160 after re-entry -> expect NRC 0x33.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2703'
-    expected_responses_hex:
-    - 6703a8198afb
-    description: Request seed -> a fresh non-zero seed (level is locked again).
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: security_level:programming
-    quote: 'Security level 0x03 programming: seed sub-function 0x03, key sub-function
-      0x04, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x02''].'
-  - source: data/bcm_spec.yaml
-    ref: session:programming
-    quote: 'Session 0x02 programming: allowed services [0x10, 0x11, 0x22, 0x27, 0x2E,
-      0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x27
-    quote: 0x27 SecurityAccess
-  - source: data/requirements_seed.csv
-    ref: REQ-009
-    quote: 'REQ-009 (conditions): The factory reset flag (DID 0x0150) shall only be
-      writable in programming session with security level 0x03, and only while the
-      vehicle is stationary.'
-  - source: docs/behaviour_contract.md
-    ref: 5b-subfunction-specific-length-0x13
-    quote: '| 0x27 seed request | exactly 2 |'
-  review_status: validated
-  explanation: This test checks if the ECU correctly locks the security level to 0x03
-    after a session change. It matters because it verifies that the requirement for
-    only allowing the factory reset flag to be written in programming session with
-    security level 0x03 is met. The expected outcome is that after re-entering the
-    session, the Non-Response Code (NRC) is 0x33, indicating the security level is
-    locked again.
-  origin: generated
-- id: req_009__tpl_negative_suppress_10_03
-  title: Negative response not suppressed for service 0x10 in session 0x3
-  requirement_ids:
-  - REQ-009
-  category: negative
-  template_id: negative_response_with_suppress_bit
-  parameters:
-    sid: 16
-    session: 3
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '1087'
-    expected_responses_hex:
-    - 7f1012
-    description: Unsupported subfunction 0x7 with the suppress bit set -> the NRC
-      is still sent.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x10
-    quote: 0x10 DiagnosticSessionControl
-  - source: data/requirements_seed.csv
-    ref: REQ-009
-    quote: 'REQ-009 (conditions): The factory reset flag (DID 0x0150) shall only be
-      writable in programming session with security level 0x03, and only while the
-      vehicle is stationary.'
-  - source: docs/behaviour_contract.md
-    ref: 0x10-diagnosticsessioncontrol
-    quote: 0x10 DiagnosticSessionControl
-  review_status: validated
-  explanation: This test checks if the ECU correctly refuses to write the factory
-    reset flag (DID 0x0150) in session 0x03 when the security level is 0x03, which
-    is not allowed according to the requirement. It matters because it ensures the
-    ECU adheres to the requirement that the factory reset flag can only be written
-    in a programming session with security level 0x03 and while the vehicle is stationary.
-    The expected outcome is that the ECU should not accept the write request and should
-    respond with an NRC (Not Supported) message, as specified in the UDS (Unified
-    Diagnostics Standard) reference notes.
-  origin: generated
-- id: req_009__tpl_service_not_in_session_27_01
-  title: Service 0x27 rejected in session 0x1
+- id: req_009__tpl_service_not_in_session_2e_01
+  title: Service 0x2e rejected in session 0x1
   requirement_ids:
   - REQ-009
   category: session
   template_id: service_not_in_session
   parameters:
-    sid: 39
+    sid: 46
     session: 1
   preconditions: []
   steps:
   - kind: send
-    request_hex: '2701'
+    request_hex: 2e010000
     expected_responses_hex:
-    - 7f277f
-    description: Service 0x27 not allowed in session 0x1 -> expect NRC 0x7F.
+    - 7f2e7f
+    description: Service 0x2e not allowed in session 0x1 -> expect NRC 0x7F.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
@@ -2358,81 +2121,114 @@
     quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: svc-0x27
-    quote: 0x27 SecurityAccess
+    ref: svc-0x2e
+    quote: 0x2E WriteDataByIdentifier
   - source: data/requirements_seed.csv
     ref: REQ-009
     quote: 'REQ-009 (conditions): The factory reset flag (DID 0x0150) shall only be
       writable in programming session with security level 0x03, and only while the
       vehicle is stationary.'
   - source: docs/behaviour_contract.md
-    ref: 5b-subfunction-specific-length-0x13
-    quote: '| 0x27 seed request | exactly 2 |'
+    ref: 0x2e-writedatabyidentifier
+    quote: 0x2E WriteDataByIdentifier
   review_status: validated
-  explanation: This test checks if the ECU correctly rejects a session 0x01 service
-    0x27 request, which is not allowed in that session. It matters because it verifies
-    the ECU's compliance with the requirement that the factory reset flag can only
-    be written in a programming session with security level 0x03 and while the vehicle
-    is stationary. The expected outcome is a Non-Response Code (NRC) 0x7F indicating
-    the service is not supported in the specified session.
+  explanation: This test aims to verify if the service 0x2E is not allowed in a default
+    session (0x1), which is a programming session. The expected outcome is a Non-Request-Capable
+    (NRC) response code 0x7F, indicating that the service is not allowed in the specified
+    session.
   origin: generated
-- id: req_009__tpl_s3_timeout_02
-  title: S3 timeout drops session 0x2 back to default
+- id: req_009__tpl_nrc_priority_2e_01
+  title: 'NRC priority: service 0x2e + unknown identifier in session 0x1'
   requirement_ids:
   - REQ-009
-  category: timing
-  template_id: s3_timeout_reverts_session
+  category: negative
+  template_id: nrc_priority_session_over_identifier
   parameters:
-    session: 2
+    sid: 46
+    session: 1
   preconditions: []
   steps:
   - kind: send
-    request_hex: '1002'
+    request_hex: 2edead00
     expected_responses_hex:
-    - 5002003201f4
-    description: Switch to session 0x2.
-    max_response_time_ms: null
-  - kind: advance_time
-    ms: 5001
-    description: Advance past the S3 timer with no requests.
-  - kind: send
-    request_hex: 22f186
-    expected_responses_hex:
-    - 62f18601
-    description: Read active session DID -> expect it reports default session 0x01.
+    - 7f2e7f
+    description: Unknown DID 0xdead, service 0x2e not allowed in session 0x1 -> the
+      session check (0x7F) wins over the identifier check (0x31).
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
-    ref: session:programming
-    quote: 'Session 0x02 programming: allowed services [0x10, 0x11, 0x22, 0x27, 0x2E,
-      0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: svc-0x10
-    quote: 0x10 DiagnosticSessionControl
+    ref: svc-0x2e
+    quote: 0x2E WriteDataByIdentifier
   - source: data/requirements_seed.csv
     ref: REQ-009
     quote: 'REQ-009 (conditions): The factory reset flag (DID 0x0150) shall only be
       writable in programming session with security level 0x03, and only while the
       vehicle is stationary.'
   - source: docs/behaviour_contract.md
-    ref: 0x10-diagnosticsessioncontrol
-    quote: 0x10 DiagnosticSessionControl
+    ref: 0x2e-writedatabyidentifier
+    quote: 0x2E WriteDataByIdentifier
   review_status: validated
-  explanation: "{\n  \"test_description\": \"This test checks if the session 0x2 reverts\
-    \ to the default session 0x01 when idle past the S3_ms timer. It matters for the\
-    \ requirement as it verifies that the factory reset flag (DID 0x0150) can only\
-    \ be written in a stationary vehicle during programming session 0x02. The expected\
-    \ outcome is that the active session DID will report session 0x01, indicating\
-    \ the session has reverted.\",\n  \"schema_version\": \"1.0\"\n}"
+  explanation: This test checks if the NRC priority is correctly applied when attempting
+    to use a non-allowed service (0x2E) with an unknown DID (0xdead) in a programming
+    session (0x1). The expected outcome is an NRC response code 0x7F, demonstrating
+    that the session check (0x1) takes precedence over the identifier check (0xdead).
   origin: generated
-- id: req_010__tpl_write_secured_0101
-  title: Write DID ambient_lighting_color_index (0x0101) after unlocking level 0x1
+- id: req_010__tpl_read_did_positive_0110_01
+  title: Read DID driver_door_lock_state (0x0110) positively in session 0x1
   requirement_ids:
   - REQ-010
   category: positive
-  template_id: write_did_secured_positive
+  template_id: read_did_positive
   parameters:
-    did: 257
+    did: 272
+    session: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '220110'
+    expected_responses_hex:
+    - '62011001'
+    description: Read DID 0x0110 (driver_door_lock_state) in session 0x1.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: did:driver_door_lock_state
+    quote: 'DID 0x0110 driver_door_lock_state: length 1 bytes, encoding uint8, readable
+      in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: nrcs
+    quote: '- **0x22 conditionsNotCorrect** — the request is well-formed and allowed,
+      but'
+  - source: data/requirements_seed.csv
+    ref: REQ-010
+    quote: 'REQ-010 (security): SecurityAccess level 0x01 shall lock out further attempts
+      for 10 seconds after 3 consecutive invalid keys.'
+  - source: docs/behaviour_contract.md
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
+  review_status: validated
+  explanation: This test checks if the driver door lock state can be read in the default
+    session. It ensures that the system can communicate with the ECU to retrieve the
+    current state of the driver door lock, which is crucial for understanding the
+    vehicle's security and functionality. The expected outcome is that the test passes,
+    indicating the ECU correctly responds with the driver door lock state.
+  origin: generated
+- id: req_010__tpl_seed_while_unlocked_01
+  title: Seed request while security level 0x1 is already unlocked
+  requirement_ids:
+  - REQ-010
+  category: security
+  template_id: seed_request_while_unlocked
+  parameters:
+    level: 1
   preconditions: []
   steps:
   - kind: send
@@ -2454,174 +2250,23 @@
     description: Send computed key for level 0x1.
     max_response_time_ms: null
   - kind: send
-    request_hex: 2e010100
+    request_hex: '2701'
     expected_responses_hex:
-    - 6e0101
-    description: Write 0 to DID 0x0101.
+    - '670100000000'
+    description: Request a seed again while the level is unlocked -> 'already unlocked'
+      seed.
     max_response_time_ms: null
   - kind: send
-    request_hex: '220101'
+    request_hex: 2e010000
     expected_responses_hex:
-    - '62010100'
-    description: Read back to confirm the write.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:ambient_lighting_color_index
-    quote: 'DID 0x0101 ambient_lighting_color_index: length 1 bytes, encoding uint8,
-      readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions [''0x03'']
-      requiring security level 0x01. Value range 0-15.'
-  - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-010
-    quote: 'REQ-010 (security): SecurityAccess level 0x01 shall lock out further attempts
-      for 10 seconds after 3 consecutive invalid keys.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU can successfully write a value of 0 to
-    DID 0x0101 in session 0x01 after unlocking security level 0x1. This is important
-    because it verifies the ECU's ability to perform a write operation under secured
-    conditions, which is necessary for the ambient lighting system to function correctly.
-    The expected outcome is that the write operation is successful and the ECU confirms
-    the write by reading back the value 0.
-  origin: generated
-- id: req_010__tpl_read_did_positive_0101_02
-  title: Read DID ambient_lighting_color_index (0x0101) positively in session 0x2
-  requirement_ids:
-  - REQ-010
-  category: positive
-  template_id: read_did_positive
-  parameters:
-    did: 257
-    session: 2
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1002'
-    expected_responses_hex:
-    - 5002003201f4
-    description: Switch to session 0x2.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '220101'
-    expected_responses_hex:
-    - '62010100'
-    description: Read DID 0x0101 (ambient_lighting_color_index) in session 0x2.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:ambient_lighting_color_index
-    quote: 'DID 0x0101 ambient_lighting_color_index: length 1 bytes, encoding uint8,
-      readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions [''0x03'']
-      requiring security level 0x01. Value range 0-15.'
-  - source: data/bcm_spec.yaml
-    ref: session:programming
-    quote: 'Session 0x02 programming: allowed services [0x10, 0x11, 0x22, 0x27, 0x2E,
-      0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: nrcs
-    quote: '- **0x22 conditionsNotCorrect** — the request is well-formed and allowed,
-      but'
-  - source: data/requirements_seed.csv
-    ref: REQ-010
-    quote: 'REQ-010 (security): SecurityAccess level 0x01 shall lock out further attempts
-      for 10 seconds after 3 consecutive invalid keys.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: '6. A required condition is not met → 0x22:'
-  review_status: validated
-  explanation: This test checks if the ECU can successfully read the ambient lighting
-    color index (DID 0x0101) in session 0x02, which is part of the programming session.
-    This is important because it ensures the ECU can communicate correctly with the
-    diagnostic tool, which is necessary for performing other diagnostic tests. The
-    expected outcome is that the ECU responds with the ambient lighting color index
-    data without any errors, confirming the system is functioning as required.
-  origin: generated
-- id: req_010__tpl_security_lockout_01
-  title: SecurityAccess level 0x1 lockout after 3 wrong keys
-  requirement_ids:
-  - REQ-010
-  category: security
-  template_id: security_invalid_key_lockout
-  parameters:
-    level: 1
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
+    - 6e0100
+    description: Protected write to 0x0100 -> still accepted (level stays unlocked).
     max_response_time_ms: null
   - kind: send
     request_hex: '2701'
     expected_responses_hex:
-    - 6701950677e8
-    description: Request seed, attempt 1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2702960778e9
-    expected_responses_hex:
-    - 7f2735
-    description: Send wrong key, attempt 1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 670132a31485
-    description: Request seed, attempt 2.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 270233a41586
-    expected_responses_hex:
-    - 7f2735
-    description: Send wrong key, attempt 2.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 6701cf40b122
-    description: Request seed, attempt 3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2702d041b223
-    expected_responses_hex:
-    - 7f2736
-    description: Send wrong key, attempt 3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 7f2737
-    description: Request seed during lockout -> expect NRC 0x37.
-    max_response_time_ms: null
-  - kind: advance_time
-    ms: 10001
-    description: Advance past the lockout delay.
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Re-enter the session (S3 expired during the wait).
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 67016cdd4ebf
-    description: Request seed after delay expiry -> seed issued again.
+    - '670100000000'
+    description: Request a seed once more -> still the 'already unlocked' answer.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
@@ -2644,12 +2289,11 @@
     ref: 0x27-securityaccess
     quote: 0x27 SecurityAccess
   review_status: validated
-  explanation: "{\n  \"test_description\": \"This test checks if the ECU locks out\
-    \ further attempts after receiving 3 consecutive wrong keys at the SecurityAccess\
-    \ level 0x01. It matters because it verifies the requirement that locks out further\
-    \ attempts for 10 seconds after 3 consecutive invalid keys. The expected outcome\
-    \ is to see NRC 0x37 when attempting to request a seed during the lockout period,\
-    \ and then seed issuance resumes after the lockout delay expires.\"\n}"
+  explanation: This test verifies that attempting to seed the security level when
+    the door is unlocked is rejected. It is important for maintaining the security
+    of the vehicle, as it prevents unauthorized access attempts. The expected outcome
+    is that the test fails, resulting in a security level 0x01 notification, confirming
+    the system's security measures are in place.
   origin: generated
 - id: req_010__tpl_service_not_in_session_27_01
   title: Service 0x27 rejected in session 0x1
@@ -2684,11 +2328,11 @@
     ref: 0x27-securityaccess
     quote: 0x27 SecurityAccess
   review_status: validated
-  explanation: This test checks if attempting SecurityAccess level 0x01 in session
-    0x01 is refused, as per requirement REQ-010. It ensures that after three consecutive
-    invalid keys, the ECU locks out further attempts for 10 seconds. The expected
-    outcome is a Normal Response Code (NRC) 0x7F, indicating the service is not allowed
-    in the current session.
+  explanation: This test checks if the SecurityAccess service is refused in the default
+    session. It is essential for ensuring that the service is not available in the
+    default session, which could lead to unauthorized access. The expected outcome
+    is that the test passes, showing the service is correctly rejected in the default
+    session.
   origin: generated
 - id: req_010__tpl_seed_replay_01
   title: Replayed SecurityAccess key for level 0x1 is rejected
@@ -2745,12 +2389,253 @@
     ref: 0x27-securityaccess
     quote: 0x27 SecurityAccess
   review_status: validated
-  explanation: This test checks if the ECU correctly locks out further attempts after
-    receiving 3 consecutive invalid SecurityAccess keys at level 0x01. It matters
-    because it ensures the ECU's security mechanism is functioning as intended, preventing
-    unauthorized access attempts. The expected outcome is a Non-Request-Correction
-    (NRC) code 0x24, indicating the seed was consumed and further attempts are locked
-    out for 10 seconds.
+  explanation: This test confirms that replaying the same seed request is rejected
+    with a security level 0x01. It is crucial for maintaining the integrity of the
+    security system. The expected outcome is that the test fails, resulting in a security
+    level 0x01 notification, ensuring the system locks out further attempts.
+  origin: generated
+- id: req_010__tpl_read_badlen_0110_01
+  title: Malformed-length reads of DID driver_door_lock_state (0x0110) are rejected
+  requirement_ids:
+  - REQ-010
+  category: negative
+  template_id: read_did_invalid_length
+  parameters:
+    did: 272
+    session: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '22'
+    expected_responses_hex:
+    - 7f2213
+    description: ReadDataByIdentifier without any DID -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2201'
+    expected_responses_hex:
+    - 7f2213
+    description: Only the first byte of DID 0x0110 -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '22011000'
+    expected_responses_hex:
+    - 7f2213
+    description: DID 0x0110 plus one dangling byte -> length NRC, no partial answer.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '220110'
+    expected_responses_hex:
+    - '62011001'
+    description: Well-formed read of the same DID -> served normally.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: did:driver_door_lock_state
+    quote: 'DID 0x0110 driver_door_lock_state: length 1 bytes, encoding uint8, readable
+      in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: nrcs
+    quote: '- **0x22 conditionsNotCorrect** — the request is well-formed and allowed,
+      but'
+  - source: data/requirements_seed.csv
+    ref: REQ-010
+    quote: 'REQ-010 (security): SecurityAccess level 0x01 shall lock out further attempts
+      for 10 seconds after 3 consecutive invalid keys.'
+  - source: docs/behaviour_contract.md
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
+  review_status: validated
+  explanation: This test verifies that reading a DID with a malformed length is rejected.
+    It is important for ensuring the integrity of the communication protocol. The
+    expected outcome is that the test fails, resulting in a length NRC notification,
+    indicating the ECU correctly rejects the invalid data.
+  origin: generated
+- id: req_010__tpl_read_multi_0110_f190_01
+  title: Multi-DID read driver_door_lock_state + VIN in session 0x1
+  requirement_ids:
+  - REQ-010
+  category: positive
+  template_id: read_multiple_dids
+  parameters:
+    dids:
+    - 272
+    - 61840
+    session: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: 220110f190
+    expected_responses_hex:
+    - 62011001f19053594e544845544943424d303030303031
+    description: Read DIDs 0x0110, 0xf190 in one request -> every record, in order.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: did:driver_door_lock_state
+    quote: 'DID 0x0110 driver_door_lock_state: length 1 bytes, encoding uint8, readable
+      in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: did:VIN
+    quote: 'DID 0xF190 VIN: length 17 bytes, encoding ascii, readable in sessions
+      [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: nrcs
+    quote: '- **0x22 conditionsNotCorrect** — the request is well-formed and allowed,
+      but'
+  - source: data/requirements_seed.csv
+    ref: REQ-010
+    quote: 'REQ-010 (security): SecurityAccess level 0x01 shall lock out further attempts
+      for 10 seconds after 3 consecutive invalid keys.'
+  - source: docs/behaviour_contract.md
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
+  review_status: validated
+  explanation: This test checks if reading two DIDs in one request is allowed. It
+    is important for the efficiency and reliability of the communication. The expected
+    outcome is that the test passes, showing the ECU correctly responds with both
+    the driver door lock state and the VIN.
+  origin: generated
+- id: req_010__tpl_read_badlen_0111_01
+  title: Malformed-length reads of DID passenger_door_lock_state (0x0111) are rejected
+  requirement_ids:
+  - REQ-010
+  category: negative
+  template_id: read_did_invalid_length
+  parameters:
+    did: 273
+    session: 1
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '22'
+    expected_responses_hex:
+    - 7f2213
+    description: ReadDataByIdentifier without any DID -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2201'
+    expected_responses_hex:
+    - 7f2213
+    description: Only the first byte of DID 0x0111 -> length NRC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '22011100'
+    expected_responses_hex:
+    - 7f2213
+    description: DID 0x0111 plus one dangling byte -> length NRC, no partial answer.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '220111'
+    expected_responses_hex:
+    - '62011101'
+    description: Well-formed read of the same DID -> served normally.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: did:passenger_door_lock_state
+    quote: 'DID 0x0111 passenger_door_lock_state: length 1 bytes, encoding uint8,
+      readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
+  - source: data/bcm_spec.yaml
+    ref: session:default
+    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: nrcs
+    quote: '- **0x22 conditionsNotCorrect** — the request is well-formed and allowed,
+      but'
+  - source: data/requirements_seed.csv
+    ref: REQ-010
+    quote: 'REQ-010 (security): SecurityAccess level 0x01 shall lock out further attempts
+      for 10 seconds after 3 consecutive invalid keys.'
+  - source: docs/behaviour_contract.md
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
+  review_status: validated
+  explanation: This test verifies that reading a DID with a malformed length is rejected.
+    It is important for maintaining the integrity of the communication protocol. The
+    expected outcome is that the test fails, resulting in a length NRC notification,
+    indicating the ECU correctly rejects the invalid data.
+  origin: generated
+- id: req_010__tpl_session_relock_03
+  title: Session change re-locks security level 0x3
+  requirement_ids:
+  - REQ-010
+  category: security
+  template_id: session_change_relocks_security
+  parameters:
+    level: 3
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1002'
+    expected_responses_hex:
+    - 5002003201f4
+    description: Switch to session 0x2.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2703'
+    expected_responses_hex:
+    - 67030b7ced5e
+    description: Request seed for level 0x3.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 270420a92dba
+    expected_responses_hex:
+    - '6704'
+    description: Send computed key for level 0x3.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1002'
+    expected_responses_hex:
+    - 5002003201f4
+    description: Re-enter the same session -> security must be locked again.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2e01600000
+    expected_responses_hex:
+    - 7f2e33
+    description: Secured write to 0x0160 after re-entry -> expect NRC 0x33.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2703'
+    expected_responses_hex:
+    - 6703a8198afb
+    description: Request seed -> a fresh non-zero seed (level is locked again).
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: security_level:programming
+    quote: 'Security level 0x03 programming: seed sub-function 0x03, key sub-function
+      0x04, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
+      sessions [''0x02''].'
+  - source: data/bcm_spec.yaml
+    ref: session:programming
+    quote: 'Session 0x02 programming: allowed services [0x10, 0x11, 0x22, 0x27, 0x2E,
+      0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x27
+    quote: 0x27 SecurityAccess
+  - source: data/requirements_seed.csv
+    ref: REQ-010
+    quote: 'REQ-010 (security): SecurityAccess level 0x01 shall lock out further attempts
+      for 10 seconds after 3 consecutive invalid keys.'
+  - source: docs/behaviour_contract.md
+    ref: 0x27-securityaccess
+    quote: 0x27 SecurityAccess
+  review_status: validated
+  explanation: This test checks if a session change locks out further attempts with
+    security level 0x03. It is crucial for maintaining the security of the vehicle.
+    The expected outcome is that the test passes, showing the system correctly locks
+    out further attempts with security level 0x03.
   origin: generated
 - id: req_011__tpl_routine_start_results_0201
   title: Start routine lighting_self_test (0x0201) and read its results
@@ -2760,6 +2645,7 @@
   template_id: routine_start_results
   parameters:
     routine: 513
+    suppress_positive: false
   preconditions: []
   steps:
   - kind: send
@@ -2818,11 +2704,10 @@
     ref: 0x31-routinecontrol
     quote: 0x31 RoutineControl
   review_status: validated
-  explanation: This test checks if the lighting self-test routine can be initiated
-    and its results can be read successfully in session 0x01. It ensures that the
-    routine can be started without prematurely requesting results, which is important
-    for maintaining the integrity of the test. The expected outcome is that the routine
-    starts correctly and the results are returned without any issues.
+  explanation: This test verifies that the lighting self-test routine (0x0201) can
+    be started and results read successfully. It is crucial for ensuring the routine
+    does not accept a stop or requestResults subfunction before start has been sent.
+    The expected outcome is successful start and read of routine results.
   origin: generated
 - id: req_011__tpl_negative_suppress_31_02
   title: Negative response not suppressed for service 0x31 in session 0x2
@@ -2844,7 +2729,7 @@
   - kind: send
     request_hex: '31840201'
     expected_responses_hex:
-    - 7f3112
+    - 7f3131
     description: Unsupported subfunction 0x4 with the suppress bit set -> the NRC
       is still sent.
     max_response_time_ms: null
@@ -2864,301 +2749,16 @@
     ref: 0x31-routinecontrol
     quote: 0x31 RoutineControl
   review_status: validated
-  explanation: This test checks if the ECU correctly refuses a lighting self-test
-    routine (0x0201) when session 0x2 is active. It ensures that before sending the
-    start command (0x01), the ECU does not accept a stop command (0x40) or a request
-    for results (0x41). The outcome expected is a negative response with the suppress
-    bit set, indicating that the NRC (Negative Response Code) must still be sent,
-    adhering to the requirement that the lighting self-test routine is not accepted
-    before the start command is sent.
+  explanation: This test checks if the lighting self-test routine can be started and
+    results read successfully in session 0x2. It ensures that the routine does not
+    prematurely request results by rejecting a stop subfunction before start. The
+    expected outcome is a negative response not suppressed for service 0x31 in session
+    0x2.
   origin: generated
-- id: req_011__tpl_condition_not_met_routine_0202
-  title: Start routine door_actuator_calibration while vehicle is moving
-  requirement_ids:
-  - REQ-011
-  category: negative
-  template_id: condition_not_met
-  parameters:
-    kind: routine
-    target: 514
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: set_environment
-    vehicle_speed_kph: 10
-    nvm_write_fault: null
-    description: Vehicle moving.
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 6701950677e8
-    description: Request seed for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 27029a068f73
-    expected_responses_hex:
-    - '6702'
-    description: Send computed key for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '3101020200'
-    expected_responses_hex:
-    - 7f3122
-    description: Start routine while vehicle is moving -> expect NRC 0x22.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: routine:door_actuator_calibration
-    quote: 'Routine 0x0202 door_actuator_calibration: allowed sub-functions [''0x01'',
-      ''0x02'', ''0x03''], sessions [''0x03''], requires security level 0x01, option
-      record length 1 bytes.'
-  - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x31
-    quote: 0x31 RoutineControl
-  - source: data/requirements_seed.csv
-    ref: REQ-011
-    quote: 'REQ-011 (sequence): The lighting self-test routine (0x0201) shall not
-      accept a stop or requestResults subfunction before start has been sent.'
-  - source: docs/behaviour_contract.md
-    ref: 0x31-routinecontrol
-    quote: 0x31 RoutineControl
-  review_status: validated
-  explanation: This test checks if the lighting self-test routine correctly refuses
-    a request to start the door actuator calibration routine when the vehicle is moving.
-    It matters because the requirement states the routine should not accept a stop
-    or requestResults subfunction before start has been sent. The expected outcome
-    is a negative response (NRC 0x22) when attempting to start the door actuator calibration
-    routine while the vehicle is in motion.
-  origin: generated
-- id: req_011__tpl_negative_suppress_31_03
-  title: Negative response not suppressed for service 0x31 in session 0x3
-  requirement_ids:
-  - REQ-011
-  category: negative
-  template_id: negative_response_with_suppress_bit
-  parameters:
-    sid: 49
-    session: 3
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '31840201'
-    expected_responses_hex:
-    - 7f3112
-    description: Unsupported subfunction 0x4 with the suppress bit set -> the NRC
-      is still sent.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x31
-    quote: 0x31 RoutineControl
-  - source: data/requirements_seed.csv
-    ref: REQ-011
-    quote: 'REQ-011 (sequence): The lighting self-test routine (0x0201) shall not
-      accept a stop or requestResults subfunction before start has been sent.'
-  - source: docs/behaviour_contract.md
-    ref: 0x31-routinecontrol
-    quote: 0x31 RoutineControl
-  review_status: validated
-  explanation: This test checks if the ECU correctly refuses a lighting self-test
-    routine (0x0201) when a negative response is sent in session 0x3, specifically
-    when the suppress bit is set. This ensures that the ECU does not accept a stop
-    or requestResults subfunction before the start has been sent, as per the requirement.
-    The expected outcome is that the ECU will send the NRC (Negative Response Code)
-    to indicate the negative response, maintaining the protocol integrity.
-  origin: generated
-- id: req_011__tpl_nrc_priority_31_01
-  title: 'NRC priority: service 0x31 + unknown identifier in session 0x1'
-  requirement_ids:
-  - REQ-011
-  category: negative
-  template_id: nrc_priority_session_over_identifier
-  parameters:
-    sid: 49
-    session: 1
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: 3101dead
-    expected_responses_hex:
-    - 7f317f
-    description: Unknown routine 0xdead, service 0x31 not allowed in session 0x1 ->
-      the session check (0x7F) wins over the identifier check (0x31).
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: session:default
-    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x31
-    quote: 0x31 RoutineControl
-  - source: data/requirements_seed.csv
-    ref: REQ-011
-    quote: 'REQ-011 (sequence): The lighting self-test routine (0x0201) shall not
-      accept a stop or requestResults subfunction before start has been sent.'
-  - source: docs/behaviour_contract.md
-    ref: 0x31-routinecontrol
-    quote: 0x31 RoutineControl
-  review_status: validated
-  explanation: This test checks if the ECU correctly refuses a lighting self-test
-    routine (0x0201) when the session identifier is 0x1 and the service identifier
-    is 0x31, which is not allowed in that session. The outcome expected is that the
-    ECU will respond with a session check (0x7F) error, indicating that the session
-    identifier takes precedence over the service identifier in this scenario.
-  origin: generated
-- id: req_012__tpl_write_secured_0101
-  title: Write DID ambient_lighting_color_index (0x0101) after unlocking level 0x1
-  requirement_ids:
-  - REQ-012
-  category: positive
-  template_id: write_did_secured_positive
-  parameters:
-    did: 257
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1003'
-    expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '2701'
-    expected_responses_hex:
-    - 6701950677e8
-    description: Request seed for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 27029a068f73
-    expected_responses_hex:
-    - '6702'
-    description: Send computed key for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e010100
-    expected_responses_hex:
-    - 6e0101
-    description: Write 0 to DID 0x0101.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '220101'
-    expected_responses_hex:
-    - '62010100'
-    description: Read back to confirm the write.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:ambient_lighting_color_index
-    quote: 'DID 0x0101 ambient_lighting_color_index: length 1 bytes, encoding uint8,
-      readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions [''0x03'']
-      requiring security level 0x01. Value range 0-15.'
-  - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-012
-    quote: 'REQ-012 (conditions): The door actuator calibration routine (0x0202) shall
-      only run while the vehicle is stationary.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the door actuator calibration routine can be initiated
-    when the vehicle is stationary (session 0x01). It ensures that the requirement
-    REQ-012, which states that the door actuator calibration routine should only run
-    while the vehicle is stationary, is met. The outcome expected is that the DID
-    0x0101 is written successfully and read back to confirm the write, indicating
-    that the session is indeed stationary.
-  origin: generated
-- id: req_012__tpl_read_did_positive_0101_02
-  title: Read DID ambient_lighting_color_index (0x0101) positively in session 0x2
-  requirement_ids:
-  - REQ-012
-  category: positive
-  template_id: read_did_positive
-  parameters:
-    did: 257
-    session: 2
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1002'
-    expected_responses_hex:
-    - 5002003201f4
-    description: Switch to session 0x2.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '220101'
-    expected_responses_hex:
-    - '62010100'
-    description: Read DID 0x0101 (ambient_lighting_color_index) in session 0x2.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:ambient_lighting_color_index
-    quote: 'DID 0x0101 ambient_lighting_color_index: length 1 bytes, encoding uint8,
-      readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions [''0x03'']
-      requiring security level 0x01. Value range 0-15.'
-  - source: data/bcm_spec.yaml
-    ref: session:programming
-    quote: 'Session 0x02 programming: allowed services [0x10, 0x11, 0x22, 0x27, 0x2E,
-      0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: nrcs
-    quote: '- **0x22 conditionsNotCorrect** — the request is well-formed and allowed,
-      but'
-  - source: data/requirements_seed.csv
-    ref: REQ-012
-    quote: 'REQ-012 (conditions): The door actuator calibration routine (0x0202) shall
-      only run while the vehicle is stationary.'
-  - source: docs/behaviour_contract.md
-    ref: 0x31-routinecontrol
-    quote: 6. Conditions not met → 0x22. Checked on start only.
-  review_status: validated
-  explanation: This test checks if the ambient lighting color index can be read correctly
-    during the programming session (0x2). It matters for the requirement as it verifies
-    the ambient lighting system is operational. The expected outcome is that the DID
-    0x0101 (ambient_lighting_color_index) can be successfully read in this session
-    without any errors.
-  origin: generated
-- id: req_012__tpl_service_not_in_session_31_01
+- id: req_011__tpl_service_not_in_session_31_01
   title: Service 0x31 rejected in session 0x1
   requirement_ids:
-  - REQ-012
+  - REQ-011
   category: session
   template_id: service_not_in_session
   parameters:
@@ -3181,18 +2781,193 @@
     ref: svc-0x31
     quote: 0x31 RoutineControl
   - source: data/requirements_seed.csv
-    ref: REQ-012
-    quote: 'REQ-012 (conditions): The door actuator calibration routine (0x0202) shall
-      only run while the vehicle is stationary.'
+    ref: REQ-011
+    quote: 'REQ-011 (sequence): The lighting self-test routine (0x0201) shall not
+      accept a stop or requestResults subfunction before start has been sent.'
   - source: docs/behaviour_contract.md
     ref: 0x31-routinecontrol
     quote: 0x31 RoutineControl
   review_status: validated
-  explanation: This test checks if the vehicle correctly refuses to run the door actuator
-    calibration routine (Service 0x0202) when the extended session (Session 0x03)
-    is active. It ensures that the routine is only executed when the vehicle is stationary,
-    as per the requirement. The expected outcome is a Normal Response Code (NRC) 0x7F,
-    indicating that the service is not allowed in the current session.
+  explanation: This test checks if the RoutineControl service (0x31) is rejected in
+    session 0x1, ensuring the lighting self-test routine is not allowed in this session.
+    The expected outcome is an NRC (Negative Response Code) of 0x7F.
+  origin: generated
+- id: req_011__tpl_routine_after_session_0201
+  title: Routine lighting_self_test (0x0201) status is cleared by the session change
+  requirement_ids:
+  - REQ-011
+  category: session
+  template_id: session_change_resets_routine
+  parameters:
+    routine: 513
+    transition: session_change
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Switch to session 0x3.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: Request seed for level 0x1.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: Send computed key for level 0x1.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31010201'
+    expected_responses_hex:
+    - '7101020101'
+    description: Start the routine.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Re-enter the session (a positive session change).
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 670132a31485
+    description: 'Unlock again: Request seed for level 0x1.'
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2702a529961a
+    expected_responses_hex:
+    - '6702'
+    description: 'Unlock again: Send computed key for level 0x1.'
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31030201'
+    expected_responses_hex:
+    - 7f3124
+    description: Request results -> the start before the session change no longer
+      counts.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31010201'
+    expected_responses_hex:
+    - '7101020101'
+    description: Start the routine again -> accepted.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: routine:lighting_self_test
+    quote: 'Routine 0x0201 lighting_self_test: allowed sub-functions [''0x01'', ''0x02'',
+      ''0x03''], sessions [''0x03''], requires security level 0x01, option record
+      length 0 bytes.'
+  - source: data/bcm_spec.yaml
+    ref: security_level:extended_diag
+    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
+      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
+      sessions [''0x03''].'
+  - source: data/bcm_spec.yaml
+    ref: session:extended
+    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x31
+    quote: 0x31 RoutineControl
+  - source: data/requirements_seed.csv
+    ref: REQ-011
+    quote: 'REQ-011 (sequence): The lighting self-test routine (0x0201) shall not
+      accept a stop or requestResults subfunction before start has been sent.'
+  - source: docs/behaviour_contract.md
+    ref: 0x31-routinecontrol
+    quote: 0x31 RoutineControl
+  review_status: validated
+  explanation: Routine lighting_self_test (0x0201) status is cleared by the session
+    change (session test, template session_change_resets_routine). Start a routine,
+    change session or reset the ECU, results must say not started. Expected responses
+    come from the rules engine.
+  origin: generated
+- id: req_012__tpl_routine_start_results_0202
+  title: Start routine door_actuator_calibration (0x0202) and read its results
+  requirement_ids:
+  - REQ-012
+  category: positive
+  template_id: routine_start_results
+  parameters:
+    routine: 514
+    suppress_positive: false
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Switch to session 0x3.
+    max_response_time_ms: null
+  - kind: set_environment
+    vehicle_speed_kph: 0
+    nvm_write_fault: null
+    description: Ensure routine preconditions hold.
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: Request seed for level 0x1.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: Send computed key for level 0x1.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '3101020200'
+    expected_responses_hex:
+    - '7101020201'
+    description: Start the routine.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31030202'
+    expected_responses_hex:
+    - '7103020201'
+    description: Request routine results.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: routine:door_actuator_calibration
+    quote: 'Routine 0x0202 door_actuator_calibration: allowed sub-functions [''0x01'',
+      ''0x02'', ''0x03''], sessions [''0x03''], requires security level 0x01, option
+      record length 1 bytes.'
+  - source: data/bcm_spec.yaml
+    ref: security_level:extended_diag
+    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
+      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
+      sessions [''0x03''].'
+  - source: data/bcm_spec.yaml
+    ref: session:extended
+    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x31
+    quote: 0x31 RoutineControl
+  - source: data/requirements_seed.csv
+    ref: REQ-012
+    quote: 'REQ-012 (conditions): The door actuator calibration routine (0x0202) shall
+      only run while the vehicle is stationary.'
+  - source: docs/behaviour_contract.md
+    ref: 4-subfunction-supported-0x12
+    quote: '**This step is not applied to 0x31.** For RoutineControl the control type
+      is checked only per routine, inside the 0x31 checks (step 3 of the 0x31 list),
+      i.e. *after* the routine identifier and the routine''s session have been checked.
+      Examples (extended session, security locked):'
+  review_status: validated
+  explanation: This test checks if the door actuator calibration routine (0x0202)
+    starts and its results are read when the vehicle is stationary. It ensures the
+    routine only runs when the vehicle is not moving, which is crucial for safety
+    and proper calibration. The expected outcome is that the routine starts successfully
+    and its results are read without any issues.
   origin: generated
 - id: req_012__tpl_negative_suppress_31_03
   title: Negative response not suppressed for service 0x31 in session 0x3
@@ -3231,136 +3006,192 @@
     quote: 'REQ-012 (conditions): The door actuator calibration routine (0x0202) shall
       only run while the vehicle is stationary.'
   - source: docs/behaviour_contract.md
-    ref: 0x31-routinecontrol
-    quote: 0x31 RoutineControl
+    ref: 4-subfunction-supported-0x12
+    quote: '**This step is not applied to 0x31.** For RoutineControl the control type
+      is checked only per routine, inside the 0x31 checks (step 3 of the 0x31 list),
+      i.e. *after* the routine identifier and the routine''s session have been checked.
+      Examples (extended session, security locked):'
   review_status: validated
-  explanation: This test checks if the ECU correctly sends an NRC (Negative Response
-    Code) when the door actuator calibration routine is unsupported in the extended
-    session (0x03). This is important because it ensures the ECU complies with the
-    requirement that the door actuator calibration routine can only run when the vehicle
-    is stationary. The expected outcome is that the ECU will send the NRC as required
-    when the unsupported subfunction is encountered.
+  explanation: This test verifies that the service is refused when attempting to run
+    the door actuator calibration routine while the vehicle is moving. The expected
+    outcome is that the service is refused with the NRC (Not Ready Code) set to 0x7F,
+    indicating the routine is not allowed due to the vehicle's movement.
   origin: generated
-- id: req_013__tpl_read_did_positive_0140_01
-  title: Read DID vehicle_speed_kph (0x0140) positively in session 0x1
+- id: req_012__tpl_routine_after_session_0202
+  title: Routine door_actuator_calibration (0x0202) status is cleared by the session
+    change
   requirement_ids:
-  - REQ-013
-  category: positive
-  template_id: read_did_positive
+  - REQ-012
+  category: session
+  template_id: session_change_resets_routine
   parameters:
-    did: 320
+    routine: 514
+    transition: session_change
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Switch to session 0x3.
+    max_response_time_ms: null
+  - kind: set_environment
+    vehicle_speed_kph: 0
+    nvm_write_fault: null
+    description: Ensure routine preconditions hold.
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 6701950677e8
+    description: Request seed for level 0x1.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 27029a068f73
+    expected_responses_hex:
+    - '6702'
+    description: Send computed key for level 0x1.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '3101020200'
+    expected_responses_hex:
+    - '7101020201'
+    description: Start the routine.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Re-enter the session (a positive session change).
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '2701'
+    expected_responses_hex:
+    - 670132a31485
+    description: 'Unlock again: Request seed for level 0x1.'
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 2702a529961a
+    expected_responses_hex:
+    - '6702'
+    description: 'Unlock again: Send computed key for level 0x1.'
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '31030202'
+    expected_responses_hex:
+    - 7f3124
+    description: Request results -> the start before the session change no longer
+      counts.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '3101020200'
+    expected_responses_hex:
+    - '7101020201'
+    description: Start the routine again -> accepted.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: routine:door_actuator_calibration
+    quote: 'Routine 0x0202 door_actuator_calibration: allowed sub-functions [''0x01'',
+      ''0x02'', ''0x03''], sessions [''0x03''], requires security level 0x01, option
+      record length 1 bytes.'
+  - source: data/bcm_spec.yaml
+    ref: security_level:extended_diag
+    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
+      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
+      sessions [''0x03''].'
+  - source: data/bcm_spec.yaml
+    ref: session:extended
+    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x31
+    quote: 0x31 RoutineControl
+  - source: data/requirements_seed.csv
+    ref: REQ-012
+    quote: 'REQ-012 (conditions): The door actuator calibration routine (0x0202) shall
+      only run while the vehicle is stationary.'
+  - source: docs/behaviour_contract.md
+    ref: 4-subfunction-supported-0x12
+    quote: '**This step is not applied to 0x31.** For RoutineControl the control type
+      is checked only per routine, inside the 0x31 checks (step 3 of the 0x31 list),
+      i.e. *after* the routine identifier and the routine''s session have been checked.
+      Examples (extended session, security locked):'
+  review_status: validated
+  explanation: This test checks if the door actuator calibration routine is reset
+    when the session changes, ensuring it does not run while the vehicle is moving.
+    The expected outcome is that the routine status is cleared by the session change,
+    preventing its execution when the vehicle is moving.
+  origin: generated
+- id: req_012__tpl_service_not_in_session_31_01
+  title: Service 0x31 rejected in session 0x1
+  requirement_ids:
+  - REQ-012
+  category: session
+  template_id: service_not_in_session
+  parameters:
+    sid: 49
     session: 1
   preconditions: []
   steps:
   - kind: send
-    request_hex: '220140'
+    request_hex: '31010201'
     expected_responses_hex:
-    - '62014000'
-    description: Read DID 0x0140 (vehicle_speed_kph) in session 0x1.
+    - 7f317f
+    description: Service 0x31 not allowed in session 0x1 -> expect NRC 0x7F.
     max_response_time_ms: null
   citations:
-  - source: data/bcm_spec.yaml
-    ref: did:vehicle_speed_kph
-    quote: 'DID 0x0140 vehicle_speed_kph: length 1 bytes, encoding uint8, readable
-      in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
   - source: data/bcm_spec.yaml
     ref: session:default
     quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: svc-0x22
-    quote: 0x22 ReadDataByIdentifier
+    ref: svc-0x31
+    quote: 0x31 RoutineControl
   - source: data/requirements_seed.csv
-    ref: REQ-013
-    quote: 'REQ-013 (negative): ECUReset shall support hard reset (0x01) and soft
-      reset (0x03) subfunctions only.'
+    ref: REQ-012
+    quote: 'REQ-012 (conditions): The door actuator calibration routine (0x0202) shall
+      only run while the vehicle is stationary.'
   - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
+    ref: 4-subfunction-supported-0x12
+    quote: '**This step is not applied to 0x31.** For RoutineControl the control type
+      is checked only per routine, inside the 0x31 checks (step 3 of the 0x31 list),
+      i.e. *after* the routine identifier and the routine''s session have been checked.
+      Examples (extended session, security locked):'
   review_status: validated
-  explanation: This test checks if the ECU can read the vehicle speed in kilometers
-    per hour (KPH) DID 0x0140 in session 0x01. It matters because it verifies the
-    ECU supports reading this important vehicle data. The expected outcome is that
-    the ECU responds correctly with the vehicle speed value in session 0x01.
+  explanation: This test ensures the service 0x31 is not allowed in the wrong session,
+    preventing the door actuator calibration routine from running while the vehicle
+    is moving. The expected outcome is that the service is refused with the NRC set
+    to 0x7F, indicating the session is incorrect for the routine.
   origin: generated
-- id: req_013__tpl_write_readonly_0140
-  title: Write to read-only DID vehicle_speed_kph (0x0140) is rejected
+- id: req_013__tpl_negative_suppress_11_03
+  title: Negative response not suppressed for service 0x11 in session 0x3
   requirement_ids:
   - REQ-013
   category: negative
-  template_id: write_readonly_did
-  parameters:
-    did: 320
-    session: 2
-  preconditions: []
-  steps:
-  - kind: send
-    request_hex: '1002'
-    expected_responses_hex:
-    - 5002003201f4
-    description: Switch to session 0x2.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e014000
-    expected_responses_hex:
-    - 7f2e31
-    description: Write a read-only DID -> expect NRC 0x31 (identifier not writable).
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '220140'
-    expected_responses_hex:
-    - '62014000'
-    description: Read back -> value unchanged.
-    max_response_time_ms: null
-  citations:
-  - source: data/bcm_spec.yaml
-    ref: did:vehicle_speed_kph
-    quote: 'DID 0x0140 vehicle_speed_kph: length 1 bytes, encoding uint8, readable
-      in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
-  - source: data/bcm_spec.yaml
-    ref: session:programming
-    quote: 'Session 0x02 programming: allowed services [0x10, 0x11, 0x22, 0x27, 0x2E,
-      0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
-  - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
-  - source: data/requirements_seed.csv
-    ref: REQ-013
-    quote: 'REQ-013 (negative): ECUReset shall support hard reset (0x01) and soft
-      reset (0x03) subfunctions only.'
-  - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
-  review_status: validated
-  explanation: This test checks if the ECU can write to the vehicle_speed_kph DID
-    (0x0140), which is identified as a read-only DID in session 0x02 programming.
-    It matters because it verifies that the ECU does not support writing to this read-only
-    DID, aligning with the requirement that ECUReset only supports hard reset (0x01)
-    and soft reset (0x03) subfunctions. The expected outcome is a Negative Response
-    Code (NRC) 0x31, indicating that the DID is not writable, confirming the requirement.
-  origin: generated
-- id: req_013__tpl_unsupported_subfunction_11_01
-  title: Unsupported subfunction for service 0x11 in session 0x1
-  requirement_ids:
-  - REQ-013
-  category: negative
-  template_id: unsupported_subfunction
+  template_id: negative_response_with_suppress_bit
   parameters:
     sid: 17
-    session: 1
+    session: 3
   preconditions: []
   steps:
   - kind: send
-    request_hex: '1102'
+    request_hex: '1003'
+    expected_responses_hex:
+    - 5003003201f4
+    description: Switch to session 0x3.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1182'
     expected_responses_hex:
     - 7f1112
-    description: Unsupported subfunction 0x2 for service 0x11 -> expect NRC 0x12.
+    description: Unsupported subfunction 0x2 with the suppress bit set -> the NRC
+      is still sent.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
-    ref: session:default
-    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+    ref: session:extended
+    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
+      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
     ref: svc-0x11
     quote: 0x11 ECUReset
@@ -3372,11 +3203,56 @@
     ref: 0x11-ecureset
     quote: 0x11 ECUReset
   review_status: validated
-  explanation: This test checks if the ECU supports only the hard reset (0x01) and
-    soft reset (0x03) subfunctions for the ECUReset service (0x11). It matters because
-    the requirement specifies that these are the only supported subfunctions. The
-    expected outcome is a Negative Response Code (NRC) 0x12, indicating that the ECU
-    does not support the unsupported subfunction 0x02 for the service 0x11.
+  explanation: This test checks for unsupported session 0x03 with extended reset.
+    It ensures that the NRC (Normal Response Code) is still sent, even when the session
+    is set to 0x03 and the subfunction is 0x2, which is not supported. This is important
+    for verifying that the ECU correctly handles unsupported reset subfunctions and
+    sends the NRC to maintain communication integrity.
+  origin: generated
+- id: req_013__tpl_negative_suppress_11_02
+  title: Negative response not suppressed for service 0x11 in session 0x2
+  requirement_ids:
+  - REQ-013
+  category: negative
+  template_id: negative_response_with_suppress_bit
+  parameters:
+    sid: 17
+    session: 2
+  preconditions: []
+  steps:
+  - kind: send
+    request_hex: '1002'
+    expected_responses_hex:
+    - 5002003201f4
+    description: Switch to session 0x2.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '1182'
+    expected_responses_hex:
+    - 7f1112
+    description: Unsupported subfunction 0x2 with the suppress bit set -> the NRC
+      is still sent.
+    max_response_time_ms: null
+  citations:
+  - source: data/bcm_spec.yaml
+    ref: session:programming
+    quote: 'Session 0x02 programming: allowed services [0x10, 0x11, 0x22, 0x27, 0x2E,
+      0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x11
+    quote: 0x11 ECUReset
+  - source: data/requirements_seed.csv
+    ref: REQ-013
+    quote: 'REQ-013 (negative): ECUReset shall support hard reset (0x01) and soft
+      reset (0x03) subfunctions only.'
+  - source: docs/behaviour_contract.md
+    ref: 0x11-ecureset
+    quote: 0x11 ECUReset
+  review_status: validated
+  explanation: 'Negative response not suppressed for service 0x11 in session 0x2 (negative
+    test, template negative_response_with_suppress_bit). Unsupported subfunction with
+    the suppress bit set: the NRC must still be sent. Expected responses come from
+    the rules engine.'
   origin: generated
 - id: req_013__tpl_negative_suppress_11_01
   title: Negative response not suppressed for service 0x11 in session 0x1
@@ -3412,62 +3288,66 @@
     ref: 0x11-ecureset
     quote: 0x11 ECUReset
   review_status: validated
-  explanation: This test checks if the ECU supports the ECUReset subfunction 0x01
-    in session 0x01 with the suppress bit set. It matters because the requirement
-    states that only hard reset (0x01) and soft reset (0x03) are supported. The expected
-    outcome is that when the ECU receives a request for subfunction 0x01 with the
-    suppress bit set, it should still send the Normal Response Code (NRC) to indicate
-    the unsupported subfunction.
+  explanation: 'Negative response not suppressed for service 0x11 in session 0x1 (negative
+    test, template negative_response_with_suppress_bit). Unsupported subfunction with
+    the suppress bit set: the NRC must still be sent. Expected responses come from
+    the rules engine.'
   origin: generated
-- id: req_014__tpl_read_multi_0140_f190_01
-  title: Multi-DID read vehicle_speed_kph + VIN in session 0x1
+- id: req_014__tpl_dtc_read_clear_B10101
+  title: Read and clear injected DTC B10101
   requirement_ids:
   - REQ-014
   category: positive
-  template_id: read_multiple_dids
+  template_id: dtc_read_clear
   parameters:
-    dids:
-    - 320
-    - 61840
-    session: 1
+    code: B10101
   preconditions: []
   steps:
+  - kind: set_dtc_status
+    code: B10101
+    status: 9
+    description: Inject status 0x09 on DTC B10101.
   - kind: send
-    request_hex: 220140f190
+    request_hex: '190209'
     expected_responses_hex:
-    - 62014000f19053594e544845544943424d303030303031
-    description: Read DIDs 0x0140, 0xf190 in one request -> every record, in order.
+    - 5902ffb1010109
+    description: Read DTCs matching mask 0x09 -> includes the injected DTC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '190240'
+    expected_responses_hex:
+    - 5902ff
+    description: Read DTCs matching mask 0x40 -> excludes the injected DTC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 14b10101
+    expected_responses_hex:
+    - '54'
+    description: Clear just this DTC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '190209'
+    expected_responses_hex:
+    - 5902ff
+    description: Read again -> the DTC no longer matches.
     max_response_time_ms: null
   citations:
-  - source: data/bcm_spec.yaml
-    ref: did:vehicle_speed_kph
-    quote: 'DID 0x0140 vehicle_speed_kph: length 1 bytes, encoding uint8, readable
-      in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
-  - source: data/bcm_spec.yaml
-    ref: did:VIN
-    quote: 'DID 0xF190 VIN: length 17 bytes, encoding ascii, readable in sessions
-      [''0x01'', ''0x02'', ''0x03''], read-only.'
-  - source: data/bcm_spec.yaml
-    ref: session:default
-    quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: svc-0x22
-    quote: 0x22 ReadDataByIdentifier
+    ref: svc-0x19
+    quote: 0x19/0x02 ReadDTCInformation (reportDTCByStatusMask)
   - source: data/requirements_seed.csv
     ref: REQ-014
     quote: 'REQ-014 (negative): ReadDTCInformation shall support subfunction 0x02
       (reportDTCByStatusMask) only.'
   - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
+    ref: 0x19-subfunction-02-readdtcinformation-by-status-mask
+    quote: '0x19 subfunction 02: ReadDTCInformation by status mask'
   review_status: validated
-  explanation: This test checks if the ECU supports reading two different Diagnostic
-    Information Dids (DIDs) in a single ReadDataByIdentifier request, specifically
-    DIDs 0x0140 (Vehicle Speed) and 0xf190 (VIN). This is important because it verifies
-    compliance with the requirement that the ECU should support subfunction 0x02 (reportDTCByStatusMask)
-    for ReadDTCInformation. The expected outcome is successful processing of the request,
-    returning all records for both DIDs in the correct order.
+  explanation: This test checks if the ECU can read and clear a specific DTC (DTC
+    B10101) when injected with a status code 0x09. It matters for the requirement
+    as it verifies the ECU's ability to handle and clear a particular DTC status.
+    The expected outcome is that the ECU will read and clear the DTC B10101 when the
+    status 0x09 is injected.
   origin: generated
 - id: req_014__tpl_service_not_in_session_19_02
   title: Service 0x19 rejected in session 0x2
@@ -3508,40 +3388,50 @@
     ref: 0x19-subfunction-02-readdtcinformation-by-status-mask
     quote: '0x19 subfunction 02: ReadDTCInformation by status mask'
   review_status: validated
-  explanation: This test checks if the ECU correctly rejects a request to perform
-    the ReadDTCInformation service (Service 0x19) during a programming session (Session
-    0x2). It ensures that the ECU adheres to the requirement that this service is
-    not allowed in session 0x2. The expected outcome is a Non-Recognition Code (NRC)
-    0x7F, indicating that the service is not supported in the current session.
+  explanation: This test ensures that the service 0x19 is not allowed in session 0x2,
+    as per the requirement. It matters because it confirms the ECU's compliance with
+    the session management rules. The expected outcome is that the ECU will respond
+    with NRC 0x7F when the service 0x19 is requested in session 0x2.
   origin: generated
-- id: req_014__tpl_unsupported_subfunction_19_03
-  title: Unsupported subfunction for service 0x19 in session 0x3
+- id: req_014__tpl_dtc_read_clear_B10205
+  title: Read and clear injected DTC B10205
   requirement_ids:
   - REQ-014
-  category: negative
-  template_id: unsupported_subfunction
+  category: positive
+  template_id: dtc_read_clear
   parameters:
-    sid: 25
-    session: 3
+    code: B10205
   preconditions: []
   steps:
+  - kind: set_dtc_status
+    code: B10205
+    status: 9
+    description: Inject status 0x09 on DTC B10205.
   - kind: send
-    request_hex: '1003'
+    request_hex: '190209'
     expected_responses_hex:
-    - 5003003201f4
-    description: Switch to session 0x3.
+    - 5902ffb1020509
+    description: Read DTCs matching mask 0x09 -> includes the injected DTC.
     max_response_time_ms: null
   - kind: send
-    request_hex: 1901ff
+    request_hex: '190240'
     expected_responses_hex:
-    - 7f1912
-    description: Unsupported subfunction 0x1 for service 0x19 -> expect NRC 0x12.
+    - 5902ff
+    description: Read DTCs matching mask 0x40 -> excludes the injected DTC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 14b10205
+    expected_responses_hex:
+    - '54'
+    description: Clear just this DTC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '190209'
+    expected_responses_hex:
+    - 5902ff
+    description: Read again -> the DTC no longer matches.
     max_response_time_ms: null
   citations:
-  - source: data/bcm_spec.yaml
-    ref: session:extended
-    quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
-      0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
     ref: svc-0x19
     quote: 0x19/0x02 ReadDTCInformation (reportDTCByStatusMask)
@@ -3553,37 +3443,89 @@
     ref: 0x19-subfunction-02-readdtcinformation-by-status-mask
     quote: '0x19 subfunction 02: ReadDTCInformation by status mask'
   review_status: validated
-  explanation: This test checks if the ECU correctly rejects the unsupported subfunction
-    0x02 (reportDTCByStatusMask) in the service 0x19 when session 0x3 is used. It
-    matters because the requirement specifies that the ECU should only support this
-    subfunction. The expected outcome is that the ECU responds with NRC 0x12, indicating
-    an unsupported subfunction, when the test engineer sends the unsupported subfunction
-    value.
+  explanation: This test checks if the ECU can read and clear a different DTC (DTC
+    B10205) when injected with a status code 0x09. It matters for the requirement
+    as it validates the ECU's ability to handle and clear a different DTC status.
+    The expected outcome is that the ECU will read and clear the DTC B10205 when the
+    status 0x09 is injected.
   origin: generated
-- id: req_015__tpl_read_did_positive_0100_01
-  title: Read DID interior_lighting_brightness_pct (0x0100) positively in session
-    0x1
+- id: req_014__tpl_dtc_read_clear_B10310
+  title: Read and clear injected DTC B10310
+  requirement_ids:
+  - REQ-014
+  category: positive
+  template_id: dtc_read_clear
+  parameters:
+    code: B10310
+  preconditions: []
+  steps:
+  - kind: set_dtc_status
+    code: B10310
+    status: 9
+    description: Inject status 0x09 on DTC B10310.
+  - kind: send
+    request_hex: '190209'
+    expected_responses_hex:
+    - 5902ffb1031009
+    description: Read DTCs matching mask 0x09 -> includes the injected DTC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '190240'
+    expected_responses_hex:
+    - 5902ff
+    description: Read DTCs matching mask 0x40 -> excludes the injected DTC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: 14b10310
+    expected_responses_hex:
+    - '54'
+    description: Clear just this DTC.
+    max_response_time_ms: null
+  - kind: send
+    request_hex: '190209'
+    expected_responses_hex:
+    - 5902ff
+    description: Read again -> the DTC no longer matches.
+    max_response_time_ms: null
+  citations:
+  - source: data/sources/uds_reference_notes.md
+    ref: svc-0x19
+    quote: 0x19/0x02 ReadDTCInformation (reportDTCByStatusMask)
+  - source: data/requirements_seed.csv
+    ref: REQ-014
+    quote: 'REQ-014 (negative): ReadDTCInformation shall support subfunction 0x02
+      (reportDTCByStatusMask) only.'
+  - source: docs/behaviour_contract.md
+    ref: 0x19-subfunction-02-readdtcinformation-by-status-mask
+    quote: '0x19 subfunction 02: ReadDTCInformation by status mask'
+  review_status: validated
+  explanation: This test checks if the ECU can use subfunction 0x02 to report a specific
+    DTC (DTC B10310) when injected with a status code 0x09. It matters for the requirement
+    as it validates the use of subfunction 0x02 for reporting DTCs. The expected outcome
+    is that the ECU will read and clear the DTC B10310 when the status 0x09 is injected.
+  origin: generated
+- id: req_015__tpl_read_did_positive_f186_01
+  title: Read DID active_diagnostic_session (0xf186) positively in session 0x1
   requirement_ids:
   - REQ-015
   category: positive
   template_id: read_did_positive
   parameters:
-    did: 256
+    did: 61830
     session: 1
   preconditions: []
   steps:
   - kind: send
-    request_hex: '220100'
+    request_hex: 22f186
     expected_responses_hex:
-    - '62010032'
-    description: Read DID 0x0100 (interior_lighting_brightness_pct) in session 0x1.
+    - 62f18601
+    description: Read DID 0xf186 (active_diagnostic_session) in session 0x1.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
-    ref: did:interior_lighting_brightness_pct
-    quote: 'DID 0x0100 interior_lighting_brightness_pct: length 1 bytes, encoding
-      uint8, readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions
-      [''0x03''] requiring security level 0x01. Value range 0-100.'
+    ref: did:active_diagnostic_session
+    quote: 'DID 0xF186 active_diagnostic_session: length 1 bytes, encoding uint8,
+      readable in sessions [''0x01'', ''0x02'', ''0x03''], read-only.'
   - source: data/bcm_spec.yaml
     ref: session:default
     quote: 'Session 0x01 default: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
@@ -3596,25 +3538,23 @@
     quote: 'REQ-015 (timing): TesterPresent shall be accepted in every diagnostic
       session to keep the S3 session timer from expiring.'
   - source: docs/behaviour_contract.md
-    ref: 0x22-readdatabyidentifier
-    quote: 0x22 ReadDataByIdentifier
+    ref: 3-generic-length-0x13
+    quote: '| 0x22 | at least 3, and (len−1) even |'
   review_status: validated
-  explanation: This test checks if the ECU can read the interior lighting brightness
-    percentage (DID 0x0100) in session 0x01, ensuring it is accessible. It matters
-    for the requirement as it verifies that the tester is accepted in every diagnostic
-    session to prevent the S3 session timer from expiring. The expected outcome is
-    that the ECU successfully reads the interior lighting brightness percentage value
-    in session 0x01.
+  explanation: This test checks if TesterPresent is accepted in session 0x1. It matters
+    because REQ-015 requires TesterPresent to be accepted in every diagnostic session
+    to keep the S3 session timer from expiring. The expected outcome is that the DID
+    0xF186 (active_diagnostic_session) in session 0x1 will show TesterPresent as accepted.
   origin: generated
-- id: req_015__tpl_write_secured_0100
-  title: Write DID interior_lighting_brightness_pct (0x0100) after unlocking level
-    0x1
+- id: req_015__tpl_negative_suppress_3e_03
+  title: Negative response not suppressed for service 0x3e in session 0x3
   requirement_ids:
   - REQ-015
-  category: positive
-  template_id: write_did_secured_positive
+  category: negative
+  template_id: negative_response_with_suppress_bit
   parameters:
-    did: 256
+    sid: 62
+    session: 3
   preconditions: []
   steps:
   - kind: send
@@ -3624,61 +3564,33 @@
     description: Switch to session 0x3.
     max_response_time_ms: null
   - kind: send
-    request_hex: '2701'
+    request_hex: 3e81
     expected_responses_hex:
-    - 6701950677e8
-    description: Request seed for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 27029a068f73
-    expected_responses_hex:
-    - '6702'
-    description: Send computed key for level 0x1.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: 2e010000
-    expected_responses_hex:
-    - 6e0100
-    description: Write 0 to DID 0x0100.
-    max_response_time_ms: null
-  - kind: send
-    request_hex: '220100'
-    expected_responses_hex:
-    - '62010000'
-    description: Read back to confirm the write.
+    - 7f3e12
+    description: Unsupported subfunction 0x1 with the suppress bit set -> the NRC
+      is still sent.
     max_response_time_ms: null
   citations:
-  - source: data/bcm_spec.yaml
-    ref: did:interior_lighting_brightness_pct
-    quote: 'DID 0x0100 interior_lighting_brightness_pct: length 1 bytes, encoding
-      uint8, readable in sessions [''0x01'', ''0x02'', ''0x03''], writable in sessions
-      [''0x03''] requiring security level 0x01. Value range 0-100.'
-  - source: data/bcm_spec.yaml
-    ref: security_level:extended_diag
-    quote: 'Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function
-      0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in
-      sessions [''0x03''].'
   - source: data/bcm_spec.yaml
     ref: session:extended
     quote: 'Session 0x03 extended: allowed services [0x10, 0x11, 0x14, 0x19, 0x22,
       0x27, 0x2E, 0x31, 0x3E]. Timing: P2=50ms, P2*=5000ms, S3=5000ms.'
   - source: data/sources/uds_reference_notes.md
-    ref: svc-0x2e
-    quote: 0x2E WriteDataByIdentifier
+    ref: svc-0x3e
+    quote: 0x3E TesterPresent
   - source: data/requirements_seed.csv
     ref: REQ-015
     quote: 'REQ-015 (timing): TesterPresent shall be accepted in every diagnostic
       session to keep the S3 session timer from expiring.'
   - source: docs/behaviour_contract.md
-    ref: 0x2e-writedatabyidentifier
-    quote: 0x2E WriteDataByIdentifier
+    ref: 0x3e-testerpresent
+    quote: 0x3E TesterPresent
   review_status: validated
-  explanation: This test checks if the ECU can securely write and read back the interior
-    lighting brightness percentage (DID 0x0100) in a session secured at level 0x1.
-    It verifies the ECU's ability to maintain security and ensure that the S3 session
-    timer does not expire. The expected outcome is that the ECU successfully writes
-    0 to DID 0x0100 and then reads it back, confirming the write functionality and
-    security.
+  explanation: This test checks if TesterPresent is rejected in session 0x3 when the
+    suppress bit is set. It matters because REQ-015 specifies that TesterPresent should
+    be rejected in session 0x3 with the suppress bit set. The expected outcome is
+    that the session will not be extended due to TesterPresent, and the NRC will be
+    sent as a negative response.
   origin: generated
 - id: req_015__tpl_s3_keepalive_03
   title: TesterPresent keeps session 0x3 alive at the S3 boundary
@@ -3730,19 +3642,18 @@
     ref: 0x3e-testerpresent
     quote: 0x3E TesterPresent
   review_status: validated
-  explanation: This test checks if the TesterPresent message is received at the S3
-    boundary, ensuring the session 0x3 remains active. It matters because the requirement
-    states TesterPresent must be accepted to keep the S3 session timer from expiring.
-    The expected outcome is that after receiving TesterPresent at S3, the session
-    continues to be active, and reading the active session confirms it remains the
-    non-default session.
+  explanation: This test checks if TesterPresent keeps the session 0x3 alive at the
+    S3 boundary. It matters because REQ-015 requires TesterPresent to keep the S3
+    session alive. The expected outcome is that the session will remain active until
+    the S3 boundary, and TesterPresent will be present at the S3 boundary to keep
+    the session alive.
   origin: generated
-- id: req_015__tpl_negative_suppress_3e_02
-  title: Negative response not suppressed for service 0x3e in session 0x2
+- id: req_015__tpl_suppress_positive_3e_02
+  title: Suppress positive response for service 0x3e in session 0x2
   requirement_ids:
   - REQ-015
-  category: negative
-  template_id: negative_response_with_suppress_bit
+  category: positive
+  template_id: suppress_positive_response
   parameters:
     sid: 62
     session: 2
@@ -3755,11 +3666,9 @@
     description: Switch to session 0x2.
     max_response_time_ms: null
   - kind: send
-    request_hex: 3e81
-    expected_responses_hex:
-    - 7f3e12
-    description: Unsupported subfunction 0x1 with the suppress bit set -> the NRC
-      is still sent.
+    request_hex: 3e80
+    expected_responses_hex: []
+    description: Suppress-positive-response bit set -> expect no response frame.
     max_response_time_ms: null
   citations:
   - source: data/bcm_spec.yaml
@@ -3777,10 +3686,8 @@
     ref: 0x3e-testerpresent
     quote: 0x3E TesterPresent
   review_status: validated
-  explanation: This test checks if the ECU correctly sends the Negative Response Control
-    Command (NRC) when TesterPresent is not accepted in session 0x2 of a programming
-    session. This is important because it ensures that the Session Timer, which is
-    used to keep track of diagnostic sessions, does not expire. The expected outcome
-    is that the NRC is still sent, even though TesterPresent was not accepted, to
-    maintain the session timer.
+  explanation: This test checks if TesterPresent suppresses positive responses in
+    session 0x2. It matters because REQ-015 requires TesterPresent to suppress positive
+    responses in session 0x2. The expected outcome is that no response frame will
+    be sent due to the suppress-positive-response bit being set.
   origin: generated

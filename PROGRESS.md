@@ -693,3 +693,25 @@ The validation output, the count of requirements containing hex IDs, which are a
   - Natural v2: parsed exact 0/16, parsed P / R / F1 1.0 / 0.2245 / 0.3667, category recall 48%, precondition recall 55.6%.
 - **Held-out v1, now "seen":** the mock's generated suite catches 10/12 (it was 3/12 before the coverage templates).
 - **Command for the real run:** `python -m uds_assistant.eval.run_eval --mode ollama --noise-runs 3 --before-after`. It needs the GPU and takes about 1.1 to 1.4 hours (an estimate).
+
+## C5b — real evaluation run, mock and ollama (2026-10-04T02:22:15+05:30)
+
+- **Command:** `python -m uds_assistant.eval.run_eval --mode ollama --noise-runs 3 --before-after`. It started at 2026-10-04T01:48:22+05:30 and took about 31 minutes. Log: `outputs/partC/eval_run.log`. The GPU was free when it started.
+- **Result of the run:** the mode actually used was ollama. Byte provenance passed on every test: 511/511 mock and 418/418 ollama, including all three noise runs. Every Part C freeze hash matches and is clean.
+- **Fresh (v2) headline numbers**
+
+| Metric | mock | ollama |
+|---|---|---|
+| Held-out v2 bugs, generated / gold / union | 2/15, 5/15, 5/15 | 2/15, 5/15, 5/15 |
+| Natural v2 parsed exact | 0/16 | 4/16 |
+| Natural v2 parsed P / R / F1 | 1.000 / 0.225 / 0.367 | 0.565 / 0.796 / 0.661 |
+| Natural v2 category recall | 48.0% | 74.0% (mean of 3 runs 75.3%, range 74.0–76.0) |
+| Natural v2 precondition recall | 55.6% | 77.8% (mean 82.7%, range 77.8–85.2) |
+
+- **Seen sets, for context only:** the held-out v1 generated suite catches 10/12 with mock and 5/12 with ollama. The in-sample generated suite catches 25/26 and 19/26.
+- **Interpretation:** `outputs/partC/interpretation.md`, stored in the report with `--rerender`. The only key that changed in the report JSON was `interpretation`.
+- **Unfavourable results, stated plainly:**
+  - The generated suite catches only 2 of the 15 fresh bugs, in both modes. The coverage templates did not transfer from the seen v1 bugs.
+  - Ollama's parsed precision did not improve (0.565 on v2, 0.500 on the seen v1 test split). Most false positives are services, which the new identifier check does not cover.
+  - Rejected planner choices rose: 15 across the 35 old requirements (10 before) and 12 on v2. The template-id normalisation fired 0 times.
+- **Improvements:** explain now makes 1 call per requirement (it was 4.51), and mean latency fell from 30.8 s to 21.4 s.

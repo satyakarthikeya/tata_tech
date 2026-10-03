@@ -512,9 +512,9 @@ def test_gold_ecu_reset_suppressed():
     ])
 
 def test_gold_multi_did_read_one_bad():
-    """Multi-DID read where one DID is unknown fails the whole request [negative; template=None; requirements=REQ-002]"""
+    """Multi-DID read skips an unknown DID and answers the readable one [positive; template=None; requirements=REQ-002]"""
     run_steps([
-        ('send', '22f1909999', ['7f2231'], None),
+        ('send', '22f1909999', ['62f19053594e544845544943424d303030303031'], None),
     ])
 
 def test_gold_duplicate_did_read():

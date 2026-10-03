@@ -1,0 +1,157 @@
+[mock] REQ-001: 18 tests in 0.4 s
+[mock] REQ-002: 20 tests in 0.4 s
+[mock] REQ-003: 8 tests in 0.2 s
+[mock] REQ-004: 5 tests in 0.1 s
+[mock] REQ-005: 18 tests in 0.5 s
+[mock] REQ-006: 18 tests in 0.4 s
+[mock] REQ-007: 16 tests in 0.4 s
+[mock] REQ-008: 16 tests in 0.4 s
+[mock] REQ-009: 22 tests in 0.5 s
+[mock] REQ-010: 8 tests in 0.2 s
+[mock] REQ-011: 12 tests in 0.3 s
+[mock] REQ-012: 16 tests in 0.3 s
+[mock] REQ-013: 6 tests in 0.2 s
+[mock] REQ-014: 10 tests in 0.2 s
+[mock] REQ-015: 13 tests in 0.3 s
+[mock] NAT-001 (dev): 18 tests in 0.4 s
+[mock] NAT-002 (test): 14 tests in 0.3 s
+[mock] NAT-003 (dev): 0 tests in 0.1 s
+[mock] NAT-004 (test): 9 tests in 0.2 s
+[mock] NAT-005 (dev): 18 tests in 0.4 s
+[mock] NAT-006 (test): 14 tests in 0.3 s
+[mock] NAT-007 (dev): 7 tests in 0.2 s
+[mock] NAT-008 (test): 0 tests in 0.1 s
+[mock] NAT-009 (dev): 20 tests in 0.4 s
+[mock] NAT-010 (test): 3 tests in 0.1 s
+[mock] NAT-011 (dev): 12 tests in 0.3 s
+[mock] NAT-012 (test): 16 tests in 0.4 s
+[mock] NAT-013 (dev): 6 tests in 0.2 s
+[mock] NAT-014 (test): 11 tests in 0.3 s
+[mock] NAT-015 (dev): 9 tests in 0.2 s
+[mock] NAT-016 (test): 13 tests in 0.3 s
+[mock] NAT-017 (test): 0 tests in 0.1 s
+[mock] NAT-018 (test): 16 tests in 0.3 s
+[mock] NAT-019 (test): 19 tests in 0.4 s
+[mock] NAT-020 (test): 0 tests in 0.1 s
+[mock v2] NAT2-001 (test2): 18 tests in 0.4 s
+[mock v2] NAT2-002 (test2): 14 tests in 0.3 s
+[mock v2] NAT2-003 (test2): 16 tests in 0.3 s
+[mock v2] NAT2-004 (test2): 8 tests in 0.2 s
+[mock v2] NAT2-005 (test2): 0 tests in 0.1 s
+[mock v2] NAT2-006 (test2): 0 tests in 0.1 s
+[mock v2] NAT2-007 (test2): 8 tests in 0.2 s
+[mock v2] NAT2-008 (test2): 2 tests in 0.1 s
+[mock v2] NAT2-009 (test2): 2 tests in 0.1 s
+[mock v2] NAT2-010 (test2): 1 tests in 0.1 s
+[mock v2] NAT2-011 (test2): 2 tests in 0.1 s
+[mock v2] NAT2-012 (test2): 19 tests in 0.4 s
+[mock v2] NAT2-013 (test2): 1 tests in 0.1 s
+[mock v2] NAT2-014 (test2): 1 tests in 0.1 s
+[mock v2] NAT2-015 (test2): 0 tests in 0.1 s
+[mock v2] NAT2-016 (test2): 8 tests in 0.2 s
+[mock v2 determinism check] NAT2-001 (test2): 18 tests in 0.4 s
+[mock v2 determinism check] NAT2-002 (test2): 14 tests in 0.3 s
+[mock v2 determinism check] NAT2-003 (test2): 16 tests in 0.4 s
+[mock v2 determinism check] NAT2-004 (test2): 8 tests in 0.2 s
+[mock v2 determinism check] NAT2-005 (test2): 0 tests in 0.1 s
+[mock v2 determinism check] NAT2-006 (test2): 0 tests in 0.1 s
+[mock v2 determinism check] NAT2-007 (test2): 8 tests in 0.2 s
+[mock v2 determinism check] NAT2-008 (test2): 2 tests in 0.1 s
+[mock v2 determinism check] NAT2-009 (test2): 2 tests in 0.1 s
+[mock v2 determinism check] NAT2-010 (test2): 1 tests in 0.1 s
+[mock v2 determinism check] NAT2-011 (test2): 2 tests in 0.1 s
+[mock v2 determinism check] NAT2-012 (test2): 19 tests in 0.4 s
+[mock v2 determinism check] NAT2-013 (test2): 1 tests in 0.1 s
+[mock v2 determinism check] NAT2-014 (test2): 1 tests in 0.1 s
+[mock v2 determinism check] NAT2-015 (test2): 0 tests in 0.1 s
+[mock v2 determinism check] NAT2-016 (test2): 8 tests in 0.2 s
+[ollama] REQ-001: 3 tests in 27.9 s
+[ollama] REQ-002: 5 tests in 19.9 s
+[ollama] REQ-003: 2 tests in 18.3 s
+[ollama] REQ-004: 5 tests in 21.7 s
+[ollama] REQ-005: 8 tests in 22.4 s
+[ollama] REQ-006: 8 tests in 27.6 s
+[ollama] REQ-007: 3 tests in 17.9 s
+[ollama] REQ-008: 2 tests in 14.5 s
+[ollama] REQ-009: 3 tests in 18.7 s
+[ollama] REQ-010: 8 tests in 30.1 s
+[ollama] REQ-011: 4 tests in 17.9 s
+[ollama] REQ-012: 4 tests in 19.9 s
+[ollama] REQ-013: 3 tests in 18.9 s
+[ollama] REQ-014: 4 tests in 23.7 s
+[ollama] REQ-015: 4 tests in 19.7 s
+[ollama] NAT-001 (dev): 5 tests in 18.2 s
+[ollama] NAT-002 (test): 7 tests in 28.5 s
+[ollama] NAT-003 (dev): 8 tests in 19.4 s
+[ollama] NAT-004 (test): 4 tests in 21.2 s
+[ollama] NAT-005 (dev): 7 tests in 20.2 s
+[ollama] NAT-006 (test): 7 tests in 21.4 s
+[ollama] NAT-007 (dev): 4 tests in 21.0 s
+[ollama] NAT-008 (test): 8 tests in 27.9 s
+[ollama] NAT-009 (dev): 5 tests in 22.7 s
+[ollama] NAT-010 (test): 5 tests in 20.0 s
+[ollama] NAT-011 (dev): 4 tests in 18.9 s
+[ollama] NAT-012 (test): 6 tests in 23.6 s
+[ollama] NAT-013 (dev): 5 tests in 22.3 s
+[ollama] NAT-014 (test): 4 tests in 20.9 s
+[ollama] NAT-015 (dev): 4 tests in 18.7 s
+[ollama] NAT-016 (test): 8 tests in 20.2 s
+[ollama] NAT-017 (test): 4 tests in 22.1 s
+[ollama] NAT-018 (test): 4 tests in 20.4 s
+[ollama] NAT-019 (test): 4 tests in 19.7 s
+[ollama] NAT-020 (test): 8 tests in 21.8 s
+[ollama v2] NAT2-001 (test2): 8 tests in 22.0 s
+[ollama v2] NAT2-002 (test2): 4 tests in 20.4 s
+[ollama v2] NAT2-003 (test2): 8 tests in 21.8 s
+[ollama v2] NAT2-004 (test2): 4 tests in 19.9 s
+[ollama v2] NAT2-005 (test2): 4 tests in 20.1 s
+[ollama v2] NAT2-006 (test2): 3 tests in 22.4 s
+[ollama v2] NAT2-007 (test2): 8 tests in 26.6 s
+[ollama v2] NAT2-008 (test2): 4 tests in 17.0 s
+[ollama v2] NAT2-009 (test2): 2 tests in 17.3 s
+[ollama v2] NAT2-010 (test2): 8 tests in 29.8 s
+[ollama v2] NAT2-011 (test2): 3 tests in 18.1 s
+[ollama v2] NAT2-012 (test2): 7 tests in 28.5 s
+[ollama v2] NAT2-013 (test2): 4 tests in 17.4 s
+[ollama v2] NAT2-014 (test2): 5 tests in 22.2 s
+[ollama v2] NAT2-015 (test2): 4 tests in 21.9 s
+[ollama v2] NAT2-016 (test2): 5 tests in 22.2 s
+[ollama v2 run2] NAT2-001 (test2): 5 tests in 23.3 s
+[ollama v2 run2] NAT2-002 (test2): 4 tests in 19.4 s
+[ollama v2 run2] NAT2-003 (test2): 7 tests in 26.0 s
+[ollama v2 run2] NAT2-004 (test2): 4 tests in 18.8 s
+[ollama v2 run2] NAT2-005 (test2): 4 tests in 20.1 s
+[ollama v2 run2] NAT2-006 (test2): 3 tests in 20.3 s
+[ollama v2 run2] NAT2-007 (test2): 5 tests in 21.9 s
+[ollama v2 run2] NAT2-008 (test2): 4 tests in 16.2 s
+[ollama v2 run2] NAT2-009 (test2): 4 tests in 16.5 s
+[ollama v2 run2] NAT2-010 (test2): 8 tests in 26.9 s
+[ollama v2 run2] NAT2-011 (test2): 3 tests in 16.5 s
+[ollama v2 run2] NAT2-012 (test2): 7 tests in 26.3 s
+[ollama v2 run2] NAT2-013 (test2): 5 tests in 21.6 s
+[ollama v2 run2] NAT2-014 (test2): 5 tests in 21.9 s
+[ollama v2 run2] NAT2-015 (test2): 4 tests in 21.1 s
+[ollama v2 run2] NAT2-016 (test2): 8 tests in 23.8 s
+[ollama v2 run3] NAT2-001 (test2): 5 tests in 23.6 s
+[ollama v2 run3] NAT2-002 (test2): 4 tests in 19.7 s
+[ollama v2 run3] NAT2-003 (test2): 7 tests in 24.3 s
+[ollama v2 run3] NAT2-004 (test2): 4 tests in 18.6 s
+[ollama v2 run3] NAT2-005 (test2): 4 tests in 20.0 s
+[ollama v2 run3] NAT2-006 (test2): 3 tests in 20.4 s
+[ollama v2 run3] NAT2-007 (test2): 5 tests in 21.1 s
+[ollama v2 run3] NAT2-008 (test2): 4 tests in 16.0 s
+[ollama v2 run3] NAT2-009 (test2): 4 tests in 16.3 s
+[ollama v2 run3] NAT2-010 (test2): 8 tests in 27.0 s
+[ollama v2 run3] NAT2-011 (test2): 3 tests in 16.5 s
+[ollama v2 run3] NAT2-012 (test2): 7 tests in 26.3 s
+[ollama v2 run3] NAT2-013 (test2): 5 tests in 19.5 s
+[ollama v2 run3] NAT2-014 (test2): 5 tests in 21.2 s
+[ollama v2 run3] NAT2-015 (test2): 4 tests in 21.1 s
+[ollama v2 run3] NAT2-016 (test2): 8 tests in 23.4 s
+mode=mock tests=206 HELD-OUT v2 (fresh) bug detection: generated 2/15, gold 5/15, union 5/15; natural v2 (fresh) understanding: parsed exact 0/16, P/R/F1 1.0/0.2245/0.3667, exercised F1 0.45, category recall 0.48, precondition recall 0.5556; held-out v1 (seen): generated 10/12, gold 3/12, union 11/12; in-sample (templates tuned on these): generated 25/26, gold 24/26, union 26/26; byte provenance 511/511
+mode=ollama tests=66 HELD-OUT v2 (fresh) bug detection: generated 2/15, gold 5/15, union 5/15; natural v2 (fresh) understanding: parsed exact 4/16, P/R/F1 0.5652/0.7959/0.661, exercised F1 0.5833, category recall 0.74, precondition recall 0.7778; held-out v1 (seen): generated 5/12, gold 3/12, union 6/12; in-sample (templates tuned on these): generated 19/26, gold 24/26, union 26/26; byte provenance 418/418
+actual mode=ollama (requested ollama)
+exported pytest run: 66 passed in 0.99s
+report: outputs\eval_report.md
+freeze: all recorded Part C hashes match and are clean = True
+before/after: outputs\partC\before_after.md
