@@ -385,3 +385,16 @@ Both agents were launched after the Part C freeze. Their exact prompts are recor
   - Held-out v2 bugs: generated 2/15, gold 5/15, union 5/15.
   - Natural v2: parsed exact 0/16, parsed P/R/F1 1.0 / 0.2245 / 0.3667, category recall 24/50, precondition recall 15/27.
   - These are the mock numbers on fresh data, recorded before any Ollama run.
+
+### C6a (UI, checklist, code tour and demo, built without the GPU)
+
+- **[PC6-UI]** The Streamlit evaluation section renders `outputs/eval_report.json` (version 2 or 3) and `outputs/partC/before_after.md`, and never computes metrics.
+  - v1 rows are labelled SEEN.
+  - The "did NOT beat" note shows only for version 2 reports.
+  - A mode that was not run shows "not run yet"; a missing before/after file shows "not generated yet".
+- **[PC6-UI-BUGS]** The bug dropdown now offers three sets: `[in-sample]`, `[held-out v1, seen]` and `[held-out v2, fresh]`.
+- **[PC6-UI-LLM]** After generating, the UI shows which LLM backend ran and any fallback warning. This addition was not in the brief.
+- **[PC6-DEMO]** `scripts/demo.py --bug` accepts any bug id from all three sets, and reads the version 3 headline, falling back gracefully to the older layout. It hard-codes no verdict or numbers for version 3.
+- **[PC6-DOCS]** `docs/DEMO_SCRIPT.md` and `docs/CODE_TOUR.md` carry no final v2 numbers, only placeholders. The mock counts in them come from real runs.
+- **[PC6-CHECKLIST]** `docs/UI_CHECKLIST.md` has 10 steps. Steps 1 to 8 are checked against the real widget labels through the headless UI test, and step 6 is pinned by a test.
+  - Not verified: launching `streamlit run` in a real browser (the checklist notes it may need `PYTHONPATH=.`), and the human-review button in a live browser.

@@ -115,11 +115,11 @@ def test_app_shows_headline_heldout_and_understanding() -> None:
 
 
 @pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
-def test_bug_multiselect_labels_heldout_and_in_sample() -> None:
+def test_bug_multiselect_labels_in_sample_heldout_v1_and_v2() -> None:
     """Run section needs generated tests, so seed session state directly."""
     from streamlit.testing.v1 import AppTest
 
-    from uds_assistant.simulator import HELDOUT_BUG_IDS
+    from uds_assistant.simulator import HELDOUT_BUG_IDS, HELDOUT_V2_BUG_IDS
 
     at = AppTest.from_file(str(UI_FILE), default_timeout=60)
     at.run()
@@ -127,8 +127,10 @@ def test_bug_multiselect_labels_heldout_and_in_sample() -> None:
     assert not at.exception
     ms = next(m for m in at.multiselect if "Inject bug" in m.label)
     assert any(o.startswith("[in-sample]") for o in ms.options)
-    held = [o for o in ms.options if o.startswith("[held-out]")]
+    held = [o for o in ms.options if o.startswith("[held-out v1, seen]")]
     assert len(held) == len(HELDOUT_BUG_IDS)
+    held_v2 = [o for o in ms.options if o.startswith("[held-out v2, fresh]")]
+    assert len(held_v2) == len(HELDOUT_V2_BUG_IDS)
 
 
 @pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
@@ -150,14 +152,14 @@ def test_app_tolerates_older_report(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
 def test_app_shows_mock_vs_ollama_comparison() -> None:
-    """The committed report (version 2) must render both modes side by side."""
+    """The committed version-2 report must render both modes side by side."""
     import json
 
     from streamlit.testing.v1 import AppTest
 
     report = json.loads((REPO_ROOT / "outputs" / "eval_report.json").read_text(encoding="utf-8"))
-    if report.get("report_version", 1) < 2 or "ollama" not in (report.get("modes") or {}):
-        pytest.skip("committed report has no ollama mode")
+    if report.get("report_version", 1) != 2 or "ollama" not in (report.get("modes") or {}):
+        pytest.skip("committed report is not the version-2 mock+ollama report (v3 is covered below)")
     at = AppTest.from_file(str(UI_FILE), default_timeout=60)
     at.run()
     assert not at.exception
@@ -201,3 +203,389 @@ def test_app_degrades_when_only_mock_report(tmp_path: Path, monkeypatch: pytest.
     assert set(headline["ollama"]) == {"n/a"}
     assert not any("did NOT beat" in i.value for i in at.info)
     assert any("Retrieval comparison not in this report" in c.value for c in at.caption)
+
+
+# --------------------------------------------------------------------------------------------
+# Part C: report version 3 (v2 headline, noise check, before/after, freeze status)
+# --------------------------------------------------------------------------------------------
+
+PREDATES = "n/a — report predates Part C"
+
+
+def _det(detected: int, bugs: int) -> dict:
+    return {"detected": detected, "bugs": bugs, "rate": round(detected / bugs, 4)}
+
+
+def _heldout_block(bug_ids: list[str], detected: int, label: str) -> dict:
+    per_bug = [
+        {"bug_id": b, "category": "security", "detected": i < detected} for i, b in enumerate(bug_ids)
+    ]
+    n = len(bug_ids)
+    return {
+        "scope": label,
+        "generated": {**_det(detected, n), "per_bug": per_bug},
+        "gold": {**_det(1, n), "per_bug": [{**p, "detected": i < 1} for i, p in enumerate(per_bug)]},
+        "union": _det(detected + 1, n),
+        "analysis": {"triggers": {}, "generated": {"missed": []}, "gold": {"missed": []}},
+        "supplementary": {
+            "all_generated": {**_det(detected + 2, n), "tests": 9},
+            "natural_v2_generated": {**_det(detected + 1, n), "tests": 4},
+        },
+    }
+
+
+def _und_block(source: str, split: str, n: int, exact: int) -> dict:
+    sp = {
+        "requirements": n,
+        "targets_parsed": {"exact": exact, "precision": 0.9, "recall": 0.5, "f1": 0.64},
+        "targets_exercised": {"exact": exact, "f1": 0.6},
+        "categories": {"micro_recall": 0.5, "macro_recall": 0.4},
+        "preconditions": {"micro_recall": 0.6, "macro_recall": 0.5},
+        "fallback": {"count": 1},
+    }
+    per_req = [
+        {
+            "id": f"R{i}",
+            "split": split,
+            "label_targets": ["0x0100"],
+            "parsed": {"exact": i < exact},
+            "tests": 3,
+            "categories": {"missed": []},
+        }
+        for i in range(n)
+    ]
+    return {"source": source, "per_requirement": per_req, "splits": {split: sp}}
+
+
+def _noise_check(deterministic: bool, n_runs: int) -> dict:
+    runs = [
+        {
+            "run": k + 1,
+            "used_for_main_tables": k == 0,
+            "parsed_precision": 0.5,
+            "parsed_recall": 0.6,
+            "parsed_f1": 0.5 + 0.01 * k,
+            "exercised_f1": 0.4,
+            "category_recall_micro": 0.5,
+            "precondition_recall_micro": 0.5,
+            "tests_kept": 40 + k,
+            "rejected": 2,
+            "fallback_events": 0,
+            "wall_total_s": 100.0,
+        }
+        for k in range(n_runs)
+    ]
+    out: dict = {
+        "status": "completed",
+        "deterministic": deterministic,
+        "requested_runs": n_runs,
+        "runs": runs,
+        "summary": {"parsed_f1": {"n": n_runs, "mean": 0.51, "min": 0.5, "max": 0.52}},
+        "note": "Run 1 feeds the tables.",
+    }
+    if deterministic:
+        out["determinism_check"] = {"second_run_identical": True}
+    return out
+
+
+def _mode_block(deterministic: bool, n_runs: int) -> dict:
+    return {
+        "status": "completed",
+        "generated_tests": {"count": 50},
+        "bug_detection": {"generated": _det(25, 26), "gold": _det(20, 26)},
+        "heldout_bug_detection": _heldout_block([f"v1_{i}" for i in range(12)], 10, "v1 scope"),
+        "heldout_v2_bug_detection": _heldout_block([f"v2_{i}" for i in range(15)], 2, "v2 scope"),
+        "requirement_understanding": _und_block("data/requirements_natural.csv", "test", 12, 5),
+        "requirement_understanding_v2": _und_block(
+            "data/requirements_natural_v2.csv", "test2", 16, 3
+        ),
+        "noise_check": _noise_check(deterministic, n_runs),
+        "coverage": {
+            "category_totals": {"positive": 3},
+            "requirements_with_tests": 15,
+            "requirements": 15,
+            "rate": 1.0,
+        },
+        "citation_validity": {"valid": 9, "citations": 9, "rate": 1.0},
+        "provenance": {"passed": 5, "checked": 5},
+    }
+
+
+def _freeze(ok: bool) -> dict:
+    return {
+        "source": "PROGRESS.md",
+        "error": None,
+        "all_ok": ok,
+        "commit": {"recorded": "a" * 40, "head": "b" * 40, "recorded_is_ancestor_of_head": True},
+        "paths": {
+            "uds_assistant/testgen": {
+                "expected": "c" * 40,
+                "head": ("c" if ok else "d") * 40,
+                "matches": ok,
+                "worktree_clean": True,
+            }
+        },
+    }
+
+
+def _report(version: int = 3, ollama: bool = True, freeze_ok: bool = True) -> dict:
+    modes = {"mock": _mode_block(True, 1)}
+    if ollama:
+        modes["ollama"] = _mode_block(False, 3)
+    else:
+        modes["ollama"] = {"status": "not run", "reason": "not requested"}
+    rep: dict = {
+        "report_version": version,
+        "timestamp": "t",
+        "actual_mode": "mock",
+        "modes": modes,
+        "simulator_rules_agreement": {"agreed": 10, "requests": 10, "rate": 1.0},
+        "udsoncan_virtual_can": {"status": "pass"},
+        "gold_tests": 60,
+        "gold_clean_passed": 60,
+        "gold_clean_pass_rate": 1.0,
+        "freeze": _freeze(freeze_ok),
+    }
+    if version < 3:
+        for blk in modes.values():
+            for key in ("heldout_v2_bug_detection", "requirement_understanding_v2", "noise_check"):
+                blk.pop(key, None)
+        rep.pop("freeze")
+    return rep
+
+
+def _app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, report: dict, before_after: str | None = None):
+    import json
+
+    from streamlit.testing.v1 import AppTest
+
+    rp = tmp_path / "eval_report.json"
+    rp.write_text(json.dumps(report), encoding="utf-8")
+    monkeypatch.setenv("UDS_EVAL_REPORT", str(rp))
+    ba = tmp_path / "before_after.md"
+    if before_after is not None:
+        ba.write_text(before_after, encoding="utf-8")
+    monkeypatch.setenv("UDS_BEFORE_AFTER", str(ba))
+    at = AppTest.from_file(str(UI_FILE), default_timeout=60)
+    at.run()
+    assert not at.exception
+    return at
+
+
+BEFORE_AFTER = (
+    "# Part C: before / after\n\nBefore = frozen baseline.\n\n"
+    "| Metric | mock before | mock after |\n|---|---|---|\n| SYNTHETIC-ROW | 1 | 2 |\n"
+)
+
+
+def _v2_table(at):
+    for df in at.dataframe:
+        v = df.value
+        if "Metric" in v.columns and v["Metric"].astype(str).str.startswith("A. Held-out v2").any():
+            return v
+    raise AssertionError("v2 headline table not found")
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_v3_report_shows_v2_headline_noise_before_after_freeze(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _app(tmp_path, monkeypatch, _report(), BEFORE_AFTER)
+    subheaders = [s.value for s in at.subheader]
+    assert any("Fresh v2 headline" in s for s in subheaders)
+    assert any("Noise check" in s for s in subheaders)
+    assert any("Before / after" in s for s in subheaders)
+    assert any("Freeze status" in s for s in subheaders)
+    assert any("seen (templates designed against these misses)" in s for s in subheaders)
+    # (a) v2 headline for both modes
+    v2 = _v2_table(at)
+    row_a = v2.iloc[0]
+    assert "generated 2/15 (13.3%) (HEADLINE)" in row_a["mock"]
+    assert "generated 2/15" in row_a["ollama"] and "union 3/15" in row_a["ollama"]
+    row_b = v2.iloc[1]
+    assert "test2 split (n=16)" in row_b["mock"] and "3/16" in row_b["ollama"]
+    # (b) noise: every ollama run, mean and range, mock determinism check
+    all_runs = [df.value for df in at.dataframe if "used for main tables" in df.value.columns]
+    assert sorted(len(r) for r in all_runs) == [1, 3]
+    captions = " ".join(c.value for c in at.caption)
+    assert "parsed_f1: mean 0.51 (range 0.5 to 0.52, n=3)" in captions
+    assert "Second run identical: True" in captions
+    # (c) before/after markdown rendered (without its H1)
+    md = " ".join(m.value for m in at.markdown)
+    assert "SYNTHETIC-ROW" in md and "# Part C: before / after" not in md
+    # (d) v1 rows are labelled seen; in-sample still labelled as tuned on
+    headline = next(t.value for t in at.table if "ollama" in t.value.columns and len(t.value) == 7)
+    assert "SEEN" in headline[headline["Metric"].str.startswith("4.")].iloc[0]["Metric"]
+    assert "SEEN" in headline[headline["Metric"].str.startswith("5.")].iloc[0]["Metric"]
+    assert "HEADLINE" not in headline[headline["Metric"].str.startswith("4.")].iloc[0]["mock"]
+    assert any("tuned on" in m.label for m in at.metric)
+    # (e) freeze ok
+    assert any("MATCH" in s.value for s in at.success)
+    assert not at.error
+    # (f) comparison and retrieval sections still there (retrieval absent in the fixture: n/a)
+    assert any("Mock vs Ollama" in s for s in subheaders)
+    assert any("Retrieval comparison not in this report" in c.value for c in at.caption)
+    assert not any("did NOT beat" in i.value for i in at.info)
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_v3_freeze_mismatch_is_flagged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    at = _app(tmp_path, monkeypatch, _report(freeze_ok=False), BEFORE_AFTER)
+    assert any("MISMATCH" in e.value for e in at.error)
+    assert not at.success
+    freeze = next(df.value for df in at.dataframe if "worktree clean" in df.value.columns)
+    assert list(freeze["result"]) == ["MISMATCH"]
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_v3_ollama_not_run_degrades_gracefully(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    at = _app(tmp_path, monkeypatch, _report(ollama=False), before_after=None)
+    v2 = _v2_table(at)
+    assert set(v2["ollama"]) == {"not run yet"}
+    assert "generated 2/15" in v2.iloc[0]["mock"]
+    captions = " ".join(c.value for c in at.caption)
+    assert "ollama: noise check not run yet" in captions
+    assert "Before/after table not generated yet" in captions
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_v2_report_shows_v1_and_na_for_v2_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    at = _app(tmp_path, monkeypatch, _report(version=2), BEFORE_AFTER)
+    v2 = _v2_table(at)
+    for col in ("mock", "ollama"):
+        assert set(v2[col]) == {PREDATES}
+    captions = " ".join(c.value for c in at.caption)
+    assert f"Noise check: {PREDATES}" in captions
+    assert f"Freeze status: {PREDATES}" in captions
+    subheaders = [s.value for s in at.subheader]
+    assert any("Held-out bug detection" in s for s in subheaders)
+    assert any("Requirement understanding" in s for s in subheaders)
+    assert not any("seen (templates designed" in s for s in subheaders)
+    headline = next(t.value for t in at.table if "ollama" in t.value.columns and len(t.value) == 7)
+    assert "SEEN" not in " ".join(headline["Metric"])
+    assert any("did NOT beat" in i.value for i in at.info)
+
+
+def _generate_and_run(requirement: str, bug_prefix: str, bug_id: str):
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(str(UI_FILE), default_timeout=120)
+    at.run()
+    at.text_area[0].set_value(requirement)
+    next(b for b in at.button if b.label == "Generate tests").click().run()
+    assert not at.exception
+    clean = next(b for b in at.button if b.label == "Run suite on simulator")
+    clean.click().run()
+    assert not at.exception
+    clean_metric = next(m.value for m in at.metric if m.label == "Passed")
+    ms = next(m for m in at.multiselect if "Inject bug" in m.label)
+    label = next(o for o in ms.options if o.startswith(bug_prefix) and f" {bug_id} " in o)
+    ms.set_value([label])
+    next(b for b in at.button if b.label == "Run suite on simulator").click().run()
+    assert not at.exception
+    return at, clean_metric
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_ui_clean_run_then_in_sample_bug_shows_expected_vs_actual() -> None:
+    """The click-through of docs/UI_CHECKLIST.md steps 2-7 (mock LLM)."""
+    req = (
+        "Writing the interior lighting brightness DID (0x0100) shall require extended session "
+        "and security level 0x01."
+    )
+    at, clean = _generate_and_run(req, "[in-sample]", "write_ignores_value_range")
+    passed, total = clean.split("/")
+    assert passed == total  # clean simulator: everything passes
+    res = next(df.value for df in at.dataframe if "failure" in df.value.columns)
+    failed = res[~res["passed"]]
+    assert len(failed) >= 1
+    assert "expected" in " ".join(failed["failure"]) and "got" in " ".join(failed["failure"])
+    assert any("human_reviewed" in b.label for b in at.button)
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_ui_heldout_v2_bug_can_be_injected() -> None:
+    at, clean = _generate_and_run(
+        "The tester shall be able to read the VIN (DID 0xF190) in any diagnostic session.",
+        "[held-out v2, fresh]",
+        "multi_did_read_dedups_repeats",
+    )
+    passed, total = clean.split("/")
+    assert passed == total
+    assert any("failure" in df.value.columns for df in at.dataframe)
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_ui_shows_llm_backend_and_ollama_fallback_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM_MODE=ollama with an unreachable server (closed port, no real Ollama) falls back to mock
+    and the page says so, instead of only warning in the terminal."""
+    import streamlit as st
+    from streamlit.testing.v1 import AppTest
+
+    st.cache_resource.clear()
+    monkeypatch.setenv("LLM_MODE", "ollama")
+    monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")
+    try:
+        at = AppTest.from_file(str(UI_FILE), default_timeout=120)
+        at.run()
+        next(b for b in at.button if b.label == "Generate tests").click().run()
+        assert not at.exception
+        assert any("LLM backend used: mock" in c.value for c in at.caption)
+        assert any("falling back to the deterministic mock LLM" in w.value for w in at.warning)
+    finally:
+        st.cache_resource.clear()
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_ui_default_run_reports_mock_backend_without_fallback() -> None:
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file(str(UI_FILE), default_timeout=120)
+    at.run()
+    next(b for b in at.button if b.label == "Generate tests").click().run()
+    assert not at.exception
+    assert any("LLM backend used: mock" in c.value for c in at.caption)
+    assert not any(w.value.startswith("Fallback:") for w in at.warning)
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+@pytest.mark.parametrize(
+    ("prefix", "bug_id", "test_id", "failure"),
+    [
+        (
+            "[in-sample]",
+            "write_ignores_value_range",
+            "req_ui_001__tpl_write_oor_0100",
+            "step 3: expected ['7f2e31'], got ['6e0100']",
+        ),
+        (
+            "[held-out v1, seen]",
+            "seed_returned_while_unlocked",
+            "req_ui_001__tpl_seed_while_unlocked_01",
+            "step 3: expected ['670100000000'], got ['670132a31485']",
+        ),
+        (
+            "[held-out v2, fresh]",
+            "session_reentry_keeps_unlock",
+            "req_ui_001__tpl_session_relock_01",
+            "step 4: expected ['7f2e33'], got ['6e0100']",
+        ),
+    ],
+)
+def test_ui_checklist_step6_expected_failures(
+    prefix: str, bug_id: str, test_id: str, failure: str
+) -> None:
+    """Pins the exact screen contents quoted in docs/UI_CHECKLIST.md step 6."""
+    req = (
+        "Writing the interior lighting brightness DID (0x0100) shall require extended session "
+        "and security level 0x01."
+    )
+    at, clean = _generate_and_run(req, prefix, bug_id)
+    assert clean == "18/18"
+    res = next(df.value for df in at.dataframe if "failure" in df.value.columns)
+    failed = res[~res["passed"]]
+    assert list(failed["test_id"]) == [test_id]
+    assert list(failed["failure"]) == [failure]
+    assert next(m.value for m in at.metric if m.label == "Passed") == "17/18"

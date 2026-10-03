@@ -33,7 +33,13 @@ from uds_assistant.llm.factory import get_llm
 from uds_assistant.rag.factory import get_retriever
 from uds_assistant.rag.ingest import build_corpus
 from uds_assistant.runner import run_suite
-from uds_assistant.simulator import HELDOUT_BUG_CATALOG_PATH, HELDOUT_BUG_IDS, load_bug_catalog
+from uds_assistant.simulator import (
+    HELDOUT_BUG_CATALOG_PATH,
+    HELDOUT_BUG_IDS,
+    HELDOUT_V2_BUG_CATALOG_PATH,
+    HELDOUT_V2_BUG_IDS,
+    load_bug_catalog,
+)
 from uds_assistant.spec.schema import load_spec
 from uds_assistant.store.audit import AuditStore
 
@@ -57,6 +63,10 @@ def _load_backend() -> dict[str, object]:
         heldout_catalog = load_bug_catalog(HELDOUT_BUG_CATALOG_PATH)
     except (OSError, ValueError):  # held-out catalog missing: in-sample bugs only
         heldout_catalog = None
+    try:
+        heldout_v2_catalog = load_bug_catalog(HELDOUT_V2_BUG_CATALOG_PATH)
+    except (OSError, ValueError):  # v2 catalog missing: older bug sets only
+        heldout_v2_catalog = None
     return {
         "cfg": cfg,
         "spec": spec,
@@ -65,6 +75,7 @@ def _load_backend() -> dict[str, object]:
         "store": store,
         "catalog": catalog,
         "heldout_catalog": heldout_catalog,
+        "heldout_v2_catalog": heldout_v2_catalog,
     }
 
 
@@ -108,6 +119,9 @@ def _generate_section(backend: dict[str, object]) -> None:
                 f"Generated {len(result.tests)} test(s), dropped {len(result.dropped)}. "
                 f"run_id={result.run_id}"
             )
+            st.caption(f"LLM backend used: {result.llm}; engine: {result.engine}.")
+            for event in result.fallback_events:
+                st.warning(f"Fallback: {event}")
             for note in result.notes:
                 st.info(note)
 
@@ -170,7 +184,12 @@ def _run_section(backend: dict[str, object]) -> None:
     if heldout_catalog is not None:
         for b in heldout_catalog.bugs:
             if b.id in HELDOUT_BUG_IDS:
-                bug_options[f"[held-out] {b.id} ({b.title})"] = b.id
+                bug_options[f"[held-out v1, seen] {b.id} ({b.title})"] = b.id
+    heldout_v2_catalog = backend.get("heldout_v2_catalog")
+    if heldout_v2_catalog is not None:
+        for b in heldout_v2_catalog.bugs:
+            if b.id in HELDOUT_V2_BUG_IDS:
+                bug_options[f"[held-out v2, fresh] {b.id} ({b.title})"] = b.id
     chosen_labels = st.multiselect("Inject bug(s) (optional)", options=list(bug_options))
     chosen_bugs = {bug_options[label] for label in chosen_labels}
     if st.button("Run suite on simulator"):
@@ -243,15 +262,17 @@ def _mode_blocks(report: dict) -> dict[str, dict]:
     return out
 
 
-def _understanding_text(block: dict) -> str:
-    und = ((block.get("requirement_understanding") or {}).get("splits") or {}).get("test") or {}
+def _understanding_text(
+    block: dict, key: str = "requirement_understanding", split: str = "test"
+) -> str:
+    und = ((block.get(key) or {}).get("splits") or {}).get(split) or {}
     if not und:
         return NA
     n = und.get("requirements", "?")
     tp, te = und.get("targets_parsed", {}), und.get("targets_exercised", {})
     cat, pre, fb = und.get("categories", {}), und.get("preconditions", {}), und.get("fallback", {})
     return (
-        f"test split (n={n}): target exact match parsed {tp.get('exact', '?')}/{n} "
+        f"{split} split (n={n}): target exact match parsed {tp.get('exact', '?')}/{n} "
         f"(F1 {tp.get('f1', '?')}), exercised {te.get('exact', '?')}/{n} (F1 {te.get('f1', '?')}); "
         f"category recall {_pct(cat.get('micro_recall'))} micro / {_pct(cat.get('macro_recall'))} macro; "
         f"precondition recall {_pct(pre.get('micro_recall'))} micro / "
@@ -259,12 +280,12 @@ def _understanding_text(block: dict) -> str:
     )
 
 
-def _heldout_text(block: dict) -> str:
-    held = block.get("heldout_bug_detection") or {}
+def _heldout_text(block: dict, key: str = "heldout_bug_detection", tag: bool = True) -> str:
+    held = block.get(key) or {}
     if not held:
         return NA
     return (
-        f"generated {_frac(held.get('generated'))} (HEADLINE) | gold {_frac(held.get('gold'))} | "
+        f"generated {_frac(held.get('generated'))}{' (HEADLINE)' if tag else ''} | gold {_frac(held.get('gold'))} | "
         f"union {_frac(held.get('union'))}"
     )
 
@@ -288,8 +309,15 @@ def _citation_text(block: dict) -> str:
     return f"{cit.get('valid')}/{cit.get('citations')} ({_pct(cit.get('rate'))})"
 
 
-def _headline_rows(report: dict, blocks: dict[str, dict] | None = None) -> list[dict[str, str]]:
-    """The 7-row headline table with one column per mode, built defensively."""
+def _headline_rows(
+    report: dict, blocks: dict[str, dict] | None = None, v3: bool = False
+) -> list[dict[str, str]]:
+    """The 7-row headline table with one column per mode, built defensively.
+
+    From report version 3 on the v1 held-out and natural rows are labelled SEEN (the Part C
+    templates were designed against those misses); the fresh v2 rows live in
+    :func:`_v2_headline_rows`.
+    """
     blocks = blocks if blocks is not None else _mode_blocks(report)
     agree = report.get("simulator_rules_agreement") or {}
     can = report.get("udsoncan_virtual_can") or {}
@@ -327,11 +355,183 @@ def _headline_rows(report: dict, blocks: dict[str, dict] | None = None) -> list[
     independent("1. Simulator <-> rules-engine agreement", agree_txt)
     independent("2. Gold tests passing on bug-free simulator", gold_txt)
     independent("3. udsoncan virtual-CAN sequence", can_txt)
-    dependent("4. Held-out bug detection (12 bugs)", _heldout_text)
-    dependent("5. Requirement understanding (natural requirements)", _understanding_text)
+    dependent(
+        "4. Held-out v1 bug detection (12 bugs; SEEN: templates designed against these misses)"
+        if v3
+        else "4. Held-out bug detection (12 bugs)",
+        (lambda b: _heldout_text(b, tag=False)) if v3 else _heldout_text,
+    )
+    dependent(
+        "5. Requirement understanding (natural v1 test split; SEEN)"
+        if v3
+        else "5. Requirement understanding (natural requirements)",
+        _understanding_text,
+    )
     dependent("6. Coverage (seed requirements, tests per category)", _coverage_text)
     dependent("7. Citation validity", _citation_text)
     return rows
+
+
+PREDATES = "n/a — report predates Part C"
+NOT_RUN = "not run yet"
+
+
+def _report_version(report: dict) -> int:
+    v = report.get("report_version", 1)
+    return v if isinstance(v, int) else 1
+
+
+def _v2_cell(report: dict, blocks: dict[str, dict], mode: str, fn: Callable[[dict], str]) -> str:
+    """One cell of a v2 row: predates-Part-C, not-run-yet, or the value."""
+    if _report_version(report) < 3:
+        return PREDATES
+    blk = blocks.get(mode)
+    if not blk:
+        return NOT_RUN
+    return fn(blk)
+
+
+def _supp_text(block: dict, name: str) -> str:
+    supp = _get(block, "heldout_v2_bug_detection", "supplementary", name, default=None)
+    if not isinstance(supp, dict) or "detected" not in supp:
+        return NA
+    return f"{supp['detected']}/{supp.get('bugs', '?')} ({_pct(supp.get('rate'))})"
+
+
+def _v2_headline_rows(report: dict, blocks: dict[str, dict]) -> list[dict[str, str]]:
+    """The fresh (blind, written after the freeze) headline rows, one column per mode."""
+    spec: list[tuple[str, Callable[[dict], str]]] = [
+        (
+            "A. Held-out v2 bug detection, FRESH (15 bugs): generated / gold / union",
+            lambda b: _heldout_text(b, "heldout_v2_bug_detection"),
+        ),
+        (
+            "B. Natural v2 requirement understanding, FRESH (test2, 16 requirements)",
+            lambda b: _understanding_text(b, "requirement_understanding_v2", "test2"),
+        ),
+        (
+            "   supplementary: v2 bugs detected by all generated tests (seed + natural)",
+            lambda b: _supp_text(b, "all_generated"),
+        ),
+        (
+            "   supplementary: v2 bugs detected by the natural-v2 tests alone",
+            lambda b: _supp_text(b, "natural_v2_generated"),
+        ),
+    ]
+    return [
+        {"Metric": label, **{m: _v2_cell(report, blocks, m, fn) for m in MODES}}
+        for label, fn in spec
+    ]
+
+
+def _freeze_section(report: dict) -> None:
+    fr = report.get("freeze")
+    if not isinstance(fr, dict) or "paths" not in fr:
+        st.caption(f"Freeze status: {PREDATES}.")
+        return
+    st.subheader("Freeze status (templates, prompts, planner, gold unchanged since the freeze)")
+    if fr.get("error"):
+        st.error(f"Freeze check could not run: {fr['error']}")
+    elif fr.get("all_ok"):
+        st.success("Freeze status: all recorded hashes MATCH and the worktree is clean.")
+    else:
+        st.error(
+            "Freeze status: MISMATCH (a frozen path changed, is dirty, or the commit is not "
+            "an ancestor of HEAD)."
+        )
+    rows = [
+        {
+            "path": path,
+            "recorded": str(v.get("expected", ""))[:12],
+            "current": str(v.get("head", ""))[:12],
+            "result": "match" if v.get("matches") else "MISMATCH",
+            "worktree clean": str(v.get("worktree_clean")),
+        }
+        for path, v in (fr.get("paths") or {}).items()
+    ]
+    if rows:
+        st.dataframe(rows, use_container_width=True)
+    commit = fr.get("commit") or {}
+    if commit.get("recorded"):
+        anc = commit.get("recorded_is_ancestor_of_head")
+        st.caption(
+            f"Freeze commit {str(commit['recorded'])[:12]} is "
+            + ("an ancestor of HEAD." if anc else "NOT confirmed as an ancestor of HEAD.")
+        )
+
+
+def _noise_section(report: dict, blocks: dict[str, dict]) -> None:
+    st.subheader("Noise check (natural v2, repeated runs)")
+    if _report_version(report) < 3:
+        st.caption(f"Noise check: {PREDATES}.")
+        return
+    shown = False
+    for m in MODES:
+        nc = (blocks.get(m) or {}).get("noise_check")
+        if not isinstance(nc, dict) or nc.get("status") != "completed":
+            st.caption(f"{m}: noise check {NOT_RUN}.")
+            continue
+        shown = True
+        n_runs = len(nc.get("runs") or [])
+        st.markdown(
+            f"**{m}**: {'deterministic' if nc.get('deterministic') else 'sampled'}, "
+            f"{n_runs} run(s) (requested {nc.get('requested_runs', '?')})."
+        )
+        runs = [
+            {
+                "run": r.get("run"),
+                "used for main tables": r.get("used_for_main_tables"),
+                "parsed P": r.get("parsed_precision"),
+                "parsed R": r.get("parsed_recall"),
+                "parsed F1": r.get("parsed_f1"),
+                "exercised F1": r.get("exercised_f1"),
+                "category recall": r.get("category_recall_micro"),
+                "precondition recall": r.get("precondition_recall_micro"),
+                "tests kept": r.get("tests_kept"),
+                "rejected": r.get("rejected"),
+                "fallback events": r.get("fallback_events"),
+                "wall s": r.get("wall_total_s"),
+            }
+            for r in nc.get("runs") or []
+        ]
+        if runs:
+            st.dataframe(runs, use_container_width=True)
+        lines = [
+            f"{k}: mean {v['mean']} (range {v.get('min')} to {v.get('max')}, n={v.get('n')})"
+            for k, v in (nc.get("summary") or {}).items()
+            if isinstance(v, dict) and v.get("mean") is not None
+        ]
+        if lines:
+            st.caption("Mean and min-max range over all runs: " + "; ".join(lines))
+        det = nc.get("determinism_check")
+        if isinstance(det, dict):
+            st.caption(f"Second run identical: {det.get('second_run_identical')}.")
+        if nc.get("note"):
+            st.caption(str(nc["note"]))
+    if not shown:
+        st.caption("No completed noise check in this report.")
+
+
+def _before_after_path() -> Path:
+    return Path(
+        os.environ.get("UDS_BEFORE_AFTER") or REPO_ROOT / "outputs" / "partC" / "before_after.md"
+    )
+
+
+def _before_after_section() -> None:
+    st.subheader("Before / after Part C")
+    path = _before_after_path()
+    if not path.exists():
+        st.caption(
+            f"Before/after table not generated yet ({path}). It is written by "
+            "`python -m uds_assistant.eval.run_eval --mode ollama --before-after` or "
+            "`python -m uds_assistant.eval.before_after`."
+        )
+        return
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if lines and lines[0].startswith("# "):  # the page already has a subheader
+        lines = lines[1:]
+    st.markdown("\n".join(lines))
 
 
 def _sum_pipeline(block: dict, key: str) -> object:
@@ -360,11 +560,27 @@ def _events_text(block: dict, kind: str) -> str:
     return str(len(ev)) if isinstance(ev, list) else NA
 
 
-def _comparison_rows(blocks: dict[str, dict]) -> list[dict[str, str]]:
+def _comparison_rows(blocks: dict[str, dict], v3: bool = False) -> list[dict[str, str]]:
     """Side-by-side rows for the mock vs ollama comparison."""
-    spec: list[tuple[str, Callable[[dict], str]]] = [
-        ("Requirement understanding, TEST split", _understanding_text),
-        ("Held-out bug detection (12 bugs)", _heldout_text),
+    spec: list[tuple[str, Callable[[dict], str]]] = []
+    if v3:
+        spec += [
+            (
+                "Held-out v2 bug detection, FRESH (15 bugs)",
+                lambda b: _heldout_text(b, "heldout_v2_bug_detection"),
+            ),
+            (
+                "Natural v2 understanding, FRESH (test2)",
+                lambda b: _understanding_text(b, "requirement_understanding_v2", "test2"),
+            ),
+        ]
+    seen = " (SEEN)" if v3 else ""
+    spec += [
+        ("Requirement understanding, v1 TEST split" + seen, _understanding_text),
+        (
+            "Held-out v1 bug detection (12 bugs)" + seen,
+            (lambda b: _heldout_text(b, tag=False)) if v3 else _heldout_text,
+        ),
         ("Generated tests (seed requirements)", lambda b: str(_get(b, "generated_tests", "count"))),
         (
             "In-sample detection, generated (26 bugs; tuned on)",
@@ -411,14 +627,14 @@ def _retrieval_rows(report: dict) -> list[dict[str, object]]:
     return rows
 
 
-def _heldout_section(blocks: dict[str, dict]) -> None:
-    present = {
-        m: b["heldout_bug_detection"] for m, b in blocks.items() if b.get("heldout_bug_detection")
-    }
+def _heldout_section(
+    blocks: dict[str, dict], key: str = "heldout_bug_detection", title: str | None = None
+) -> None:
+    present = {m: b[key] for m, b in blocks.items() if b.get(key)}
     if not present:
         st.caption("Held-out results not in this report (older report).")
         return
-    st.subheader("Held-out bug detection (bugs not seen when templates/gold were written)")
+    st.subheader(title or "Held-out bug detection (bugs not seen when templates/gold were written)")
     first = next(iter(present.values()))
     st.caption(first.get("scope", ""))
     analysis = first.get("analysis", {})
@@ -486,16 +702,16 @@ def _split_rows(und: dict, mode: str) -> list[dict[str, object]]:
     return rows
 
 
-def _understanding_section(blocks: dict[str, dict]) -> None:
+def _understanding_section(
+    blocks: dict[str, dict], key: str = "requirement_understanding", title: str | None = None
+) -> None:
     present = {
-        m: b["requirement_understanding"]
-        for m, b in blocks.items()
-        if b.get("requirement_understanding")
+        m: b[key] for m, b in blocks.items() if isinstance(b.get(key), dict) and b[key].get("splits")
     }
     if not present:
         st.caption("Requirement-understanding results not in this report (older report).")
         return
-    st.subheader("Requirement understanding (natural-language requirements)")
+    st.subheader(title or "Requirement understanding (natural-language requirements)")
     first = next(iter(present.values()))
     st.caption(f"Source: {first.get('source', '?')}. The TEST split is the main number.")
     split_rows: list[dict[str, object]] = []
@@ -531,9 +747,15 @@ def _comparison_section(report: dict, blocks: dict[str, dict]) -> None:
             "Regenerate with `python -m uds_assistant.eval.run_eval --mode ollama` "
             "(needs a local Ollama)."
         )
-    else:
+    elif _report_version(report) < 3:
         st.info(HEADLINE_NOTE)
-    st.table(_comparison_rows(blocks))
+    else:
+        st.info(
+            "Read the FRESH v2 rows first. The v1 rows are SEEN (the Part C templates were "
+            "designed against the v1 misses), so they are not independent evidence; see "
+            "docs/RESULTS.md for the interpretation of the run."
+        )
+    st.table(_comparison_rows(blocks, _report_version(report) >= 3))
     st.caption(
         f"Model: {_get(report, 'llm_settings', 'model')}, num_ctx "
         f"{_get(report, 'llm_settings', 'num_ctx')}. Prompts were tuned on the 8 dev rows only; "
@@ -557,15 +779,33 @@ def _eval_section() -> None:
     path = Path(os.environ.get("UDS_EVAL_REPORT") or REPO_ROOT / "outputs" / "eval_report.json")
     if not path.exists():
         st.caption(f"No report yet at {path}. Run `python -m uds_assistant.eval.run_eval`.")
+        _before_after_section()
         return
     report = json.loads(path.read_text(encoding="utf-8"))
+    version = _report_version(report)
+    v3 = version >= 3
     blocks = _mode_blocks(report)
+    st.caption(
+        f"Report version {version}"
+        + ("" if v3 else f" ({PREDATES}: v2 rows are n/a, v1 sections are shown as measured)")
+    )
+    _freeze_section(report)
+    st.subheader("Fresh v2 headline (written blind after the Part C freeze)")
+    st.dataframe(_v2_headline_rows(report, blocks), use_container_width=True)
+    st.caption(
+        "FRESH = nothing was changed after seeing these results. HEADLINE for bug detection is the "
+        "generated suite (tests generated from the 15 seed requirements)."
+    )
     st.subheader("Headline metrics")
-    st.table(_headline_rows(report, blocks))
+    st.table(_headline_rows(report, blocks, v3))
     st.caption(
         "Both columns come from one invocation on the same inputs, templates and retriever. "
         "The oracle self-consistency check is circular and lives in the report appendix."
+        + (" Held-out v1 and natural v1 rows are SEEN: " + "templates were designed against them."
+           if v3 else "")
     )
+    _noise_section(report, blocks)
+    _before_after_section()
     _comparison_section(report, blocks)
     base = blocks.get("mock") or next((b for b in blocks.values() if b), {})
     det = base.get("bug_detection", {})
@@ -573,8 +813,26 @@ def _eval_section() -> None:
     col1.metric("Generated tests (mock)", base.get("generated_tests", {}).get("count", "?"))
     col2.metric("In-sample bugs (generated, mock; tuned on)", _frac(det.get("generated")))
     col3.metric("In-sample bugs (gold)", _frac(det.get("gold")))
-    _heldout_section(blocks)
-    _understanding_section(blocks)
+    if v3:
+        _heldout_section(
+            blocks, "heldout_v2_bug_detection", "Held-out v2 bug detection (FRESH, 15 bugs)"
+        )
+        _understanding_section(
+            blocks, "requirement_understanding_v2", "Natural v2 requirement understanding (FRESH)"
+        )
+        _heldout_section(
+            blocks,
+            "heldout_bug_detection",
+            "Held-out v1 bug detection — seen (templates designed against these misses)",
+        )
+        _understanding_section(
+            blocks,
+            "requirement_understanding",
+            "Natural v1 requirement understanding (test split SEEN; dev split tuned on)",
+        )
+    else:
+        _heldout_section(blocks)
+        _understanding_section(blocks)
     st.caption(f"Report timestamp: {report.get('timestamp')}; spec is synthetic.")
     with st.expander("Full report JSON"):
         st.json(report)
