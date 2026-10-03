@@ -86,6 +86,18 @@ class ParsedRequirement(_Schema):
     dtcs: list[str] = Field(default_factory=list, description="DTC codes, e.g. 'B10101'")
     intents: list[Intent] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+    evidence: dict[str, str] = Field(
+        default_factory=dict,
+        description="Optional short verbatim phrase from the requirement per item, "
+        "keyed like 'service:0x2E' or 'did:<id>'",
+    )
+
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def _evidence_strings(cls, value: object) -> dict[str, str]:
+        if not isinstance(value, dict):
+            return {}
+        return {str(k): str(v) for k, v in value.items() if isinstance(v, str)}
 
     @field_validator("services", "dids", "routines", "sessions", "security_levels")
     @classmethod
@@ -143,6 +155,58 @@ class TestPlan(_Schema):
     tests: list[PlannedTest] = Field(default_factory=list)
 
 
+class ChoiceReply(_Schema):
+    """One planner choice in the constrained-decoding reply: ``choice`` is a single string
+    ``"<template_id>#<option_index>"`` that the schema restricts to the offered pairs."""
+
+    choice: str
+    rationale: str = ""
+
+
+class ConstrainedPlan(_Schema):
+    """The planner's reply when decoding is constrained by a per-call JSON schema."""
+
+    tests: list[ChoiceReply] = Field(default_factory=list)
+
+    def to_test_plan(self) -> TestPlan:
+        """Parse every ``template_id#option_index`` back. An entry that does not parse keeps its
+        raw string as ``template_id`` (option 0) so the agent rejects and records it."""
+        out: list[PlannedTest] = []
+        for item in self.tests:
+            raw = item.choice.strip()
+            tid, sep, idx = raw.rpartition("#")
+            if sep and tid.strip() and idx.strip().isdigit():
+                out.append(PlannedTest(template_id=tid.strip(), option_index=int(idx),
+                                       rationale=item.rationale))
+            else:
+                out.append(PlannedTest(template_id=raw, option_index=0, rationale=item.rationale))
+        return TestPlan(tests=out)
+
+
+def constrained_plan_schema(offered: list[tuple[str, int]], max_choices: int = 12) -> dict[str, object]:
+    """JSON schema for :class:`ConstrainedPlan` whose ``choice`` is an enum of exactly the
+    offered ``(template_id, option_index)`` pairs written ``template_id#option_index``."""
+    enum = [f"{tid}#{idx}" for tid, idx in offered]
+    return {
+        "type": "object",
+        "properties": {
+            "tests": {
+                "type": "array",
+                "maxItems": max_choices,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "choice": {"type": "string", "enum": enum},
+                        "rationale": {"type": "string"},
+                    },
+                    "required": ["choice", "rationale"],
+                },
+            }
+        },
+        "required": ["tests"],
+    }
+
+
 class TestExplanation(_Schema):
     """Prose for one kept test, keyed by the test id the agent showed the LLM."""
 
@@ -196,8 +260,14 @@ class LLMClient(Protocol):
     name: str
     """Short backend label recorded in the audit trail, e.g. ``"mock"``."""
 
-    def complete_json(self, system: str, prompt: str, schema: type[T]) -> T:
-        """Return an instance of ``schema`` answering ``prompt``."""
+    def complete_json(
+        self, system: str, prompt: str, schema: type[T], json_schema: dict[str, object] | None = None
+    ) -> T:
+        """Return an instance of ``schema`` answering ``prompt``.
+
+        ``json_schema`` optionally replaces the schema sent to a structured-output backend
+        (the reply is still validated with ``schema``). Only backends that set
+        ``supports_json_schema = True`` are given it; others are never called with it."""
         ...
 
     def complete_text(self, system: str, prompt: str) -> str:

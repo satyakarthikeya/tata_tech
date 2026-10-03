@@ -1,0 +1,291 @@
+{
+ "what": "MockLLM pipeline on all 15 seed requirements, engines plain and langgraph, BM25, before vs after Part D step D1a (service evidence grounding, evidence quotes, constrained planner schema). 'before' = working tree before the D1a edits, 'after' = with them; both measured with the same script.",
+ "compared": [
+  "tests (every field except explanation: ids, steps, citations, ...)",
+  "parsed (the new optional 'evidence' field is absent/empty for the mock and removed before comparing)",
+  "decisions",
+  "rejected",
+  "dropped",
+  "notes",
+  "plan_attempts"
+ ],
+ "excluded": [
+  "TestCase.explanation text",
+  "node_timings",
+  "llm_stats"
+ ],
+ "grounding_gate": "MockLLM.applies_grounding = False, so service/session/level/quote grounding is skipped; the plan node uses the old schema and prompt because MockLLM has no supports_json_schema.",
+ "all_identical": true,
+ "requirements": {
+  "langgraph:REQ-001": {
+   "sha_before": "d301e37eae154afa",
+   "sha_after": "d301e37eae154afa",
+   "identical": true,
+   "tests": 18,
+   "tests_sha_before": "ce774cfc043bc08a",
+   "tests_sha_after": "ce774cfc043bc08a",
+   "tests_identical": true
+  },
+  "langgraph:REQ-002": {
+   "sha_before": "61fa0bb15c1c3d05",
+   "sha_after": "61fa0bb15c1c3d05",
+   "identical": true,
+   "tests": 20,
+   "tests_sha_before": "f9831136f5afc355",
+   "tests_sha_after": "f9831136f5afc355",
+   "tests_identical": true
+  },
+  "langgraph:REQ-003": {
+   "sha_before": "0130391410f48cd9",
+   "sha_after": "0130391410f48cd9",
+   "identical": true,
+   "tests": 8,
+   "tests_sha_before": "2e3ce140311d1c12",
+   "tests_sha_after": "2e3ce140311d1c12",
+   "tests_identical": true
+  },
+  "langgraph:REQ-004": {
+   "sha_before": "894b712a94cff51e",
+   "sha_after": "894b712a94cff51e",
+   "identical": true,
+   "tests": 5,
+   "tests_sha_before": "eb6032ad977b6e05",
+   "tests_sha_after": "eb6032ad977b6e05",
+   "tests_identical": true
+  },
+  "langgraph:REQ-005": {
+   "sha_before": "b3e795d784af77e0",
+   "sha_after": "b3e795d784af77e0",
+   "identical": true,
+   "tests": 18,
+   "tests_sha_before": "503fcf6226865667",
+   "tests_sha_after": "503fcf6226865667",
+   "tests_identical": true
+  },
+  "langgraph:REQ-006": {
+   "sha_before": "2677f7a818d3559a",
+   "sha_after": "2677f7a818d3559a",
+   "identical": true,
+   "tests": 18,
+   "tests_sha_before": "c9b12d064117f539",
+   "tests_sha_after": "c9b12d064117f539",
+   "tests_identical": true
+  },
+  "langgraph:REQ-007": {
+   "sha_before": "6c8f080577b41805",
+   "sha_after": "6c8f080577b41805",
+   "identical": true,
+   "tests": 16,
+   "tests_sha_before": "029587d9d87f5e76",
+   "tests_sha_after": "029587d9d87f5e76",
+   "tests_identical": true
+  },
+  "langgraph:REQ-008": {
+   "sha_before": "22cdfcc53554fcd7",
+   "sha_after": "22cdfcc53554fcd7",
+   "identical": true,
+   "tests": 16,
+   "tests_sha_before": "f644569dba767b9e",
+   "tests_sha_after": "f644569dba767b9e",
+   "tests_identical": true
+  },
+  "langgraph:REQ-009": {
+   "sha_before": "31a1b91c29f9c735",
+   "sha_after": "31a1b91c29f9c735",
+   "identical": true,
+   "tests": 22,
+   "tests_sha_before": "a546537576b42e96",
+   "tests_sha_after": "a546537576b42e96",
+   "tests_identical": true
+  },
+  "langgraph:REQ-010": {
+   "sha_before": "86a493697941c853",
+   "sha_after": "86a493697941c853",
+   "identical": true,
+   "tests": 8,
+   "tests_sha_before": "c74a4b2b6504ca33",
+   "tests_sha_after": "c74a4b2b6504ca33",
+   "tests_identical": true
+  },
+  "langgraph:REQ-011": {
+   "sha_before": "1a313140230e93ec",
+   "sha_after": "1a313140230e93ec",
+   "identical": true,
+   "tests": 12,
+   "tests_sha_before": "581ea2ee2d0fb61c",
+   "tests_sha_after": "581ea2ee2d0fb61c",
+   "tests_identical": true
+  },
+  "langgraph:REQ-012": {
+   "sha_before": "bf12a0288ba5b5e6",
+   "sha_after": "bf12a0288ba5b5e6",
+   "identical": true,
+   "tests": 16,
+   "tests_sha_before": "a16369b315cff9ca",
+   "tests_sha_after": "a16369b315cff9ca",
+   "tests_identical": true
+  },
+  "langgraph:REQ-013": {
+   "sha_before": "bbf5e0985d05adb6",
+   "sha_after": "bbf5e0985d05adb6",
+   "identical": true,
+   "tests": 6,
+   "tests_sha_before": "42cfa4140cdc9839",
+   "tests_sha_after": "42cfa4140cdc9839",
+   "tests_identical": true
+  },
+  "langgraph:REQ-014": {
+   "sha_before": "b980e7ab933f6842",
+   "sha_after": "b980e7ab933f6842",
+   "identical": true,
+   "tests": 10,
+   "tests_sha_before": "1e8212fd1ca0a385",
+   "tests_sha_after": "1e8212fd1ca0a385",
+   "tests_identical": true
+  },
+  "langgraph:REQ-015": {
+   "sha_before": "ff6b8867bd752c85",
+   "sha_after": "ff6b8867bd752c85",
+   "identical": true,
+   "tests": 13,
+   "tests_sha_before": "fb04df8f6087e355",
+   "tests_sha_after": "fb04df8f6087e355",
+   "tests_identical": true
+  },
+  "plain:REQ-001": {
+   "sha_before": "d301e37eae154afa",
+   "sha_after": "d301e37eae154afa",
+   "identical": true,
+   "tests": 18,
+   "tests_sha_before": "ce774cfc043bc08a",
+   "tests_sha_after": "ce774cfc043bc08a",
+   "tests_identical": true
+  },
+  "plain:REQ-002": {
+   "sha_before": "61fa0bb15c1c3d05",
+   "sha_after": "61fa0bb15c1c3d05",
+   "identical": true,
+   "tests": 20,
+   "tests_sha_before": "f9831136f5afc355",
+   "tests_sha_after": "f9831136f5afc355",
+   "tests_identical": true
+  },
+  "plain:REQ-003": {
+   "sha_before": "0130391410f48cd9",
+   "sha_after": "0130391410f48cd9",
+   "identical": true,
+   "tests": 8,
+   "tests_sha_before": "2e3ce140311d1c12",
+   "tests_sha_after": "2e3ce140311d1c12",
+   "tests_identical": true
+  },
+  "plain:REQ-004": {
+   "sha_before": "894b712a94cff51e",
+   "sha_after": "894b712a94cff51e",
+   "identical": true,
+   "tests": 5,
+   "tests_sha_before": "eb6032ad977b6e05",
+   "tests_sha_after": "eb6032ad977b6e05",
+   "tests_identical": true
+  },
+  "plain:REQ-005": {
+   "sha_before": "b3e795d784af77e0",
+   "sha_after": "b3e795d784af77e0",
+   "identical": true,
+   "tests": 18,
+   "tests_sha_before": "503fcf6226865667",
+   "tests_sha_after": "503fcf6226865667",
+   "tests_identical": true
+  },
+  "plain:REQ-006": {
+   "sha_before": "2677f7a818d3559a",
+   "sha_after": "2677f7a818d3559a",
+   "identical": true,
+   "tests": 18,
+   "tests_sha_before": "c9b12d064117f539",
+   "tests_sha_after": "c9b12d064117f539",
+   "tests_identical": true
+  },
+  "plain:REQ-007": {
+   "sha_before": "6c8f080577b41805",
+   "sha_after": "6c8f080577b41805",
+   "identical": true,
+   "tests": 16,
+   "tests_sha_before": "029587d9d87f5e76",
+   "tests_sha_after": "029587d9d87f5e76",
+   "tests_identical": true
+  },
+  "plain:REQ-008": {
+   "sha_before": "22cdfcc53554fcd7",
+   "sha_after": "22cdfcc53554fcd7",
+   "identical": true,
+   "tests": 16,
+   "tests_sha_before": "f644569dba767b9e",
+   "tests_sha_after": "f644569dba767b9e",
+   "tests_identical": true
+  },
+  "plain:REQ-009": {
+   "sha_before": "31a1b91c29f9c735",
+   "sha_after": "31a1b91c29f9c735",
+   "identical": true,
+   "tests": 22,
+   "tests_sha_before": "a546537576b42e96",
+   "tests_sha_after": "a546537576b42e96",
+   "tests_identical": true
+  },
+  "plain:REQ-010": {
+   "sha_before": "86a493697941c853",
+   "sha_after": "86a493697941c853",
+   "identical": true,
+   "tests": 8,
+   "tests_sha_before": "c74a4b2b6504ca33",
+   "tests_sha_after": "c74a4b2b6504ca33",
+   "tests_identical": true
+  },
+  "plain:REQ-011": {
+   "sha_before": "1a313140230e93ec",
+   "sha_after": "1a313140230e93ec",
+   "identical": true,
+   "tests": 12,
+   "tests_sha_before": "581ea2ee2d0fb61c",
+   "tests_sha_after": "581ea2ee2d0fb61c",
+   "tests_identical": true
+  },
+  "plain:REQ-012": {
+   "sha_before": "bf12a0288ba5b5e6",
+   "sha_after": "bf12a0288ba5b5e6",
+   "identical": true,
+   "tests": 16,
+   "tests_sha_before": "a16369b315cff9ca",
+   "tests_sha_after": "a16369b315cff9ca",
+   "tests_identical": true
+  },
+  "plain:REQ-013": {
+   "sha_before": "bbf5e0985d05adb6",
+   "sha_after": "bbf5e0985d05adb6",
+   "identical": true,
+   "tests": 6,
+   "tests_sha_before": "42cfa4140cdc9839",
+   "tests_sha_after": "42cfa4140cdc9839",
+   "tests_identical": true
+  },
+  "plain:REQ-014": {
+   "sha_before": "b980e7ab933f6842",
+   "sha_after": "b980e7ab933f6842",
+   "identical": true,
+   "tests": 10,
+   "tests_sha_before": "1e8212fd1ca0a385",
+   "tests_sha_after": "1e8212fd1ca0a385",
+   "tests_identical": true
+  },
+  "plain:REQ-015": {
+   "sha_before": "ff6b8867bd752c85",
+   "sha_after": "ff6b8867bd752c85",
+   "identical": true,
+   "tests": 13,
+   "tests_sha_before": "fb04df8f6087e355",
+   "tests_sha_after": "fb04df8f6087e355",
+   "tests_identical": true
+  }
+ }
+}

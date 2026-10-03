@@ -15,7 +15,13 @@ from __future__ import annotations
 import re
 import string
 
-from uds_assistant.agent.grounding import ground_identifiers
+from uds_assistant.agent.grounding import (
+    apply_quote_check,
+    ground_identifiers,
+    ground_security_levels,
+    ground_services,
+    ground_sessions,
+)
 from uds_assistant.agent.options import (
     OptionRefs,
     ShortlistEntry,
@@ -36,12 +42,14 @@ from uds_assistant.agent.state import (
 )
 from uds_assistant.llm.base import (
     ALL_INTENTS,
+    ConstrainedPlan,
     ExplanationBatch,
     LLMError,
     ParsedRequirement,
     PlannedTest,
     TestPlan,
     build_prompt,
+    constrained_plan_schema,
     context_budget,
     drain_truncation_events,
     estimate_tokens,
@@ -51,6 +59,7 @@ from uds_assistant.llm.prompts import (
     EXPLAIN_BATCH_INSTRUCTION,
     PARSE_INSTRUCTION,
     PLAN_COMPACT_TEMPLATE,
+    PLAN_CONSTRAINED_TEMPLATE,
     PLAN_INSTRUCTION,
     SYSTEM_PROMPT,
 )
@@ -146,12 +155,41 @@ def parse(state: PipelineState, deps: PipelineDeps) -> PipelineState:
         # applies_grounding = False: it only emits ids written in the text or matched by a
         # name phrase, so the check is a no-op there and is skipped to keep its output
         # identical by construction.
-        kept, drops = ground_identifiers(kept, s.requirement_text, index, deps.retriever)
+        text = s.requirement_text
+        drops = []
+        kept, quote_drops, valid_quotes = apply_quote_check(kept, parsed.evidence, text)
+        drops += quote_drops
+        kept, id_drops = ground_identifiers(kept, text, index, deps.retriever)
+        drops += id_drops
+        kept["sessions"], session_drops = ground_sessions(kept["sessions"], text, index)
+        kept["security_levels"], level_drops = ground_security_levels(
+            kept["security_levels"], text
+        )
+        drops += session_drops + level_drops
+        kept["services"], service_drops, reasons = ground_services(
+            kept["services"], text, kept, list(parsed.intents), deps.retriever
+        )
+        drops += service_drops
         for drop in drops:
             note = f"Dropped ungrounded {drop.field[:-1]} identifier {drop.identifier}: {drop.reason}."
             s.notes.append(note)
             s.log("parse", note)
-    s.parsed = parsed.model_copy(update=kept)
+        for sid, why in reasons.items():
+            s.log("parse", f"service {sid} kept: {why}.")
+        if parsed.services and not kept["services"]:
+            note = "No parsed service had evidence in the requirement; continuing with none."
+            s.notes.append(note)
+            s.log("parse", note)
+        kept_items = {
+            f"{field[:-1] if field != 'security_levels' else 'security_level'}:{v}"
+            for field, values in kept.items()
+            for v in values
+        }
+        evidence = {k: q for k, q in valid_quotes.items() if k in kept_items}
+        kept_all: dict[str, object] = {**kept, "evidence": evidence}
+    else:
+        kept_all = dict(kept)
+    s.parsed = parsed.model_copy(update=kept_all)
     p = s.parsed
     s.log(
         "parse",
@@ -226,6 +264,8 @@ def compact_plan_prompt(
     catalog: list[TemplateOptions],
     exclude: set[tuple[str, int]],
     budget_tokens: int,
+    *,
+    constrained: bool = False,
 ) -> tuple[str, list[ShortlistEntry]]:
     """Budgeted plan prompt for a backend with a context limit.
 
@@ -249,7 +289,8 @@ def compact_plan_prompt(
             history += "Validation feedback: " + " | ".join(fb) + "\n"
         if history:
             history += "\n"
-        return PLAN_COMPACT_TEMPLATE.format(
+        template = PLAN_CONSTRAINED_TEMPLATE if constrained else PLAN_COMPACT_TEMPLATE
+        return template.format(
             options=render_shortlist(catalog, entries) if entries else "(none left)",
             history=history,
             requirement_id=state.requirement_id,
@@ -279,6 +320,8 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
     rejected_keys = {_choice_key(r.template_id, r.option_index) for r in s.rejected}
     budget = context_budget(deps.llm)
     shortlist: set[tuple[str, int]] | None = None
+    constrained = False
+    plan_schema: dict[str, object] = {}
     if budget is None:
         # Unlimited backend (mock): the full catalog as JSON context, unchanged.
         prompt = build_prompt(
@@ -297,19 +340,37 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
             },
         )
     else:
-        prompt, entries = compact_plan_prompt(s, deps, catalog, kept_keys | rejected_keys, budget)
+        exclude = kept_keys | rejected_keys
+        constrained = bool(getattr(deps.llm, "supports_json_schema", False))
+        prompt, entries = compact_plan_prompt(
+            s, deps, catalog, exclude, budget, constrained=constrained
+        )
+        if constrained and not entries:  # nothing to enumerate: an empty enum is not a schema
+            constrained = False
+            prompt, entries = compact_plan_prompt(s, deps, catalog, exclude, budget)
         shortlist = {(e.template_id, e.option_index) for e in entries}
+        if constrained:
+            plan_schema = constrained_plan_schema(
+                [(e.template_id, e.option_index) for e in entries]
+            )
         s.log(
             "plan",
             f"compact prompt: {len(entries)} shortlisted options, ~"
-            f"{estimate_tokens(SYSTEM_PROMPT, prompt)} of {budget} context tokens",
+            f"{estimate_tokens(SYSTEM_PROMPT, prompt)} of {budget} context tokens"
+            + (", constrained decoding (enum of offered choices)" if constrained else ""),
         )
     mark = truncation_mark(deps.llm)
     try:
-        raw = deps.llm.complete_json(SYSTEM_PROMPT, prompt, TestPlan)
-        # Re-validate from a plain dict: drops any extra (e.g. byte) fields a
-        # misbehaving backend might have attached.
-        test_plan = TestPlan.model_validate(raw.model_dump())
+        if constrained:
+            reply = deps.llm.complete_json(  # type: ignore[call-arg]
+                SYSTEM_PROMPT, prompt, ConstrainedPlan, json_schema=plan_schema
+            )
+            test_plan = ConstrainedPlan.model_validate(reply.model_dump()).to_test_plan()
+        else:
+            raw = deps.llm.complete_json(SYSTEM_PROMPT, prompt, TestPlan)
+            # Re-validate from a plain dict: drops any extra (e.g. byte) fields a
+            # misbehaving backend might have attached.
+            test_plan = TestPlan.model_validate(raw.model_dump())
     except (LLMError, ValueError) as exc:
         s.log("plan", f"LLM plan failed ({exc}); no new choices this round.")
         s.fallback_events.append(f"plan: LLM call failed ({exc}); no new choices this round")

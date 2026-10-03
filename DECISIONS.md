@@ -412,3 +412,26 @@ Both agents were launched after the Part C freeze. Their exact prompts are recor
 - **[PC6B-DOCS]** The final docs lead with the fresh v2 numbers. v1 results are labelled SEEN, in-sample results are labelled "tuned on", and all numbers come from report version 3.
 - **[PC6B-STALE-TESTS]** Two tests asserted the old version 2 report layout and failed against the committed version 3 report. I updated them to the version 3 layout. They are not code regressions. One UI test that only applies to a version 2 report now skips.
 - **[PC6B-BM25-DRIFT]** The BM25 retrieval numbers differ from Part B (test split hit@1 27.3% against 36.4%). A likely cause, not confirmed by an ablation: the behaviour contract in the `project` search collection grew from about 10,000 to 17,500 characters in Part C, with the same 24 sections, so each chunk is longer and BM25 rankings shift.
+
+## Part D
+
+### D1a (parse precision and constrained planner decoding, built with fake models only)
+
+- **[PD-SVC-EVID]** For real-model backends, every parsed service needs evidence, or it is dropped and recorded. Evidence is any of:
+  - a lexical hit, from a regex lexicon in `agent/service_lexicon.py` written only from protocol constants, the spec and general UDS vocabulary;
+  - implied by a kept identifier plus an intent (a kept DID with a read intent implies 0x22, with a write intent 0x2E; a kept routine implies 0x31; a kept DTC implies 0x14 or 0x19 depending on the verb);
+  - retrieval support from the `standard` collection **plus** a weak word of that service in the text. Retrieval alone never counts.
+
+  The mock is exempt, as with the identifier check.
+- **[PD-SESS-LVL]** Sessions must be named or implied in the text. Security levels are kept only when an unlock, security, seed or key word is present. 0x10 and 0x27 are never kept just because a session or level was parsed.
+- **[PD-QUOTE]** The parse output can carry optional evidence quotes, as `evidence` entries keyed like `service:0x2E`.
+  - A quote that is not found in the requirement text drops that item.
+  - A valid quote is never sufficient evidence by itself.
+  - The schema still has no byte or hex request fields.
+- **[PD-ENUM]** On Ollama, planner choices are constrained by a per-call schema in which each choice is one string from an enum of exactly the offered `template_id#option_index` pairs, with a limit of 12.
+  - The existing normalisation and validation stay as defence in depth, and the mock path is unchanged.
+  - Whether Ollama's decoder honours the enum is untested: no real call was made in this step. D1b must smoke-test it.
+- **[PD-RISK]** The evidence rules can drop a true service when the text uses a synonym outside the lexicon (for example "flip to diagnostics" for 0x10). The notes make every drop visible.
+  - The lexicon may be extended during D1b dev tuning only, using the 8 dev rows and the seed requirements.
+  - The agent built and tested it with its own made-up sentences and never opened any natural-requirements file.
+- **[PD-MOCK-EQ]** Mock output on the 15 seed requirements is unchanged across 30 runs (two engines), recorded in `outputs/partD/mock_equivalence_D1a.json`. The "before" snapshot was taken from the working tree while another agent was editing, so I will re-check the final state.

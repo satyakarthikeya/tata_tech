@@ -72,6 +72,8 @@ class OllamaClient:
     """Minimal synchronous Ollama chat client with retries and schema validation."""
 
     name = "ollama"
+    supports_json_schema = True
+    """``complete_json`` accepts a custom ``json_schema`` (sent as Ollama's ``format``)."""
 
     def __init__(
         self,
@@ -144,7 +146,10 @@ class OllamaClient:
     # ------------------------------------------------------------------ request building
 
     def build_chat_body(
-        self, messages: list[dict[str, str]], schema: type[BaseModel] | None = None
+        self,
+        messages: list[dict[str, str]],
+        schema: type[BaseModel] | None = None,
+        json_schema: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build the ``/api/chat`` JSON body (exposed for tests)."""
         body: dict[str, Any] = {
@@ -158,7 +163,9 @@ class OllamaClient:
                 "seed": DEFAULT_SEED,
             },
         }
-        if schema is not None:
+        if json_schema is not None:
+            body["format"] = json_schema
+        elif schema is not None:
             body["format"] = schema.model_json_schema()
         return body
 
@@ -199,19 +206,27 @@ class OllamaClient:
 
     # ------------------------------------------------------------------------ public API
 
-    def complete_json(self, system: str, prompt: str, schema: type[T]) -> T:
-        """Ask for JSON matching ``schema``; re-prompt with the error if invalid."""
+    def complete_json(
+        self, system: str, prompt: str, schema: type[T], json_schema: dict[str, Any] | None = None
+    ) -> T:
+        """Ask for JSON matching ``schema``; re-prompt with the error if invalid.
+
+        ``json_schema`` (optional) is sent as the ``format`` instead of ``schema``'s own JSON
+        schema, e.g. a per-call schema with enums; the reply is still validated with ``schema``.
+        """
         self.stats.calls += 1
         start = time.perf_counter()
         try:
-            return self._complete_json(system, prompt, schema)
+            return self._complete_json(system, prompt, schema, json_schema)
         except LLMError:
             self.stats.errors += 1
             raise
         finally:
             self.stats.latency_ms += (time.perf_counter() - start) * 1000
 
-    def _complete_json(self, system: str, prompt: str, schema: type[T]) -> T:
+    def _complete_json(
+        self, system: str, prompt: str, schema: type[T], json_schema: dict[str, Any] | None = None
+    ) -> T:
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": prompt},
@@ -220,7 +235,7 @@ class OllamaClient:
         for attempt in range(self.max_retries + 1):
             if attempt > 0:
                 self.stats.retries += 1
-            content = self._post_chat(self.build_chat_body(messages, schema))
+            content = self._post_chat(self.build_chat_body(messages, schema, json_schema))
             try:
                 return schema.model_validate(json.loads(content))
             except (json.JSONDecodeError, ValidationError) as exc:

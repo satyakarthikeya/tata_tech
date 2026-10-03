@@ -34,6 +34,10 @@ PARSE_INSTRUCTION = (
     "add service 0x27 and the level (level 1 -> 0x01, programming-level -> 0x03). "
     "Otherwise leave security_levels empty and do not add 0x27.\n"
     "5. intents from allowed_intents, 2-4 keywords.\n"
+    "6. evidence: for each service, did, routine or dtc you list, copy a short phrase "
+    "(2-6 words) exactly as written in requirement_text: {\"service:<service id>\": "
+    "\"<phrase>\", \"did:<id of X>\": \"<phrase>\"}. Leave out items you cannot quote; "
+    "an item whose phrase is not in the text is discarded.\n"
     "Examples (made-up requirements; <id of X> stands for the key of the spec_index entry "
     "whose name matches X, never copy an identifier from an example):\n"
     "'<X> shall be readable in every session.' -> services [0x22], dids [<id of X>], "
@@ -69,6 +73,17 @@ PLAN_COMPACT_TEMPLATE = (
 The option shortlist comes first and the requirement and instruction last, so that even
 an unexpected truncation (which keeps the tail) would cut options rather than the task."""
 
+PLAN_CONSTRAINED_TEMPLATE = (
+    "OPTIONS (the only choices allowed). Write each choice as one string "
+    "<template_id>#<option_index>, joining a template_id line with one of its "
+    "option_index values:\n{options}\n\n{history}"
+    "REQUIREMENT {requirement_id}: {requirement_text}\n"
+    "PARSED: {parsed}\n\n"
+    "TASK: {instruction}"
+)
+"""Same layout as :data:`PLAN_COMPACT_TEMPLATE` for a backend whose decoding is constrained to the
+offered ``template_id#option_index`` strings (see ``nodes.plan``)."""
+
 EXPLAIN_BATCH_INSTRUCTION = (
     "For every test in tests, write 2-3 sentences for a test engineer: what the test "
     "checks, why it matters for the requirement, and the expected outcome. Answer with "
@@ -88,6 +103,7 @@ __all__ = [
     "EXPLAIN_BATCH_INSTRUCTION",
     "PARSE_INSTRUCTION",
     "PLAN_COMPACT_TEMPLATE",
+    "PLAN_CONSTRAINED_TEMPLATE",
     "PLAN_INSTRUCTION",
     "SCHEMA_RETRY_INSTRUCTION",
     "SYSTEM_PROMPT",
