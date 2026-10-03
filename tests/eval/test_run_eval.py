@@ -60,6 +60,14 @@ RATE_PATHS = [
     ("requirement_understanding", "splits", "test", "targets_exercised", "exact_rate"),
     ("requirement_understanding", "splits", "test", "categories", "micro_recall"),
     ("requirement_understanding", "splits", "test", "preconditions", "micro_recall"),
+    ("heldout_v2_bug_detection", "generated", "rate"),
+    ("heldout_v2_bug_detection", "gold", "rate"),
+    ("heldout_v2_bug_detection", "union", "rate"),
+    ("requirement_understanding_v2", "splits", "test2", "targets_parsed", "exact_rate"),
+    ("requirement_understanding_v2", "splits", "test2", "targets_parsed", "f1"),
+    ("requirement_understanding_v2", "splits", "test2", "targets_exercised", "f1"),
+    ("requirement_understanding_v2", "splits", "test2", "categories", "micro_recall"),
+    ("requirement_understanding_v2", "splits", "test2", "preconditions", "micro_recall"),
 ]
 
 
@@ -124,10 +132,18 @@ def test_markdown_states_synthetic_spec_and_mode(full_report: tuple[Path, dict[s
     assert "UNVERIFIED TEMPLATES" in text
     headline = text.split("## Headline metrics", 1)[1].split("\n## ", 1)[0]
     assert "accuracy vs oracle" not in headline
-    order = ["1. Simulator", "2. Gold tests", "3. udsoncan", "4. Held-out", "5. Requirement",
-             "6. Coverage", "7. Citation"]
+    order = ["1. NEW HEADLINE", "2. NEW HEADLINE", "3. Simulator", "4. Gold tests", "5. udsoncan",
+             "6. Coverage", "7. Citation", "8. Held-out v1", "9. Requirement understanding, natural v1 test",
+             "10. Requirement understanding, natural v1 dev", "11. In-sample"]
     positions = [headline.index(label) for label in order]
     assert positions == sorted(positions)
+    assert "Held-out v2 bug detection" in headline and "natural v2" in headline
+    assert "**seen (templates designed against these misses)**" in headline
+    assert "**dev (tuned on)**" in headline
+    assert "**in-sample (templates tuned on these)**" in headline
+    for heading in ("## Noise check", "### Missed held-out v2 bugs — generated suite",
+                    "## Freeze verification", "recorded (Part C freeze)"):
+        assert heading in text, heading
 
 
 def test_ollama_mode_falls_back_and_records_actual_mode(
@@ -248,7 +264,31 @@ def test_headline_keys_and_values(full_report: tuple[Path, dict[str, Any]]) -> N
     prov = block["provenance"]
     assert prov["checked"] == prov["passed"] > block["generated_tests"]["count"]
     assert prov["seed"]["checked"] == block["generated_tests"]["count"]
-    assert set(report["freeze"]["paths"]) == set(run_eval.FREEZE_EXPECTED)
+    assert prov["natural_v2"]["checked"] == block["pipeline_natural_v2"]["tests_kept"] > 0
+    assert prov["checked"] == (prov["seed"]["checked"] + prov["natural"]["checked"]
+                               + prov["natural_v2"]["checked"])
+    progress = (REPO_ROOT / "PROGRESS.md").read_text(encoding="utf-8")
+    recorded = run_eval.parse_freeze_table(progress)
+    assert recorded["commit"] and len(recorded["paths"]) >= 5
+    assert set(report["freeze"]["paths"]) == set(recorded["paths"])
+    assert report["freeze"]["all_ok"] == (
+        all(v["matches"] and v["worktree_clean"] for v in report["freeze"]["paths"].values())
+        and report["freeze"]["commit"]["recorded_is_ancestor_of_head"] is True)
+    assert report["report_version"] == 3
+    order = head["order"]
+    assert order[:2] == ["heldout_v2_bug_detection", "requirement_understanding_v2"]
+    assert order[-4:] == ["heldout_bug_detection", "requirement_understanding",
+                          "requirement_understanding_dev", "in_sample_bug_detection"]
+    h2 = head["heldout_v2_bug_detection"]
+    assert h2["bugs"] == 15
+    assert h2["generated"]["detected"] == block["heldout_v2_bug_detection"]["generated"]["detected"]
+    assert h2["by_mode"]["mock"]["union"]["detected"] >= h2["by_mode"]["mock"]["generated"]["detected"]
+    assert set(h2["supplementary_by_mode"]["mock"]) == {"all_generated", "natural_v2_generated"}
+    ru2 = head["requirement_understanding_v2"]
+    assert ru2["mock"]["split"] == "test2" and ru2["mock"]["requirements"] == 16
+    assert ru2["ollama"].startswith("not run: not requested")
+    assert head["requirement_understanding_dev"]["mock"]["split"] == "dev"
+    assert head["in_sample_bug_detection"]["bugs"] == 26
     assert ru["mock"]["split"] == "test" and ru["mock"]["requirements"] == 12
     tsplit = block["requirement_understanding"]["splits"]["test"]
     assert ru["mock"]["target_exact_parsed"] == tsplit["targets_parsed"]["exact"]
@@ -410,3 +450,287 @@ def test_rerender_adds_interpretation(
     assert {k: v for k, v in after.items() if k != "interpretation"} == \
         {k: v for k, v in before.items() if k != "interpretation"}
     assert "Measured prose." in (tmp_path / "eval_report.md").read_text(encoding="utf-8")
+
+
+# ----------------------------------------------------------------------------- v2 sections
+
+
+def test_heldout_v2_section_uses_the_15_v2_bugs(full_report: tuple[Path, dict[str, Any]]) -> None:
+    from uds_assistant.simulator import HELDOUT_BUG_IDS, HELDOUT_V2_BUG_IDS, IMPLEMENTED_BUG_IDS
+
+    report = full_report[1]
+    held = report["modes"]["mock"]["heldout_v2_bug_detection"]
+    assert report["heldout_v2_catalog_size"] == 15
+    for suite in ("generated", "gold"):
+        ids = [b["bug_id"] for b in held[suite]["per_bug"]]
+        assert len(ids) == 15 and set(ids) == set(HELDOUT_V2_BUG_IDS)
+        assert not set(ids) & (set(IMPLEMENTED_BUG_IDS) | set(HELDOUT_BUG_IDS))
+        assert held[suite]["detected"] == sum(1 for b in held[suite]["per_bug"] if b["detected"])
+    assert held["union"]["detected"] >= max(held["generated"]["detected"], held["gold"]["detected"])
+    ana = held["analysis"]
+    for suite in ("generated", "gold", "all_generated", "natural_v2_generated"):
+        counts = ana[suite]["trigger_counts"]
+        assert set(counts) == set(HELDOUT_V2_BUG_IDS) and min(counts.values()) >= 0
+    missed = {m["bug_id"] for m in ana["generated"]["missed"]}
+    assert missed == set(held["generated"]["undetected"])
+    assert all(m["reason"] and "no trigger analysis" not in m["reason"]
+               for m in ana["generated"]["missed"])
+    # the headline "generated suite" is the seed-requirement suite; the supplements are others
+    supp = held["supplementary"]
+    n_seed = report["modes"]["mock"]["generated_tests"]["count"]
+    nat2 = report["modes"]["mock"]["pipeline_natural_v2"]["tests_kept"]
+    nat1 = report["modes"]["mock"]["pipeline_natural"]["tests_kept"]
+    assert supp["natural_v2_generated"]["tests"] == nat2
+    assert supp["all_generated"]["tests"] == n_seed + nat1 + nat2
+    assert supp["all_generated"]["detected"] >= held["generated"]["detected"]
+    assert held["scope"] == run_eval.HELDOUT_V2_LABEL
+    # v1 stays labelled as seen
+    assert report["modes"]["mock"]["heldout_bug_detection"]["label"] == run_eval.HELDOUT_V1_SEEN_LABEL
+
+
+def test_natural_v2_understanding_section(full_report: tuple[Path, dict[str, Any]]) -> None:
+    ru = full_report[1]["modes"]["mock"]["requirement_understanding_v2"]
+    rows = ru["per_requirement"]
+    assert len(rows) == 16 and {r["split"] for r in rows} == {"test2"}
+    assert ru["source"] == "data/requirements_natural_v2.csv"
+    assert set(ru["splits"]) == {"test2", "all"}
+    assert ru["splits"]["test2"]["requirements"] == 16
+    exact = sum(1 for r in rows if r["parsed"]["exact"])
+    assert ru["splits"]["test2"]["targets_parsed"]["exact"] == exact
+    nat16 = next(r for r in rows if r["id"] == "NAT2-016")
+    assert nat16["label_targets"] == []
+    # v1 layout is unchanged: test / dev / all
+    assert set(full_report[1]["modes"]["mock"]["requirement_understanding"]["splits"]) == {
+        "test", "dev", "all"}
+
+
+def test_mock_noise_check_is_one_run_plus_determinism_check(
+    full_report: tuple[Path, dict[str, Any]],
+) -> None:
+    nc = full_report[1]["modes"]["mock"]["noise_check"]
+    assert nc["status"] == "completed" and nc["deterministic"] is True
+    assert len(nc["runs"]) == 1 and nc["runs"][0]["used_for_main_tables"] is True
+    assert nc["determinism_check"]["second_run_identical"] is True
+    for key, sp in nc["summary"].items():
+        assert sp["min"] == sp["max"] == sp["mean"], key
+    ru = full_report[1]["modes"]["mock"]["requirement_understanding_v2"]["splits"]["test2"]
+    assert nc["runs"][0]["parsed_f1"] == ru["targets_parsed"]["f1"]
+
+
+def test_explain_calls_recorded_per_requirement(full_report: tuple[Path, dict[str, Any]]) -> None:
+    pipe = full_report[1]["modes"]["mock"]["pipeline"]
+    assert all("explain" in r["node_llm_calls"] or r["tests"] == 0
+               for r in pipe["per_requirement"])
+    assert pipe["explain_llm_calls"] == sum(r["node_llm_calls"].get("explain", 0)
+                                            for r in pipe["per_requirement"])
+
+
+def test_freeze_table_parse_and_info(tmp_path: Path) -> None:
+    import subprocess
+
+    text = (
+        "## Part C plan\n\n| `x` | `" + "a" * 40 + "` |\n\n"
+        "## Part C freeze (2026)\n\n| What | Hash |\n|---|---|\n"
+        "| Commit | `" + "1" * 40 + "` |\n"
+        "| `pkg/frozen` tree | `" + "2" * 40 + "` |\n"
+        "| `pkg/frozen/f.py` blob | `" + "3" * 40 + "` |\n\n## Next\n\n| `y` | `" + "b" * 40 + "` |\n"
+    )
+    parsed = run_eval.parse_freeze_table(text)
+    assert parsed == {"commit": "1" * 40, "paths": {"pkg/frozen": "2" * 40,
+                                                    "pkg/frozen/f.py": "3" * 40}}
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=tmp_path,
+            capture_output=True, text=True, check=True).stdout.strip()
+
+    git("init", "-q")
+    (tmp_path / "pkg" / "frozen").mkdir(parents=True)
+    (tmp_path / "pkg" / "frozen" / "f.py").write_text("x = 1\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-q", "-m", "freeze")
+    commit, tree = git("rev-parse", "HEAD"), git("rev-parse", "HEAD:pkg/frozen")
+    blob = git("rev-parse", "HEAD:pkg/frozen/f.py")
+
+    def write_progress(tree_hash: str) -> None:
+        (tmp_path / "PROGRESS.md").write_text(
+            f"## Part C freeze (x)\n\n| What | Hash |\n|---|---|\n| Commit | `{commit}` |\n"
+            f"| `pkg/frozen` tree | `{tree_hash}` |\n| `pkg/frozen/f.py` blob | `{blob}` |\n",
+            encoding="utf-8")
+
+    write_progress(tree)
+    info = run_eval.freeze_info(tmp_path)
+    assert info["all_ok"] is True and info["commit"]["recorded_is_ancestor_of_head"] is True
+    write_progress("0" * 40)
+    bad = run_eval.freeze_info(tmp_path)
+    assert bad["all_ok"] is False and bad["paths"]["pkg/frozen"]["matches"] is False
+    write_progress(tree)
+    (tmp_path / "pkg" / "frozen" / "f.py").write_text("x = 2\n", encoding="utf-8")
+    dirty = run_eval.freeze_info(tmp_path)
+    assert dirty["all_ok"] is False and dirty["paths"]["pkg/frozen"]["worktree_clean"] is False
+    (tmp_path / "PROGRESS.md").unlink()
+    missing = run_eval.freeze_info(tmp_path)
+    assert missing["all_ok"] is False and "not found" in missing["error"]
+
+
+# ----------------------------------------------------------------------------- noise check
+
+
+class _VaryingOllama(llm_factory.MockLLM):
+    """A fake Ollama whose parse varies from call to call (no server needed)."""
+
+    name = "fake-ollama-varying"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.parse_calls = 0
+
+    def complete_json(self, system: str, prompt: str, schema: Any) -> Any:
+        from uds_assistant.llm.base import ParsedRequirement
+
+        out = super().complete_json(system, prompt, schema)
+        if issubclass(schema, ParsedRequirement):
+            self.parse_calls += 1
+            phase = self.parse_calls % 3
+            data = out.model_dump()
+            if phase == 0:
+                data["dids"] = []
+            elif phase == 2 and "0x3E" not in data["services"]:
+                data["services"] = [*data["services"], "0x3E"]
+            return schema.model_validate(data)
+        return out
+
+
+def _patch_varying_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_get_llm = run_eval.get_llm
+
+    def fake_get_llm(cfg: Any = None, **kw: Any) -> Any:
+        if cfg is not None and cfg.llm_mode == "ollama":
+            return _VaryingOllama()
+        return real_get_llm(cfg, **kw)
+
+    monkeypatch.setattr(run_eval, "get_llm", fake_get_llm)
+    monkeypatch.setattr(run_eval, "OllamaClient", _VaryingOllama)
+
+
+def test_noise_runs_report_every_run_and_mean_range(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import statistics
+
+    _patch_varying_ollama(monkeypatch)
+    report = run_eval.run_evaluation(
+        "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
+        run_can=False, run_retrieval_compare=False, agreement_requests=20, noise_runs=3,
+    )
+    nc = report["modes"]["ollama"]["noise_check"]
+    assert nc["status"] == "completed" and nc["requested_runs"] == 3 and len(nc["runs"]) == 3
+    assert [r["run"] for r in nc["runs"]] == [1, 2, 3]
+    assert [r["used_for_main_tables"] for r in nc["runs"]] == [True, False, False]
+    # run 1 is exactly the run behind the main tables
+    ru = report["modes"]["ollama"]["requirement_understanding_v2"]["splits"]["test2"]
+    assert nc["runs"][0]["parsed_f1"] == ru["targets_parsed"]["f1"]
+    assert nc["runs"][0]["tests_kept"] == report["modes"]["ollama"]["pipeline_natural_v2"]["tests_kept"]
+    # the fake varies, so the runs differ and the range is non-trivial
+    f1s = [r["parsed_f1"] for r in nc["runs"]]
+    assert len(set(f1s)) > 1
+    for key in run_eval.NOISE_METRICS:
+        vals = [r[key] for r in nc["runs"] if r[key] is not None]
+        sp = nc["summary"][key]
+        assert sp["n"] == len(vals)
+        assert sp["min"] == pytest.approx(min(vals), abs=1e-4)
+        assert sp["max"] == pytest.approx(max(vals), abs=1e-4)
+        assert sp["mean"] == pytest.approx(statistics.fmean(vals), abs=1e-4)
+    # mock was run alongside and is deterministic
+    assert report["modes"]["mock"]["noise_check"]["deterministic"] is True
+    # provenance: every extra run is checked and counted in the mode total
+    prov = report["modes"]["ollama"]["provenance"]
+    assert [e["run"] for e in prov["noise_extra_runs"]] == [2, 3]
+    assert all(e["provenance"]["checked"] > 0 and e["provenance"]["ok"]
+               for e in prov["noise_extra_runs"])
+    assert prov["checked"] > prov["seed"]["checked"] + prov["natural"]["checked"] \
+        + prov["natural_v2"]["checked"]
+    assert report["provenance_ok"] is True
+    md = (tmp_path / "eval_report.md").read_text(encoding="utf-8")
+    assert "mean (min–max) over all runs" in md
+    assert "1 (used for the main tables)" in md and "2 (extra)" in md and "3 (extra)" in md
+    assert "never the best run" in md
+
+
+def test_noise_runs_default_is_one_and_validated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_varying_ollama(monkeypatch)
+    report = run_eval.run_evaluation(
+        "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
+        run_can=False, run_retrieval_compare=False, agreement_requests=20, compare_mock=False,
+    )
+    nc = report["modes"]["ollama"]["noise_check"]
+    assert len(nc["runs"]) == 1 and nc["requested_runs"] == 1
+    assert report["modes"]["ollama"]["provenance"]["noise_extra_runs"] == []
+    with pytest.raises(ValueError, match="noise_runs"):
+        run_eval.run_evaluation("mock", tmp_path, noise_runs=0)
+    args = run_eval.build_parser().parse_args(["--mode", "ollama", "--noise-runs", "3"])
+    assert args.noise_runs == 3 and run_eval.build_parser().parse_args([]).noise_runs == 1
+
+
+def test_provenance_failure_in_a_noise_run_exits_nonzero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import functools
+
+    from uds_assistant.eval import provenance
+
+    _patch_varying_ollama(monkeypatch)
+    nat2_calls = {"n": 0}
+
+    def tamper_second_nat2_check(spec: Any, tests: Any) -> dict[str, Any]:
+        tests = list(tests)
+        if tests and any(r.startswith("NAT2") for r in tests[0].requirement_ids):
+            nat2_calls["n"] += 1
+            if nat2_calls["n"] == 2:  # run 1 (in the noise check) is call 1, extra run 2 is call 2
+                tests[0] = tests[0].model_copy(update={"template_id": "not_a_template"})
+        return provenance.check_provenance(spec, tests)
+
+    monkeypatch.setattr(run_eval, "check_provenance", tamper_second_nat2_check)
+    monkeypatch.setattr(run_eval, "run_evaluation", functools.partial(
+        run_eval.run_evaluation, requirement_ids=["REQ-001"], agreement_requests=20))
+    code = run_eval.main(["--mode", "ollama", "--out", str(tmp_path), "--engine", "plain",
+                          "--skip-can", "--skip-retrieval-compare", "--no-export-run",
+                          "--no-mock-compare", "--noise-runs", "3"])
+    assert code == run_eval.PROVENANCE_EXIT_CODE
+    report = json.loads((tmp_path / "eval_report.json").read_text(encoding="utf-8"))
+    assert report["provenance_ok"] is False
+    extra = report["modes"]["ollama"]["provenance"]["noise_extra_runs"]
+    assert extra[0]["provenance"]["ok"] is False and extra[1]["provenance"]["ok"] is True
+    assert "FAILED" in (tmp_path / "eval_report.md").read_text(encoding="utf-8")
+
+
+def test_rerender_with_before_after_flag(
+    full_report: tuple[Path, dict[str, Any]], tmp_path: Path
+) -> None:
+    import shutil
+
+    shutil.copy(full_report[0] / "eval_report.json", tmp_path / "eval_report.json")
+    code = run_eval.main(["--rerender", "--out", str(tmp_path), "--before-after"])
+    assert code == 0
+    assert (tmp_path / "partC" / "before_after.md").exists()
+
+
+def test_before_after_from_the_full_mock_report(
+    full_report: tuple[Path, dict[str, Any]], tmp_path: Path
+) -> None:
+    import shutil
+
+    shutil.copy(full_report[0] / "eval_report.json", tmp_path / "eval_report.json")
+    target = run_eval.write_before_after(tmp_path)
+    md = target.read_text(encoding="utf-8")
+    held2 = full_report[1]["modes"]["mock"]["heldout_v2_bug_detection"]
+    assert f"{held2['generated']['detected']}/15" in md
+    row = next(ln for ln in md.splitlines() if ln.startswith("| **Held-out v2, FRESH"))
+    assert row.rstrip().endswith("| not run |")  # ollama did not run in this report
+    from uds_assistant.eval import before_after as ba
+
+    n_open = ba.sws_open_count(
+        (REPO_ROOT / "docs" / "SWS_DISAGREEMENTS.md").read_text(encoding="utf-8"))["open"]
+    assert f"| SWS disagreements open | 9 | {n_open} | 9 | {n_open} |" in md

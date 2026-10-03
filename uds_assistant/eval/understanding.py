@@ -1,6 +1,8 @@
 """Requirement understanding: score pipeline output on the labelled natural requirements.
 
-Input labels: ``data/requirements_natural.csv`` (see ``data/requirements_natural.md``).
+Input labels: ``data/requirements_natural.csv`` (splits ``test`` / ``dev``) and
+``data/requirements_natural_v2.csv`` (split ``test2``, same schema; see
+``data/requirements_natural.md`` for the label semantics).
 For each requirement the agent pipeline produced a :class:`ParsedRequirement` and
 a list of generated tests; this module turns both into comparable sets and scores
 them. Every function here is pure; definitions are in :data:`UNDERSTANDING_DEFINITIONS`.
@@ -23,7 +25,7 @@ from uds_assistant.testgen.model import TestCase
 Ident = tuple[str, int]
 """A typed identifier: ``("service", 0x22)``, ``("did", 0xF190)`` or ``("routine", 0x0201)``."""
 
-SPLITS = ("test", "dev", "all")
+SPLITS = ("test", "dev", "test2", "all")
 PRECONDITIONS = (
     "default_session", "extended_session", "programming_session", "security_level_1",
     "security_level_3", "vehicle_stationary", "vehicle_moving", "nvm_fault", "dtc_status_set",
@@ -113,7 +115,7 @@ def _split_tokens(raw: str | None) -> list[str]:
 
 
 def load_natural_requirements(path: Path) -> list[NaturalRequirement]:
-    """Read the labelled natural requirements CSV."""
+    """Read a labelled natural requirements CSV (v1 or v2: same schema, any ``split`` value)."""
     with path.open(encoding="utf-8", newline="") as fh:
         rows = [r for r in csv.DictReader(fh) if r.get("id")]
     return [
@@ -341,9 +343,16 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def aggregate_by_split(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregates for the ``test`` split (headline), ``dev`` split and all rows."""
-    return {
-        "test": _aggregate([r for r in rows if r["split"] == "test"]),
-        "dev": _aggregate([r for r in rows if r["split"] == "dev"]),
-        "all": _aggregate(rows),
-    }
+    """Aggregates for every split present among ``rows`` (plus ``all``).
+
+    The v1 file gives ``test`` and ``dev``; the v2 file gives ``test2``. A split with no rows
+    is omitted, except that ``test`` and ``dev`` are always present when ``rows`` has no
+    ``test2`` rows (the v1 layout), so v1 reports keep their shape.
+    """
+    present = {r["split"] for r in rows}
+    names = [s for s in ("test", "dev", "test2") if s in present]
+    if not present & {"test2"}:
+        names = ["test", "dev"]
+    out = {name: _aggregate([r for r in rows if r["split"] == name]) for name in names}
+    out["all"] = _aggregate(rows)
+    return out

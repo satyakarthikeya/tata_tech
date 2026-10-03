@@ -168,19 +168,29 @@ HELDOUT_TRIGGERS: dict[str, tuple[str, Trigger]] = {
 }
 
 
-def trigger_counts(spec: EcuSpec, tests: list[TestCase], bug_ids: list[str]) -> dict[str, int]:
-    """Number of tests applying each bug's trigger stimulus (-1 when no trigger is defined)."""
+def trigger_counts(
+    spec: EcuSpec, tests: list[TestCase], bug_ids: list[str],
+    triggers: dict[str, tuple[str, Trigger]] | None = None,
+) -> dict[str, int]:
+    """Number of tests applying each bug's trigger stimulus (-1 when no trigger is defined).
+
+    ``triggers`` defaults to the held-out v1 table :data:`HELDOUT_TRIGGERS`.
+    """
+    table = HELDOUT_TRIGGERS if triggers is None else triggers
     traces = [trace_test(spec, t) for t in tests]
     out: dict[str, int] = {}
     for bug_id in bug_ids:
-        entry = HELDOUT_TRIGGERS.get(bug_id)
+        entry = table.get(bug_id)
         out[bug_id] = -1 if entry is None else sum(1 for tr in traces if entry[1](spec, tr))
     return out
 
 
-def miss_reason(bug_id: str, suite: str, count: int) -> str:
+def miss_reason(
+    bug_id: str, suite: str, count: int,
+    triggers: dict[str, tuple[str, Trigger]] | None = None,
+) -> str:
     """One-line reason a bug was missed by ``suite`` given its trigger count."""
-    entry = HELDOUT_TRIGGERS.get(bug_id)
+    entry = (HELDOUT_TRIGGERS if triggers is None else triggers).get(bug_id)
     if entry is None or count < 0:
         return "no trigger analysis defined for this bug"
     phrase = entry[0]
@@ -191,18 +201,24 @@ def miss_reason(bug_id: str, suite: str, count: int) -> str:
 
 
 def heldout_analysis(
-    spec: EcuSpec, suites: dict[str, list[TestCase]], per_suite_detection: dict[str, Any]
+    spec: EcuSpec, suites: dict[str, list[TestCase]], per_suite_detection: dict[str, Any],
+    triggers: dict[str, tuple[str, Trigger]] | None = None,
 ) -> dict[str, Any]:
-    """Trigger counts and miss reasons per suite (``per_suite_detection`` = bug_detection dicts)."""
-    out: dict[str, Any] = {"triggers": {k: v[0] for k, v in HELDOUT_TRIGGERS.items()}}
+    """Trigger counts and miss reasons per suite (``per_suite_detection`` = bug_detection dicts).
+
+    ``triggers`` selects the trigger table (default: held-out v1).
+    """
+    table = HELDOUT_TRIGGERS if triggers is None else triggers
+    out: dict[str, Any] = {"triggers": {k: v[0] for k, v in table.items()}}
     for name, tests in suites.items():
         det = per_suite_detection[name]
         ids = [b["bug_id"] for b in det["per_bug"]]
-        counts = trigger_counts(spec, tests, ids)
+        counts = trigger_counts(spec, tests, ids, table)
         out[name] = {
             "trigger_counts": counts,
             "missed": [
-                {"bug_id": b["bug_id"], "reason": miss_reason(b["bug_id"], name, counts[b["bug_id"]])}
+                {"bug_id": b["bug_id"],
+                 "reason": miss_reason(b["bug_id"], name, counts[b["bug_id"]], table)}
                 for b in det["per_bug"] if not b["detected"]
             ],
         }

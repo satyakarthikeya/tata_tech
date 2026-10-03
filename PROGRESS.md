@@ -682,3 +682,14 @@ The validation output, the count of requirements containing hex IDs, which are a
   - Recorded: testgen `a4b6491…`, llm `95ebf49…`, agent `9696c35…`
   - Current: the same three hashes
   - `prompts.py` blob `c0c6d5a…` and `data/gold` tree `7787401…` also match
+
+## C5a — done (2026-10-03T23:41:51+05:30)
+
+- The eval is extended with held-out v2 as the headline, natural v2 understanding, the Ollama noise check, byte provenance on every run, a before/after generator and the freeze table (report version 3).
+- No GPU and no Ollama were used.
+- Verification: the full suite gave 1151 passed and 13 skipped (agent run), eval and runner tests gave 94 passed and 1 skipped (my run), ruff is clean, and the frozen paths are unchanged.
+- **Mock-only dry run on the fresh sets (temporary folder, `outputs/eval_report.*` untouched):**
+  - Held-out v2, generated / gold / union: 2/15, 5/15, 5/15.
+  - Natural v2: parsed exact 0/16, parsed P / R / F1 1.0 / 0.2245 / 0.3667, category recall 48%, precondition recall 55.6%.
+- **Held-out v1, now "seen":** the mock's generated suite catches 10/12 (it was 3/12 before the coverage templates).
+- **Command for the real run:** `python -m uds_assistant.eval.run_eval --mode ollama --noise-runs 3 --before-after`. It needs the GPU and takes about 1.1 to 1.4 hours (an estimate).

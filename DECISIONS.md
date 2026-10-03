@@ -367,3 +367,21 @@ Both agents were launched after the Part C freeze. Their exact prompts are recor
   - NAT2-006 (lockout) lists `extended_session` and `lockout_active` but not `security_level_1`.
   - NAT2-010 is about state being lost after a reset, because the spec does not define whether written values survive.
 - **[PC4-FREEZE]** I verified after C4 that the testgen, llm and agent trees, the prompts file and `data/gold` still match the recorded freeze hashes. The working tree has no changes to any of them.
+
+### C5a (evaluation extension, built without the GPU)
+
+- **[PC5-V2-HEADLINE]** The held-out v2 "generated suite" is the tests generated from the 15 seed requirements, the same definition as the earlier headline, so the numbers are comparable.
+  - Detection by all generated tests (seed, natural v1 and natural v2) and by the natural-v2 tests alone are reported as supplementary lines.
+- **[PC5-TRIGGERS-V2]** The 15 v2 trigger predicates (`uds_assistant/eval/heldout_v2.py`) were written from the bug descriptions and the behaviour contract before any v2 result was seen.
+  - Afterwards only behaviour-preserving edits were made: one lint-driven refactor and some wording in the reason text. No logic was changed.
+  - The predicates are necessary, not sufficient. A bug whose stimulus is applied but whose expected responses do not differ is reported with that reason.
+- **[PC5-NOISE]** `--noise-runs N` runs natural v2 N times in ollama mode. Run 1 feeds the tables, and the report lists every run with mean and min–max. Mock runs once plus a second run that must be identical.
+- **[PC5-PROV]** Byte provenance also covers natural v2 and every extra noise run. Any failure still gives exit code 2 after the report is written.
+- **[PC5-FREEZE]** The report now parses the freeze hashes from the "Part C freeze" table in PROGRESS.md, and the freeze commit must be an ancestor of HEAD. The old hard-coded expected hashes were removed.
+- **[PC5-BASELINE]** `outputs/partC/baseline_before_partC.json` is frozen from commit 38aa719, and a test re-extracts it from git and compares.
+  - Explain calls in the baseline are derived from tests kept, because explain made one call per kept test: 9.80 per requirement for mock, 4.51 for ollama.
+- **[PC5-LATENCY]** The latency and rejected-choice rows in before/after use the 35 seed and natural-v1 requirements, so they stay comparable with the baseline. The v2 rows are reported separately.
+- **[PC5-DRYRUN]** A mock-only dry run into a temporary folder gave these v2 numbers:
+  - Held-out v2 bugs: generated 2/15, gold 5/15, union 5/15.
+  - Natural v2: parsed exact 0/16, parsed P/R/F1 1.0 / 0.2245 / 0.3667, category recall 24/50, precondition recall 15/27.
+  - These are the mock numbers on fresh data, recorded before any Ollama run.

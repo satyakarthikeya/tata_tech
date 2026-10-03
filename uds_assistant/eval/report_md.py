@@ -49,6 +49,16 @@ def _esc(text: str) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
+def provenance_failures(prov: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every stored failure record of a provenance block (all groups and noise runs)."""
+    out: list[dict[str, Any]] = []
+    for group in ("seed", "natural", "natural_v2"):
+        out += prov.get(group, {}).get("failures", [])
+    for extra in prov.get("noise_extra_runs", []):
+        out += extra["provenance"]["failures"]
+    return out
+
+
 def _completed(report: dict[str, Any]) -> list[str]:
     return [m for m in MODES if report["modes"].get(m, {}).get("status") == "completed"]
 
@@ -80,8 +90,10 @@ def _header(report: dict[str, Any]) -> list[str]:
         (f"- **Template set:** `{report['template_set_version']}` "
          f"({report['templates_registered']} templates)"),
         (f"- **Inputs:** {report['requirements']} seed requirements, "
-         f"{report.get('natural_requirements', 0)} labelled natural requirements, "
-         f"{report['gold_tests']} gold tests, {report.get('heldout_catalog_size', 0)} held-out + "
+         f"{report.get('natural_requirements', 0)} labelled natural v1 + "
+         f"{report.get('natural_requirements_v2', 0)} natural v2 requirements, "
+         f"{report['gold_tests']} gold tests, {report.get('heldout_v2_catalog_size', 0)} held-out "
+         f"v2 (fresh) + {report.get('heldout_catalog_size', 0)} held-out v1 (seen) + "
          f"{report['bug_catalog_size']} in-sample injectable simulator bugs"),
     ]
     st = report.get("llm_settings")
@@ -127,21 +139,21 @@ def _header(report: dict[str, Any]) -> list[str]:
 # ----------------------------------------------------------------------------- headline
 
 
-def _ru_text(ru: dict[str, Any] | str) -> str:
+def _ru_text(ru: dict[str, Any] | str, label: str) -> str:
     if isinstance(ru, str):
         return ru
     if "status" in ru:
         return ru["status"]
     k = ru["requirements"]
-    return (f"test split (n={k}): target exact match parsed "
-            f"{ru['target_exact_parsed']}/{k} (F1 {_f(ru['target_f1_parsed'])}), "
-            f"exercised {ru['target_exact_exercised']}/{k} "
-            f"(F1 {_f(ru['target_f1_exercised'])}); category recall "
+    return (f"{label} (n={k}): parsed exact {ru['target_exact_parsed']}/{k}, P/R/F1 "
+            f"{_f(ru['target_precision_parsed'])}/{_f(ru['target_recall_parsed'])}/"
+            f"{_f(ru['target_f1_parsed'])}; exercised exact {ru['target_exact_exercised']}/{k}, "
+            f"F1 {_f(ru['target_f1_exercised'])}; category recall "
             f"{_pct(ru['category_recall_micro'])} micro / "
             f"{_pct(ru['category_recall_macro'])} macro; precondition recall "
             f"{_pct(ru['precondition_recall_micro'])} micro / "
             f"{_pct(ru['precondition_recall_macro'])} macro; fallback/nothing {ru['fallback']}/{k} "
-            f"({ru['fallback_unexpected']} excl. NAT-020-style empty-label rows)")
+            f"({ru['fallback_unexpected']} excl. empty-label rows)")
 
 
 def _headline(report: dict[str, Any]) -> list[str]:
@@ -149,19 +161,31 @@ def _headline(report: dict[str, Any]) -> list[str]:
     same = "same (LLM-independent)"
     agr, gold, can = h["simulator_rules_agreement"], h["gold_clean_pass"], h["udsoncan_virtual_can"]
     held, cov, cit = h["heldout_bug_detection"], h["coverage"], h["citation_validity"]
+    held2, ins = h["heldout_v2_bug_detection"], h["in_sample_bug_detection"]
     can_txt = can["status"].upper() + (f" — `{can['error']}`" if can.get("error") else "")
-    n = held["bugs"]
 
-    def by_mode(row: dict[str, Any], fmt: Callable[[dict[str, Any]], str]) -> list[str]:
-        bm = row.get("by_mode", {})
+    def by_mode(row: dict[str, Any], fmt: Callable[[dict[str, Any]], str],
+                key: str = "by_mode") -> list[str]:
+        bm = row.get(key, {})
         return [fmt(bm[m]) if isinstance(bm.get(m), dict) else str(bm.get(m, "not run"))
                 for m in MODES]
 
-    def held_fmt(v: dict[str, Any]) -> str:
-        return (f"**generated {v['generated']['detected']}/{n} "
-                f"({_pct(v['generated']['rate'])})** · gold {v['gold']['detected']}/{n} "
-                f"({_pct(v['gold']['rate'])}) · union {v['union']['detected']}/{n} "
-                f"({_pct(v['union']['rate'])})")
+    def det_fmt(n: int, bold: bool = True) -> Callable[[dict[str, Any]], str]:
+        def fmt(v: dict[str, Any]) -> str:
+            gen = (f"generated {v['generated']['detected']}/{n} ({_pct(v['generated']['rate'])})")
+            return (f"**{gen}**" if bold else gen) + (
+                f" · gold {v['gold']['detected']}/{n} ({_pct(v['gold']['rate'])}) · union "
+                f"{v['union']['detected']}/{n} ({_pct(v['union']['rate'])})")
+        return fmt
+
+    def supp_fmt(v: dict[str, Any]) -> str:
+        parts = []
+        for key, label in (("all_generated", "all generated tests (seed + natural v1 + natural v2)"),
+                           ("natural_v2_generated", "natural-v2 tests alone")):
+            x = v.get(key)
+            parts.append(f"{label} {x['detected']}/{x['bugs']} ({_pct(x['rate'])}), "
+                         f"{x['tests']} tests" if isinstance(x, dict) else f"{label}: {x}")
+        return "; ".join(parts)
 
     def cov_fmt(v: dict[str, Any]) -> str:
         tot = v["category_totals"]
@@ -172,28 +196,44 @@ def _headline(report: dict[str, Any]) -> list[str]:
     def cit_fmt(v: dict[str, Any]) -> str:
         return _frac(v["valid"], v["citations"], v["rate"])
 
-    ru = h["requirement_understanding"]
+    def ru(key: str, label: str) -> list[str]:
+        return [_ru_text(h[key].get(m, "not run"), label) for m in MODES]
+
     rows = [
-        ["1. Simulator ↔ rules-engine agreement (seeded random sample, live)",
+        [("**1. NEW HEADLINE — Held-out v2 bug detection (15 fresh bugs; generated suite = "
+          "tests from the 15 seed requirements)**"), *by_mode(held2, det_fmt(held2["bugs"]))],
+        ["1b. supplementary (not comparable to the headline): v2 bugs detected by other suites",
+         *by_mode(held2, supp_fmt, "supplementary_by_mode")],
+        ["**2. NEW HEADLINE — Requirement understanding, natural v2 (split test2, fresh)**",
+         *ru("requirement_understanding_v2", "test2")],
+        ["3. Simulator ↔ rules-engine agreement (seeded random sample, live)",
          _frac(agr["agreed"], agr["total"], agr["rate"]), same],
-        ["2. Gold tests passing on the bug-free simulator",
+        ["4. Gold tests passing on the bug-free simulator",
          _frac(gold["passed"], gold["total"], gold["rate"]), same],
-        ["3. udsoncan virtual-CAN sequence (session → seed/key → read → write → read-back)",
+        ["5. udsoncan virtual-CAN sequence (session → seed/key → read → write → read-back)",
          can_txt, same],
-        ["**4. Held-out bug detection (12 bugs; HEADLINE = generated)**", *by_mode(held, held_fmt)],
-        ["5. Requirement understanding (natural requirements)",
-         *[_ru_text(ru.get(m, "not run")) for m in MODES]],
         ["6. Coverage (seed requirements; tests per category)", *by_mode(cov, cov_fmt)],
         ["7. Citation validity", *by_mode(cit, cit_fmt)],
+        [(f"8. Held-out v1 bug detection ({held['bugs']} bugs) — **seen (templates designed "
+          "against these misses)**"), *by_mode(held, det_fmt(held["bugs"], bold=False))],
+        ["9. Requirement understanding, natural v1 test split — **seen**",
+         *ru("requirement_understanding", "test split")],
+        ["10. Requirement understanding, natural v1 dev split — **dev (tuned on)**",
+         *ru("requirement_understanding_dev", "dev split")],
+        [(f"11. In-sample bug detection ({ins['bugs']} bugs) — **in-sample (templates tuned on "
+          "these)**"), *by_mode(ins, det_fmt(ins["bugs"], bold=False))],
     ]
     lines = ["## Headline metrics", ""]
     lines += _table(["Metric", "mock", "ollama"], rows)
     lines += [
         "",
-        ("Rows 1-3 and the gold number in row 4 do not depend on the LLM; row 4 generated/union "
-         "and rows 5-7 do. The self-consistency check (expected responses vs the oracle that "
-         "produced them) is in the appendix, and the in-sample 26-bug detection is a "
-         "secondary section, because the templates were tuned on those bugs."),
+        ("Rows 1-2 are the NEW HEADLINE: both data sets were written blind, after the Part C "
+         "freeze, and nothing was tuned on them. Rows 3-5 and the gold figures in rows 1, 8 "
+         "and 11 do not depend on the LLM; everything else is measured per mode. Rows 8-11 are "
+         "labelled because their data was seen or tuned on: held-out v1 results shaped the "
+         "template set, the natural v1 dev split shaped the prompts, and the 26 in-sample bugs "
+         "shaped templates v2. The self-consistency check (expected responses vs the oracle that "
+         "produced them) is in the appendix."),
         "",
     ]
     return lines
@@ -214,14 +254,69 @@ def _interpretation(report: dict[str, Any]) -> list[str]:
     return lines
 
 
+# ----------------------------------------------------------------------------- noise check
+
+
+def _noise_section(report: dict[str, Any]) -> list[str]:
+    lines = ["## Noise check — natural v2 (fresh), run-to-run variation", ""]
+    any_shown = False
+    for mode in _completed(report):
+        nc = report["modes"][mode].get("noise_check", {})
+        if nc.get("status") != "completed":
+            lines += [f"- `{mode}`: not run", ""]
+            continue
+        any_shown = True
+        runs, summ = nc["runs"], nc["summary"]
+        lines += [(f"### mode={mode}: {len(runs)} run(s) over the 16 natural-v2 requirements "
+                   f"(requested {nc['requested_runs']})"), ""]
+        rows = [[f"{r['run']}" + (" (used for the main tables)" if r["used_for_main_tables"]
+                                    else " (extra)"),
+                 _f(r["parsed_precision"]), _f(r["parsed_recall"]), _f(r["parsed_f1"]),
+                 _f(r["exercised_f1"]), _pct(r["category_recall_micro"]),
+                 _pct(r["precondition_recall_micro"]), r["tests_kept"], r["rejected"],
+                 r["fallback_events"],
+                 f"{r['provenance']['passed']}/{r['provenance']['checked']}"
+                 + ("" if r["provenance"]["ok"] else " **FAILED**")] for r in runs]
+
+        def cell(key: str, fmt: Callable[[float | None], str], summ: dict[str, Any] = summ) -> str:
+            sp = summ[key]
+            if sp["mean"] is None:
+                return "n/a"
+            return f"{fmt(sp['mean'])} ({fmt(sp['min'])}–{fmt(sp['max'])})"
+
+        def num(v: float | None) -> str:
+            return "n/a" if v is None else f"{v:.2f}".rstrip("0").rstrip(".")
+
+        rows.append(["**mean (min–max) over all runs**",
+                     cell("parsed_precision", _f), cell("parsed_recall", _f),
+                     cell("parsed_f1", _f), cell("exercised_f1", _f),
+                     cell("category_recall_micro", _pct), cell("precondition_recall_micro", _pct),
+                     cell("tests_kept", num), cell("rejected", num), cell("fallback_events", num),
+                     "-"])
+        lines += _table(["Run", "Parsed P", "Parsed R", "Parsed F1", "Exercised F1",
+                         "Category recall (micro)", "Precondition recall (micro)", "Tests kept",
+                         "Rejected choices", "Fallback events", "Byte provenance"], rows)
+        lines += ["", f"_{nc['note']}_"]
+        dc = nc.get("determinism_check")
+        if dc:
+            lines += ["", (f"Determinism check: a second `{mode}` run over natural v2 was "
+                          f"identical = **{dc['second_run_identical']}** (compared: "
+                          f"{dc['compared']}).")]
+        lines.append("")
+    if not any_shown:
+        lines += ["No mode produced a noise check in this invocation.", ""]
+    return lines
+
+
 # ----------------------------------------------------------------------------- side by side
 
 
-def _ru_split_rows(report: dict[str, Any], split: str) -> list[list[Any]]:
+def _ru_split_rows(report: dict[str, Any], split: str,
+                   key: str = "requirement_understanding") -> list[list[Any]]:
     def get(fn: Callable[[dict[str, Any]], str]) -> list[Any]:
         def inner(blk: dict[str, Any]) -> str:
-            ru = blk.get("requirement_understanding", {})
-            if "splits" not in ru:
+            ru = blk.get(key, {})
+            if "splits" not in ru or split not in ru["splits"]:
                 return "not run"
             return fn(ru["splits"][split])
         return _cells(report, inner)
@@ -258,12 +353,13 @@ def _ru_split_rows(report: dict[str, Any], split: str) -> list[list[Any]]:
     ]
 
 
-def _per_req_understanding(report: dict[str, Any], split: str) -> list[str]:
+def _per_req_understanding(report: dict[str, Any], split: str,
+                           key: str = "requirement_understanding") -> list[str]:
     done = _completed(report)
-    by_mode = {m: {r["id"]: r for r in report["modes"][m]["requirement_understanding"].get(
-        "per_requirement", [])} for m in done}
-    ids = [r["id"] for r in report["modes"][done[0]]["requirement_understanding"].get(
-        "per_requirement", []) if r["split"] == split]
+    by_mode = {m: {r["id"]: r for r in report["modes"][m][key].get("per_requirement", [])}
+               for m in done}
+    ids = [r["id"] for r in report["modes"][done[0]][key].get("per_requirement", [])
+           if r["split"] == split]
     rows = []
     for rid in ids:
         row: list[Any] = [rid]
@@ -291,22 +387,36 @@ def _per_req_understanding(report: dict[str, Any], split: str) -> list[str]:
 
 
 def _side_understanding(report: dict[str, Any]) -> list[str]:
+    v2, v1 = "requirement_understanding_v2", "requirement_understanding"
     lines = [
-        "### Requirement understanding — TEST split (headline)",
+        "### Requirement understanding — natural v2 (split test2): NEW HEADLINE, fresh",
         "",
-        ("Natural requirements from `data/requirements_natural.csv`. The prompts were tuned on "
-         "the 8 dev rows only and frozen before the test split was run in Ollama mode."),
+        ("Natural requirements from `data/requirements_natural_v2.csv`: 16 rows written blind "
+         "after the Part C freeze, by a subagent that could not see the v1 set. Nothing was tuned "
+         "on them. Same label schema and scoring as v1."),
         "",
     ]
-    lines += _table(["Metric", "mock", "ollama"], _ru_split_rows(report, "test"))
-    lines += ["", "Per requirement, test split:", ""]
-    lines += _per_req_understanding(report, "test")
+    lines += _table(["Metric", "mock", "ollama"], _ru_split_rows(report, "test2", v2))
+    lines += ["", "Per requirement, natural v2 (misses shown):", ""]
+    lines += _per_req_understanding(report, "test2", v2)
+    lines += [
+        "",
+        "### Requirement understanding — natural v1 TEST split: SEEN",
+        "",
+        ("Natural requirements from `data/requirements_natural.csv`. The template set was "
+         "designed after these results, so they are no longer independent. The prompts were "
+         "tuned on the 8 dev rows only."),
+        "",
+    ]
+    lines += _table(["Metric", "mock", "ollama"], _ru_split_rows(report, "test", v1))
+    lines += ["", "Per requirement, v1 test split:", ""]
+    lines += _per_req_understanding(report, "test", v1)
     for split in ("dev", "all"):
-        lines += ["", f"### Requirement understanding — {split} split"
-                  + (" (the rows the prompts were tuned on)" if split == "dev" else ""), ""]
-        lines += _table(["Metric", "mock", "ollama"], _ru_split_rows(report, split))
-    lines += ["", "Per requirement, dev split:", ""]
-    lines += _per_req_understanding(report, "dev")
+        lines += ["", f"### Requirement understanding — natural v1 {split} split"
+                  + (" (dev: the rows the prompts were tuned on)" if split == "dev" else ""), ""]
+        lines += _table(["Metric", "mock", "ollama"], _ru_split_rows(report, split, v1))
+    lines += ["", "Per requirement, v1 dev split:", ""]
+    lines += _per_req_understanding(report, "dev", v1)
     lines.append("")
     return lines
 
@@ -318,9 +428,58 @@ def _side_bugs(report: dict[str, Any]) -> list[str]:
             return _frac(d["detected"], d["bugs"], d["rate"])
         return fn
 
-    lines = ["### Held-out bug detection (12 bugs) — generated suite, gold, union", ""]
+    def supp(name: str) -> Callable[[dict[str, Any]], str]:
+        def fn(blk: dict[str, Any]) -> str:
+            x = blk["heldout_v2_bug_detection"].get("supplementary", {}).get(name)
+            if not isinstance(x, dict):
+                return str(x)
+            return f"{_frac(x['detected'], x['bugs'], x['rate'])} ({x['tests']} tests)"
+        return fn
+
+    done = _completed(report)
+
+    def per_bug_table(key: str) -> list[str]:
+        per = {m: {b["bug_id"]: b for b in report["modes"][m][key]["generated"]["per_bug"]}
+               for m in done}
+        gold_by = {b["bug_id"]: b for b in report["modes"][done[0]][key]["gold"]["per_bug"]}
+        rows = []
+        for bug_id, b in per[done[0]].items():
+            cells = []
+            for m in MODES:
+                x = per.get(m, {}).get(bug_id)
+                cells.append("not run" if x is None else
+                             ("yes" if x["detected"] else "**no**")
+                             + f" ({len(x['detecting_tests'])} tests)")
+            rows.append([f"`{bug_id}`", b["category"], *cells,
+                         "yes" if gold_by.get(bug_id, {}).get("detected") else "**no**"])
+        return _table(["Bug", "Category", "mock generated", "ollama generated", "gold"], rows)
+
+    lines = [
+        "### Held-out v2 bug detection (15 FRESH bugs) — NEW HEADLINE: generated suite, gold, union",
+        "",
+        ("\"Generated suite\" = tests generated from the 15 seed requirements, exactly as for the "
+         "v1 headline, so numbers are comparable. The last three rows are supplementary and use "
+         "other test sets."),
+        "",
+    ]
     lines += _table(["Suite", "mock", "ollama"], [
-        ["**Generated (headline)**", *_cells(report, det("heldout_bug_detection", "generated"))],
+        ["**Generated (headline)**", *_cells(report, det("heldout_v2_bug_detection", "generated"))],
+        ["Gold (LLM-independent)", *_cells(report, det("heldout_v2_bug_detection", "gold"))],
+        ["Union generated ∪ gold", *_cells(report, det("heldout_v2_bug_detection", "union"))],
+        ["Generated tests (seed requirements)",
+         *_cells(report, lambda b: str(b["generated_tests"]["count"]))],
+        ["Invalid generated tests (fail on clean simulator)",
+         *_cells(report, lambda b: str(len(b["heldout_v2_bug_detection"]["generated"]["invalid_tests"])))],
+        ["Supplementary: union of ALL generated tests (seed + natural v1 + natural v2)",
+         *_cells(report, supp("all_generated"))],
+        ["Supplementary: tests generated from natural v2 alone",
+         *_cells(report, supp("natural_v2_generated"))],
+    ])
+    lines += ["", "Per held-out v2 bug (generated suite):", ""]
+    lines += per_bug_table("heldout_v2_bug_detection")
+    lines += ["", "### Held-out v1 bug detection (12 bugs) — SEEN (templates designed against these misses)", ""]
+    lines += _table(["Suite", "mock", "ollama"], [
+        ["**Generated**", *_cells(report, det("heldout_bug_detection", "generated"))],
         ["Gold (LLM-independent)", *_cells(report, det("heldout_bug_detection", "gold"))],
         ["Union generated ∪ gold", *_cells(report, det("heldout_bug_detection", "union"))],
         ["Generated tests (seed requirements)",
@@ -328,22 +487,9 @@ def _side_bugs(report: dict[str, Any]) -> list[str]:
         ["Invalid generated tests (fail on clean simulator)",
          *_cells(report, lambda b: str(len(b["heldout_bug_detection"]["generated"]["invalid_tests"])))],
     ])
-    done = _completed(report)
-    per = {m: {b["bug_id"]: b for b in report["modes"][m]["heldout_bug_detection"]["generated"]["per_bug"]}
-           for m in done}
-    gold_by = {b["bug_id"]: b for b in report["modes"][done[0]]["heldout_bug_detection"]["gold"]["per_bug"]}
-    rows = []
-    for bug_id, b in per[done[0]].items():
-        cells = []
-        for m in MODES:
-            x = per.get(m, {}).get(bug_id)
-            cells.append("not run" if x is None else
-                         ("yes" if x["detected"] else "**no**") + f" ({len(x['detecting_tests'])} tests)")
-        rows.append([f"`{bug_id}`", b["category"], *cells,
-                     "yes" if gold_by.get(bug_id, {}).get("detected") else "**no**"])
-    lines += ["", "Per held-out bug (generated suite):", ""]
-    lines += _table(["Bug", "Category", "mock generated", "ollama generated", "gold"], rows)
-    lines += ["", "### In-sample bug detection (26 bugs — templates tuned on these)", ""]
+    lines += ["", "Per held-out v1 bug (generated suite):", ""]
+    lines += per_bug_table("heldout_bug_detection")
+    lines += ["", "### In-sample bug detection (26 bugs — in-sample, templates tuned on these)", ""]
     lines += _table(["Suite", "mock", "ollama"], [
         ["Generated", *_cells(report, det("bug_detection", "generated"))],
         ["Gold", *_cells(report, det("bug_detection", "gold"))],
@@ -357,8 +503,8 @@ def _side_bugs(report: dict[str, Any]) -> list[str]:
 
 def _pipe_rows(blk: dict[str, Any]) -> dict[str, dict[str, Any]]:
     rows = {r["requirement_id"]: r for r in blk["pipeline"]["per_requirement"]}
-    nat = blk.get("pipeline_natural", {})
-    rows.update({r["requirement_id"]: r for r in nat.get("per_requirement", [])})
+    for key in ("pipeline_natural", "pipeline_natural_v2"):
+        rows.update({r["requirement_id"]: r for r in blk.get(key, {}).get("per_requirement", [])})
     return rows
 
 
@@ -376,8 +522,8 @@ def _side_validation(report: dict[str, Any]) -> list[str]:
         rows.append(row)
 
     def tot(blk: dict[str, Any], key: str) -> int:
-        nat = blk.get("pipeline_natural", {})
-        return int(blk["pipeline"].get(key, 0)) + int(nat.get(key, 0))
+        return int(blk["pipeline"].get(key, 0)) + sum(
+            int(blk.get(k, {}).get(key, 0)) for k in ("pipeline_natural", "pipeline_natural_v2"))
 
     tot_row: list[Any] = ["**total**", ""]
     for m in MODES:
@@ -389,7 +535,7 @@ def _side_validation(report: dict[str, Any]) -> list[str]:
     lines = [
         "### Validation: rejections, re-plans (retries), plan attempts, dropped tests",
         "",
-        ("Per requirement (15 seed + 20 natural). *rejected* = planner choices refused (unknown "
+        ("Per requirement (15 seed + 20 natural v1 + 16 natural v2). *rejected* = planner choices refused (unknown "
          "template/option, outside the shortlist, or failed validation); *retries* = re-plan "
          "rounds (plan attempts − 1); *dropped* = instantiated tests that failed validation."),
         "",
@@ -399,10 +545,11 @@ def _side_validation(report: dict[str, Any]) -> list[str]:
                      "mock dropped",
                      "ollama tests", "ollama rejected", "ollama retries", "ollama plan attempts",
                      "ollama dropped"], rows)
-    lines += ["", "LLM call counters (all 35 requirements):", ""]
+    lines += ["", "LLM call counters (all 51 requirements):", ""]
     lines += _table(["Counter", "mock", "ollama"], [
         [label, *_cells(report, lambda b, k=key: str(tot(b, k)))]
-        for label, key in (("LLM calls", "llm_calls"), ("JSON/schema failures", "llm_json_failures"),
+        for label, key in (("LLM calls", "llm_calls"), ("Explain LLM calls", "explain_llm_calls"),
+                           ("JSON/schema failures", "llm_json_failures"),
                            ("LLM re-prompts/retries", "llm_retries"), ("LLM errors", "llm_errors"),
                            ("Failed pipeline runs", "failed_runs"))
     ])
@@ -446,12 +593,16 @@ def _side_latency(report: dict[str, Any]) -> list[str]:
     lines = ["### Latency per requirement (wall clock)", ""]
     lines += _table(["Scope", "mock mean", "ollama mean", "mock p95", "ollama p95", "mock max",
                      "ollama max"], [
-        [f"{scope} (n={n})",
+        [f"{scope.replace('_', ' ')} (n={n})",
          *_cells(report, lat(scope, "mean")), *_cells(report, lat(scope, "p95")),
          *_cells(report, lat(scope, "max"))]
         for scope, n in (("seed", report["requirements"]),
                          ("natural", report.get("natural_requirements", 0)),
-                         ("all", report["requirements"] + report.get("natural_requirements", 0)))
+                         ("all", report["requirements"] + report.get("natural_requirements", 0)),
+                         ("natural_v2", report.get("natural_requirements_v2", 0)),
+                         ("all_with_v2", report["requirements"]
+                          + report.get("natural_requirements", 0)
+                          + report.get("natural_requirements_v2", 0)))
     ])
     lines += ["", "Per-node mean latency per requirement (ms; p95 in brackets):", ""]
     rows = []
@@ -477,6 +628,15 @@ def _side_other(report: dict[str, Any]) -> list[str]:
             return f"{p['passed']}/{p['checked']} passed" + ("" if p["ok"] else " — **FAILED**")
         return fn
 
+    def noise_prov(blk: dict[str, Any]) -> str:
+        extra = blk["provenance"].get("noise_extra_runs", [])
+        if not extra:
+            return "none (no extra runs)"
+        done_n = sum(e["provenance"]["passed"] for e in extra)
+        all_n = sum(e["provenance"]["checked"] for e in extra)
+        ok = all(e["provenance"]["ok"] for e in extra)
+        return f"{done_n}/{all_n} passed over {len(extra)} run(s)" + ("" if ok else " — **FAILED**")
+
     lines = ["### Coverage, citations, request validity, byte provenance", ""]
     rows = [
         [f"Coverage: tests per category ({', '.join(CATEGORIES)})",
@@ -498,8 +658,10 @@ def _side_other(report: dict[str, Any]) -> list[str]:
                                          b["generated_tests"]["count"],
                                          b["generated_tests"]["clean_simulator_pass_rate"]))],
         ["Byte provenance — seed-requirement tests", *_cells(report, prov("seed"))],
-        ["Byte provenance — natural-requirement tests", *_cells(report, prov("natural"))],
-        ["**Byte provenance — all generated tests**", *_cells(report, prov("total"))],
+        ["Byte provenance — natural v1 requirement tests", *_cells(report, prov("natural"))],
+        ["Byte provenance — natural v2 requirement tests", *_cells(report, prov("natural_v2"))],
+        ["Byte provenance — extra noise-check runs (natural v2)", *_cells(report, noise_prov)],
+        ["**Byte provenance — all generated tests, all runs**", *_cells(report, prov("total"))],
     ]
     lines += _table(["Metric", "mock", "ollama"], rows)
     done = _completed(report)
@@ -507,7 +669,7 @@ def _side_other(report: dict[str, Any]) -> list[str]:
         lines += ["", f"_Byte provenance: {report['modes'][done[0]]['provenance']['seed']['definition']}_"]
     for m in done:
         p = report["modes"][m]["provenance"]
-        fails = p["seed"]["failures"] + p["natural"]["failures"]
+        fails = provenance_failures(p)
         if fails:
             lines += ["", f"**Byte-provenance failures — `{m}`:**", ""]
             lines += [f"- `{f['test_id']}` ({f['template_id']}): {_esc('; '.join(f['problems']))}"
@@ -534,13 +696,21 @@ def _side_by_side(report: dict[str, Any]) -> list[str]:
 # ----------------------------------------------------------------------------- per-mode detail
 
 
+def _missed_lines(ana: dict[str, Any], suite: str) -> list[str]:
+    block = ana.get(suite)
+    if block is None:
+        return ["- not run"]
+    return [f"- `{m['bug_id']}`: {m['reason']}" for m in block["missed"]] or ["- none"]
+
+
 def _heldout(blk: dict[str, Any], mode: str) -> list[str]:
     held = blk["heldout_bug_detection"]
     gen, gold, union = held["generated"], held["gold"], held["union"]
     ana = held["analysis"]
     gold_by = {b["bug_id"]: b for b in gold["per_bug"]}
     lines = [
-        f"## Held-out bug detection (12 bugs, not seen when templates/gold were written) — mode={mode}",
+        (f"## Held-out bug detection (12 v1 bugs — SEEN: templates designed against these "
+         f"misses) — mode={mode}"),
         "",
         f"Scope: {held['scope']}. Catalog: `{held['catalog']}`.",
         "",
@@ -568,12 +738,12 @@ def _heldout(blk: dict[str, Any], mode: str) -> list[str]:
          f"the clean simulator): generated {len(gen['invalid_tests'])}, gold "
          f"{len(gold['invalid_tests'])}."),
         "",
-        f"### Missed held-out bugs — generated suite (mode={mode})",
+        f"### Missed held-out v1 bugs — generated suite (mode={mode})",
         "",
     ]
-    lines += [f"- `{m['bug_id']}`: {m['reason']}" for m in ana["generated"]["missed"]] or ["- none"]
-    lines += ["", "### Missed held-out bugs — gold suite", ""]
-    lines += [f"- `{m['bug_id']}`: {m['reason']}" for m in ana["gold"]["missed"]] or ["- none"]
+    lines += _missed_lines(ana, "generated")
+    lines += ["", "### Missed held-out v1 bugs — gold suite", ""]
+    lines += _missed_lines(ana, "gold")
     lines += [
         "",
         ("_Reasons come from a static trigger analysis (`uds_assistant/eval/heldout.py`): for "
@@ -585,24 +755,115 @@ def _heldout(blk: dict[str, Any], mode: str) -> list[str]:
     return lines
 
 
-def _understanding(report: dict[str, Any], blk: dict[str, Any], mode: str) -> list[str]:
-    ru = blk.get("requirement_understanding", {})
-    lines = [f"## Requirement understanding (natural requirements) — mode={mode}", ""]
-    if "splits" not in ru:
-        return [*lines, "Not run in this invocation.", ""]
-    lines += [
-        (f"Source: `{ru['source']}` ({report.get('natural_requirements', 0)} labelled rows). "
-         f"Each requirement was run through the agent pipeline (`mode={mode}`, "
-         f"{report['retriever']}). **The TEST split is the main number.**"),
+def _heldout_v2(blk: dict[str, Any], mode: str) -> list[str]:
+    held = blk["heldout_v2_bug_detection"]
+    gen, gold, union = held["generated"], held["gold"], held["union"]
+    ana = held["analysis"]
+    supp = held.get("supplementary", {})
+    gold_by = {b["bug_id"]: b for b in gold["per_bug"]}
+
+    def supp_by(name: str) -> dict[str, Any]:
+        x = supp.get(name)
+        return {b["bug_id"]: b for b in x["per_bug"]} if isinstance(x, dict) else {}
+
+    all_by, nat_by = supp_by("all_generated"), supp_by("natural_v2_generated")
+
+    def yn(by: dict[str, Any], bug_id: str) -> str:
+        return "not run" if bug_id not in by else ("yes" if by[bug_id]["detected"] else "**no**")
+
+    lines = [
+        f"## Held-out v2 bug detection (15 FRESH bugs) — NEW HEADLINE — mode={mode}",
+        "",
+        f"Scope: {held['scope']}. Catalog: `{held['catalog']}`.",
+        "",
+        ("Headline = the generated suite from the 15 seed requirements (same definition as the "
+         "v1 headline). The two supplementary columns use all generated tests (seed + natural v1 "
+         "+ natural v2) and the natural-v2 tests alone."),
         "",
     ]
     rows = []
-    for split in ("test", "dev", "all"):
-        a = ru["splits"][split]
+    for b in gen["per_bug"]:
+        g = gold_by.get(b["bug_id"], {})
+        bid = b["bug_id"]
+        rows.append([
+            f"`{bid}`", b["category"],
+            "yes" if b["detected"] else "**no**",
+            _tests_list(b["detecting_tests"], 2),
+            ana["generated"]["trigger_counts"].get(bid, "n/a"),
+            "yes" if g.get("detected") else "**no**",
+            ana["gold"]["trigger_counts"].get(bid, "n/a"),
+            yn(all_by, bid), ana.get("all_generated", {}).get("trigger_counts", {}).get(bid, "n/a"),
+            yn(nat_by, bid),
+            ana.get("natural_v2_generated", {}).get("trigger_counts", {}).get(bid, "n/a"),
+        ])
+    lines += _table(
+        ["Bug", "Category", "Generated (seed reqs)", "Generated detecting tests",
+         "Gen. tests applying trigger", "Gold", "Gold tests applying trigger",
+         "All generated (suppl.)", "trigger", "Natural-v2 tests (suppl.)", "trigger"], rows)
+    lines += [
+        "",
+        (f"Totals: generated {_frac(gen['detected'], gen['bugs'], gen['rate'])}, gold "
+         f"{_frac(gold['detected'], gold['bugs'], gold['rate'])}, union "
+         f"{_frac(union['detected'], union['bugs'], union['rate'])}. Invalid tests (fail on "
+         f"the clean simulator): generated {len(gen['invalid_tests'])}, gold "
+         f"{len(gold['invalid_tests'])}."),
+    ]
+    for name, label in (("all_generated", "All generated tests (seed + natural v1 + natural v2)"),
+                        ("natural_v2_generated", "Tests generated from natural v2 alone")):
+        x = supp.get(name)
+        if isinstance(x, dict):
+            lines.append(f"- Supplementary — {label}: {x['tests']} tests, "
+                         f"{_frac(x['detected'], x['bugs'], x['rate'])} detected "
+                         f"({x['invalid_tests']} invalid tests).")
+        else:
+            lines.append(f"- Supplementary — {label}: {x}")
+    lines += ["", f"### Missed held-out v2 bugs — generated suite (mode={mode})", ""]
+    lines += _missed_lines(ana, "generated")
+    lines += ["", "### Missed held-out v2 bugs — gold suite", ""]
+    lines += _missed_lines(ana, "gold")
+    lines += ["", "### Missed held-out v2 bugs — all generated tests (supplementary)", ""]
+    lines += _missed_lines(ana, "all_generated")
+    lines += ["", "### Missed held-out v2 bugs — natural-v2 tests alone (supplementary)", ""]
+    lines += _missed_lines(ana, "natural_v2_generated")
+    lines += [
+        "",
+        ("_Reasons come from `uds_assistant/eval/heldout_v2.py`: one predicate per bug, written "
+         "only from the bug descriptions in `data/bugs/heldout_v2_catalog.yaml` and "
+         "`docs/behaviour_contract.md` before any v2 result existed. \"no test X\" means no test "
+         "in that suite applies the stimulus; \"N test(s) X, but none of their expected "
+         "responses differs\" means the stimulus is present but the oracle-derived expectations "
+         "do not distinguish the bug. Reporting only — nothing was changed in response._"),
+        "",
+    ]
+    return lines
+
+
+def _understanding(report: dict[str, Any], blk: dict[str, Any], mode: str,
+                   key: str = "requirement_understanding") -> list[str]:
+    ru = blk.get(key, {})
+    is_v2 = key.endswith("_v2")
+    title = ("Requirement understanding, natural v2 (split test2, FRESH — NEW HEADLINE)" if is_v2
+             else "Requirement understanding (natural requirements) — natural v1: test split SEEN, "
+                  "dev tuned on")
+    lines = [f"## {title} — mode={mode}", ""]
+    if "splits" not in ru:
+        return [*lines, "Not run in this invocation.", ""]
+    n_rows = report.get("natural_requirements_v2" if is_v2 else "natural_requirements", 0)
+    lines += [
+        (f"Source: `{ru['source']}` ({n_rows} labelled rows). "
+         f"Each requirement was run through the agent pipeline (`mode={mode}`, "
+         f"{report['retriever']}). "
+         + ("**The test2 split is the main number.**" if is_v2 else
+            "**The test split is the v1 number, but it is SEEN; dev is what the prompts were "
+            "tuned on.**")),
+        "",
+    ]
+    rows = []
+    for split, a in ru["splits"].items():
         tp, te = a["targets_parsed"], a["targets_exercised"]
         cat, pre = a["categories"], a["preconditions"]
         rows.append([
-            f"**{split}**" if split == "test" else split, a["requirements"],
+            f"**{split}**" if split in ("test", "test2") else split, a["requirements"],
             _frac(tp["exact"], a["requirements"], tp["exact_rate"]),
             f"{_f(tp['precision'])} / {_f(tp['recall'])} / {_f(tp['f1'])}",
             _frac(te["exact"], a["requirements"], te["exact_rate"]),
@@ -615,7 +876,7 @@ def _understanding(report: dict[str, Any], blk: dict[str, Any], mode: str) -> li
         ["Split", "n", "Targets exact (parsed)", "Parsed P / R / F1", "Targets exact (exercised)",
          "Exercised P / R / F1", "Category recall micro / macro",
          "Precondition recall micro / macro", "Fallback / nothing"], rows)
-    lines += ["", f"### Per requirement (mode={mode})", ""]
+    lines += ["", f"### Per requirement ({'natural v2' if is_v2 else 'natural v1'}, mode={mode})", ""]
     prow = []
     for r in ru["per_requirement"]:
         prow.append([
@@ -643,7 +904,8 @@ def _in_sample(report: dict[str, Any], blk: dict[str, Any], mode: str) -> list[s
     det = blk["bug_detection"]
     gen, gold, union = det["generated"], det["gold"], det["union"]
     lines = [
-        f"## Secondary: in-sample bug detection (26 bugs — templates tuned on these) — mode={mode}",
+        (f"## Secondary: in-sample bug detection (26 bugs — in-sample, templates tuned on these) "
+         f"— mode={mode}"),
         "",
         (f"Scope: {det.get('scope', 'in-sample')}. Generated "
          f"{_frac(gen['detected'], gen['bugs'], gen['rate'])}, gold "
@@ -744,6 +1006,8 @@ def _mode_details(report: dict[str, Any], mode: str) -> list[str]:
          f"pass on the clean simulator; P2/P2* wall-clock warnings: {gt['p2_timing_warnings']}."),
         "",
     ]
+    lines += _heldout_v2(blk, mode)
+    lines += _understanding(report, blk, mode, "requirement_understanding_v2")
     lines += _heldout(blk, mode)
     lines += _understanding(report, blk, mode)
     lines += _in_sample(report, blk, mode)
@@ -837,11 +1101,22 @@ def _freeze(report: dict[str, Any]) -> list[str]:
     fr = report.get("freeze")
     if not fr:
         return []
-    lines = ["## Freeze verification (prompts / agent / templates)", ""]
-    lines += _table(["Path", "expected object id", "HEAD object id", "matches", "worktree clean"],
-                    [[f"`{p}`", f"`{v['expected']}`", f"`{v['head']}`", v["matches"],
-                      v["worktree_clean"]] for p, v in fr["paths"].items()])
-    lines += ["", f"All frozen paths unchanged: **{fr['all_ok']}**.", ""]
+    lines = ["## Freeze verification (Part C: templates / prompts / agent / gold)", ""]
+    lines += [(f"Recorded hashes are parsed from {fr.get('source', 'PROGRESS.md')}; current = "
+               "`git rev-parse HEAD:<path>` when this report ran."), ""]
+    if fr.get("error"):
+        lines += [f"**ERROR: {fr['error']}**", ""]
+    rows = [[f"`{p}`", f"`{v['expected']}`", f"`{v['head']}`",
+             "match" if v["matches"] else "**MISMATCH**", v["worktree_clean"]]
+            for p, v in fr["paths"].items()]
+    c = fr.get("commit")
+    if c:
+        anc = c["recorded_is_ancestor_of_head"]
+        rows.insert(0, ["freeze commit", f"`{c['recorded']}`", f"`{c['head']}` (HEAD)",
+                        "ancestor of HEAD" if anc else "**NOT an ancestor of HEAD**", "-"])
+    lines += _table(["Path", "recorded (Part C freeze)", "current", "result", "worktree clean"],
+                    rows)
+    lines += ["", f"All recorded freeze hashes match and are clean: **{fr['all_ok']}**.", ""]
     return lines
 
 
@@ -850,6 +1125,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines = _header(report)
     lines += _headline(report)
     lines += _interpretation(report)
+    lines += _noise_section(report)
     lines += _side_by_side(report)
     if "retrieval_comparison" in report:
         lines += _retrieval_section(report["retrieval_comparison"])

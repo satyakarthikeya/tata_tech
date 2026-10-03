@@ -1,0 +1,211 @@
+{
+  "source": {
+    "commit": "38aa7197d0a330f6f2f8f550fb3796ea5ae9db20",
+    "file": "outputs/eval_report.json at that commit",
+    "report_timestamp": "2026-10-03T09:37:51.233888+00:00",
+    "report_version": 2,
+    "actual_mode": "ollama",
+    "template_set_version": "v2",
+    "note": "Frozen once from the commit before Part C; never regenerated from a later report. Values are copied exactly."
+  },
+  "modes": {
+    "mock": {
+      "heldout_v1": {
+        "generated": {
+          "detected": 3,
+          "bugs": 12,
+          "rate": 0.25
+        },
+        "gold": {
+          "detected": 3,
+          "bugs": 12,
+          "rate": 0.25
+        },
+        "union": {
+          "detected": 5,
+          "bugs": 12,
+          "rate": 0.4167
+        }
+      },
+      "in_sample": {
+        "generated": {
+          "detected": 25,
+          "bugs": 26,
+          "rate": 0.9615
+        },
+        "gold": {
+          "detected": 24,
+          "bugs": 26,
+          "rate": 0.9231
+        },
+        "union": {
+          "detected": 26,
+          "bugs": 26,
+          "rate": 1.0
+        }
+      },
+      "understanding_v1_test": {
+        "requirements": 12,
+        "parsed_exact": 5,
+        "parsed_precision": 0.9333,
+        "parsed_recall": 0.56,
+        "parsed_f1": 0.7,
+        "parsed_tp": 14,
+        "parsed_fp": 1,
+        "parsed_fn": 11,
+        "exercised_exact": 2,
+        "exercised_f1": 0.4494,
+        "category_recall_micro": 0.6786,
+        "category_recall_macro": 0.697,
+        "precondition_recall_micro": 0.8,
+        "precondition_recall_macro": 0.75,
+        "fallback": 3
+      },
+      "understanding_v1_dev": {
+        "requirements": 8,
+        "parsed_exact": 4,
+        "parsed_precision": 1.0,
+        "parsed_recall": 0.7059,
+        "parsed_f1": 0.8276,
+        "parsed_tp": 12,
+        "parsed_fp": 0,
+        "parsed_fn": 5,
+        "exercised_exact": 0,
+        "exercised_f1": 0.4923,
+        "category_recall_micro": 0.6364,
+        "category_recall_macro": 0.6042,
+        "precondition_recall_micro": 1.0,
+        "precondition_recall_macro": 1.0,
+        "fallback": 1
+      },
+      "rejected": {
+        "seed": 0,
+        "natural_v1": 0,
+        "total": 0
+      },
+      "latency_per_requirement_s": {
+        "requirements": 35,
+        "mean": 0.254,
+        "p95": 0.445,
+        "max": 0.51
+      },
+      "explain_calls_per_requirement": {
+        "derived_from_tests_kept": true,
+        "requirements": 35,
+        "total": 343,
+        "mean": 9.8,
+        "min": 0,
+        "max": 18
+      },
+      "tests_kept_seed": 171
+    },
+    "ollama": {
+      "heldout_v1": {
+        "generated": {
+          "detected": 3,
+          "bugs": 12,
+          "rate": 0.25
+        },
+        "gold": {
+          "detected": 3,
+          "bugs": 12,
+          "rate": 0.25
+        },
+        "union": {
+          "detected": 5,
+          "bugs": 12,
+          "rate": 0.4167
+        }
+      },
+      "in_sample": {
+        "generated": {
+          "detected": 21,
+          "bugs": 26,
+          "rate": 0.8077
+        },
+        "gold": {
+          "detected": 24,
+          "bugs": 26,
+          "rate": 0.9231
+        },
+        "union": {
+          "detected": 26,
+          "bugs": 26,
+          "rate": 1.0
+        }
+      },
+      "understanding_v1_test": {
+        "requirements": 12,
+        "parsed_exact": 4,
+        "parsed_precision": 0.5116,
+        "parsed_recall": 0.88,
+        "parsed_f1": 0.6471,
+        "parsed_tp": 22,
+        "parsed_fp": 21,
+        "parsed_fn": 3,
+        "exercised_exact": 0,
+        "exercised_f1": 0.4348,
+        "category_recall_micro": 0.6429,
+        "category_recall_macro": 0.6439,
+        "precondition_recall_micro": 0.7333,
+        "precondition_recall_macro": 0.75,
+        "fallback": 1
+      },
+      "understanding_v1_dev": {
+        "requirements": 8,
+        "parsed_exact": 1,
+        "parsed_precision": 0.5833,
+        "parsed_recall": 0.8235,
+        "parsed_f1": 0.6829,
+        "parsed_tp": 14,
+        "parsed_fp": 10,
+        "parsed_fn": 3,
+        "exercised_exact": 0,
+        "exercised_f1": 0.5152,
+        "category_recall_micro": 0.7273,
+        "category_recall_macro": 0.7708,
+        "precondition_recall_micro": 1.0,
+        "precondition_recall_macro": 1.0,
+        "fallback": 0
+      },
+      "rejected": {
+        "seed": 5,
+        "natural_v1": 5,
+        "total": 10
+      },
+      "latency_per_requirement_s": {
+        "requirements": 35,
+        "mean": 30.785,
+        "p95": 43.405,
+        "max": 49.394
+      },
+      "explain_calls_per_requirement": {
+        "derived_from_tests_kept": true,
+        "requirements": 35,
+        "total": 158,
+        "mean": 4.5143,
+        "min": 0,
+        "max": 8
+      },
+      "tests_kept_seed": 68
+    }
+  },
+  "sws_disagreements": {
+    "open": 9,
+    "fixed": 0,
+    "total": 9,
+    "open_ids": [
+      "D1",
+      "D2",
+      "D3",
+      "D4",
+      "D5",
+      "D6",
+      "D7",
+      "D8",
+      "D9"
+    ],
+    "fixed_ids": [],
+    "source": "docs/SWS_DISAGREEMENTS.md at that commit"
+  }
+}
