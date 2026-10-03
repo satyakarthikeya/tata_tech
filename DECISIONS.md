@@ -338,3 +338,32 @@ This subagent was interrupted when the session ended before it could report back
 - **[PC3-HYPOTHESIS]** Hypothesis's `too_slow` health check is switched off for the whole suite in `tests/conftest.py`.
   - It measures how fast test data is generated, not correctness, and it failed twice under load: `test_request_roundtrip_with_subfunction`, plus a stale failure marker from an earlier step.
   - The test passes alone with the failing seed. No assertion or example count changed.
+
+### C4 (fresh evaluation data, written blind)
+
+Both agents were launched after the Part C freeze. Their exact prompts are recorded in PROGRESS.md.
+
+- **[PC4-BUGS]** Held-out bugs v2: 15 new defects in `data/bugs/heldout_v2_catalog.yaml`, each tagged `heldout_v2: true`.
+  - The agent could read only the spec, the behaviour contract, protocol, simulator and the two existing bug catalogs (to avoid duplicates). It could not see the testgen, agent, llm, eval, gold or outputs.
+  - It is a third, separate set. `IMPLEMENTED_BUG_IDS` and `HELDOUT_BUG_IDS` are unchanged, and only `ALL_BUG_IDS` is widened.
+  - The 15 ids, by category:
+    - Security (4): `seed_request_keeps_stale_pending_seed`, `key_compare_prefix_only`, `lockout_counter_pooled_across_levels`, `suppressed_seed_request_not_stored`.
+    - Session and state after reset or timeout (4): `session_reentry_keeps_unlock`, `s3_timeout_resets_lockout_counters`, `ecu_reset_keeps_session`, plus the timing one below.
+    - Timing (1): `s3_restart_skipped_on_negative_response`.
+    - NRC order (2): `nrc_order_range_before_security`, `nrc_order_nvm_fault_before_group_check`.
+    - Length and format (2): `read_dtc_trailing_bytes_accepted`, `routine_option_record_overlong_accepted`.
+    - DID and routine (3): `write_range_upper_bound_exclusive`, `multi_did_read_dedups_repeats`, `routine_restart_after_stop_blocked`.
+  - Limits the agent reported:
+    - Every session in the spec has the same timing values, so no bug could be built on per-session P2 or S3 values. The timing bug is about S3 restart behaviour instead.
+    - Every positive 0x10 re-locks security and 0x27 is not allowed in the default session, so "S3 timeout keeps the unlock" cannot be observed. The S3-state bug is about lockout counters instead.
+  - A unit test per bug asserts the exact differing bytes with the bug on and off.
+  - With all bugs off the simulator is unchanged: the agreement tests still pass.
+- **[PC4-REQS]** Natural requirements v2: 16 requirements in `data/requirements_natural_v2.csv`, all `split=test2`.
+  - The agent could read only the spec and the seed requirements. It could not see the v1 natural set.
+  - Only 2 contain a hex id (NAT2-011 and NAT2-012).
+  - The 2 ambiguous rows are NAT2-014 (which door lock, and what "unauthorised" means) and NAT2-015 (when the fault memory may not be cleared).
+  - NAT2-016 asks for freeze-frame snapshots, which the spec does not define. It has empty targets, empty categories and the precondition `none`.
+  - NAT2-004 lists `routine_started` as a precondition.
+  - NAT2-006 (lockout) lists `extended_session` and `lockout_active` but not `security_level_1`.
+  - NAT2-010 is about state being lost after a reset, because the spec does not define whether written values survive.
+- **[PC4-FREEZE]** I verified after C4 that the testgen, llm and agent trees, the prompts file and `data/gold` still match the recorded freeze hashes. The working tree has no changes to any of them.

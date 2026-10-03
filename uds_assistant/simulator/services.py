@@ -141,7 +141,10 @@ class SessionControl(ServiceHandler):
         target = ctx.spec.get_session(sub)
         assert target is not None
         kept_routines = dict(ctx.mem.routine_status)
-        ctx.mem.drop_volatile(sub, keep_security=ctx.bug(B.SECURITY_NOT_RESET_ON_SESSION_CHANGE))
+        keep_security = ctx.bug(B.SECURITY_NOT_RESET_ON_SESSION_CHANGE) or (
+            ctx.bug(B.SESSION_REENTRY_KEEPS_UNLOCK) and sub == ctx.mem.session
+        )
+        ctx.mem.drop_volatile(sub, keep_security=keep_security)
         if ctx.bug(B.ROUTINE_STATE_SURVIVES_SESSION_CHANGE):
             ctx.mem.routine_status.update(kept_routines)
         frame = bytes([self.positive_sid(), sub])
@@ -167,7 +170,9 @@ class EcuReset(ServiceHandler):
 
     def execute(self, ctx: EcuContext, req: bytes, sub: int | None) -> Outcome:
         assert sub is not None
-        ctx.mem.drop_volatile(DEFAULT_SESSION)
+        ctx.mem.drop_volatile(
+            ctx.mem.session if ctx.bug(B.ECU_RESET_KEEPS_SESSION) else DEFAULT_SESSION
+        )
         if ctx.bug(B.ECU_RESET_CLEARS_SECURITY_LOCKOUT):
             for level in ctx.mem.lockouts:
                 ctx.mem.lockouts[level] = LevelLockout()
@@ -185,6 +190,8 @@ class ClearDtc(ServiceHandler):
     def execute(self, ctx: EcuContext, req: bytes, sub: int | None) -> Outcome:
         group = int.from_bytes(req[1:4], "big")
         statuses = ctx.mem.dtc_status
+        if ctx.bug(B.NRC_ORDER_NVM_FAULT_BEFORE_GROUP_CHECK) and ctx.mem.nvm_write_fault:
+            raise Reject(NRC_NVM_FAILURE)
         if group == 0xFFFFFF or ctx.bug(B.DTC_CLEAR_IGNORES_GROUP):
             targets = list(statuses)
         elif group in statuses:
@@ -213,6 +220,8 @@ class ReadDtcInfo(ServiceHandler):
         return set(ctx.spec.read_dtc_supported_subfunctions)
 
     def subfunction_length_ok(self, ctx: EcuContext, sub: int, req: bytes) -> bool:
+        if sub == 0x02 and ctx.bug(B.READ_DTC_TRAILING_BYTES_ACCEPTED):
+            return len(req) >= 3
         return len(req) == 3 if sub == 0x02 else True
 
     def execute(self, ctx: EcuContext, req: bytes, sub: int | None) -> Outcome:
@@ -259,6 +268,8 @@ class ReadDataById(ServiceHandler):
                 B.READ_DID_SESSION_RESTRICTION_IGNORED
             ):
                 defs.append(did)
+        if ctx.bug(B.MULTI_DID_READ_DEDUPS_REPEATS):
+            defs = list({d.id: d for d in defs}.values())
         if not known or not defs:
             raise Reject(NRC_OUT_OF_RANGE)
         size = 1 + sum(2 + d.length for d in defs)
@@ -317,16 +328,23 @@ class SecurityAccess(ServiceHandler):
             )
             if delay_active and not ctx.bug(B.LOCKOUT_DELAY_IGNORED):
                 raise Reject(NRC_DELAY_ACTIVE)
-            return self._seed(ctx, lvl, sub)
+            return self._seed(ctx, lvl, sub, suppressed=bool(req[1] & 0x80))
         return self._key(ctx, lvl, sub, req[2:])
 
-    def _seed(self, ctx: EcuContext, lvl: SecurityLevelDef, sub: int) -> Outcome:
+    def _seed(
+        self, ctx: EcuContext, lvl: SecurityLevelDef, sub: int, *, suppressed: bool = False
+    ) -> Outcome:
         if ctx.mem.unlocked_level == lvl.level and not ctx.bug(B.SEED_RETURNED_WHILE_UNLOCKED):
             return Outcome([bytes([self.positive_sid(), sub]) + bytes(lvl.seed_length)])
         seed = derive_seed(lvl.level, ctx.mem.seed_counter, lvl.seed_length)
         if not ctx.bug(B.STATIC_SEED):
             ctx.mem.seed_counter += 1
-        ctx.mem.pending_seeds[lvl.level] = seed
+        stale_kept = ctx.bug(B.SEED_REQUEST_KEEPS_STALE_PENDING_SEED) and (
+            lvl.level in ctx.mem.pending_seeds
+        )
+        dropped = ctx.bug(B.SUPPRESSED_SEED_REQUEST_NOT_STORED) and suppressed
+        if not stale_kept and not dropped:
+            ctx.mem.pending_seeds[lvl.level] = seed
         if ctx.bug(B.FAILED_ATTEMPTS_RESET_BY_SEED_REQUEST):
             ctx.mem.lockouts[lvl.level].failures = 0
         return Outcome([bytes([self.positive_sid(), sub]) + seed])
@@ -336,12 +354,20 @@ class SecurityAccess(ServiceHandler):
         if seed is None:
             raise Reject(NRC_SEQUENCE)
         lock = ctx.mem.lockouts[lvl.level]
-        good = ctx.bug(B.ACCEPTS_ANY_KEY) or key == compute_key(seed, lvl.level)
+        expected = compute_key(seed, lvl.level)
+        if ctx.bug(B.KEY_COMPARE_PREFIX_ONLY):
+            matches = key[:2] == expected[:2]
+        else:
+            matches = key == expected
+        good = ctx.bug(B.ACCEPTS_ANY_KEY) or matches
         if not good:
             del ctx.mem.pending_seeds[lvl.level]
             lock.failures += 1
             threshold = lvl.max_attempts + (1 if ctx.bug(B.LOCKOUT_AFTER_EXTRA_ATTEMPT) else 0)
-            if lock.failures >= threshold:
+            attempts = lock.failures
+            if ctx.bug(B.LOCKOUT_COUNTER_POOLED_ACROSS_LEVELS):
+                attempts = sum(item.failures for item in ctx.mem.lockouts.values())
+            if attempts >= threshold:
                 lock.deadline_ms = ctx.now_ms + lvl.delay_ms
                 raise Reject(NRC_ATTEMPTS_EXCEEDED)
             raise Reject(NRC_INVALID_KEY)
@@ -372,6 +398,13 @@ class WriteDataById(ServiceHandler):
                 raise Reject(NRC_OUT_OF_RANGE)
             if ctx.mem.session not in did.write_sessions:
                 raise Reject(NRC_OUT_OF_RANGE)
+        if (
+            ctx.bug(B.NRC_ORDER_RANGE_BEFORE_SECURITY)
+            and did.value_range is not None
+            and len(data) == did.length
+            and not did.value_range.min <= int.from_bytes(data, "big") <= did.value_range.max
+        ):
+            raise Reject(NRC_OUT_OF_RANGE)
         security_first = ctx.bug(B.NRC_ORDER_SECURITY_BEFORE_LENGTH)
         if security_first and not lax_access:
             self._security(ctx, did)
@@ -386,7 +419,12 @@ class WriteDataById(ServiceHandler):
             raise Reject(NRC_CONDITIONS)
         if did.value_range is not None and not ctx.bug(B.WRITE_IGNORES_VALUE_RANGE):
             value = int.from_bytes(data, "big")
-            if not did.value_range.min <= value <= did.value_range.max:
+            upper_ok = (
+                value < did.value_range.max
+                if ctx.bug(B.WRITE_RANGE_UPPER_BOUND_EXCLUSIVE)
+                else value <= did.value_range.max
+            )
+            if not (did.value_range.min <= value and upper_ok):
                 raise Reject(NRC_OUT_OF_RANGE)
         if ctx.mem.nvm_write_fault:
             raise Reject(NRC_NVM_FAILURE)
@@ -431,7 +469,12 @@ class RoutineControl(ServiceHandler):
                 else NRC_SUBFUNCTION_NOT_SUPPORTED
             )
         expected_len = 4 + routine.option_record_length if sub == self.START else 4
-        if len(req) != expected_len:
+        overlong_ok = (
+            ctx.bug(B.ROUTINE_OPTION_RECORD_OVERLONG_ACCEPTED)
+            and sub == self.START
+            and len(req) > expected_len
+        )
+        if len(req) != expected_len and not overlong_ok:
             raise Reject(NRC_BAD_LENGTH)
         conditions_first = ctx.bug(B.NRC_ORDER_CONDITION_BEFORE_SECURITY) and sub == self.START
         if conditions_first and not conditions_ok(ctx, routine.conditions.requires):
@@ -462,6 +505,8 @@ class RoutineControl(ServiceHandler):
         self, ctx: EcuContext, routine: RoutineDef, status: int | None, head: bytes
     ) -> Outcome:
         if status == ROUTINE_RUNNING:
+            raise Reject(NRC_SEQUENCE)
+        if status == ROUTINE_STOPPED and ctx.bug(B.ROUTINE_RESTART_AFTER_STOP_BLOCKED):
             raise Reject(NRC_SEQUENCE)
         if routine.long_running:
             ctx.mem.routine_status[routine.id] = ROUTINE_COMPLETED

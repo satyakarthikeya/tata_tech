@@ -16,7 +16,7 @@ import threading
 from collections.abc import Callable, Iterable
 
 from uds_assistant.simulator import bugs as B
-from uds_assistant.simulator.memory import DEFAULT_SESSION, EcuMemory, dtc_number
+from uds_assistant.simulator.memory import DEFAULT_SESSION, EcuMemory, LevelLockout, dtc_number
 from uds_assistant.simulator.services import (
     NRC_BAD_LENGTH,
     NRC_GENERAL_REJECT,
@@ -138,9 +138,17 @@ class SimulatedEcu:
             self._tick()
             if not req:
                 return []
+            previous_ms = self.mem.last_request_ms
             if not (self.bug(B.S3_NOT_REFRESHED_BY_TESTER_PRESENT) and req[0] == 0x3E):
                 self.mem.last_request_ms = self.now_ms
-            return self._respond(req)
+            frames = self._respond(req)
+            if (
+                self.bug(B.S3_RESTART_SKIPPED_ON_NEGATIVE_RESPONSE)
+                and frames
+                and frames[-1][:1] == b""
+            ):
+                self.mem.last_request_ms = previous_ms
+            return frames
 
     def _tick(self) -> None:
         """Apply time-driven transitions: S3 session timeout, then lockout expiry."""
@@ -158,6 +166,9 @@ class SimulatedEcu:
                 mem.drop_volatile(DEFAULT_SESSION)
                 if self.bug(B.S3_TIMEOUT_REVERTS_WRITTEN_DIDS):
                     mem.did_store = EcuMemory.power_on(self.spec).did_store
+                if self.bug(B.S3_TIMEOUT_RESETS_LOCKOUT_COUNTERS):
+                    for level in mem.lockouts:
+                        mem.lockouts[level] = LevelLockout()
         if not self.bug(B.LOCKOUT_DELAY_NEVER_EXPIRES):
             for lock in mem.lockouts.values():
                 if lock.deadline_ms is not None and self.now_ms >= lock.deadline_ms:

@@ -9,7 +9,9 @@ stay in sync.
 A second, *held-out* set of faults (:data:`HELDOUT_BUG_IDS`, documented in
 ``data/bugs/heldout_catalog.yaml``) uses the same hook mechanism but is kept
 out of :data:`IMPLEMENTED_BUG_IDS`, so anything iterating the original catalog
-is unaffected. :data:`ALL_BUG_IDS` is the union accepted by the simulator.
+is unaffected. A third set (:data:`HELDOUT_V2_BUG_IDS`, documented in
+``data/bugs/heldout_v2_catalog.yaml``) follows the same pattern.
+:data:`ALL_BUG_IDS` is the union accepted by the simulator.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ TestCategory = Literal["positive", "negative", "session", "security", "timing"]
 _BUGS_DIR = Path(__file__).resolve().parents[2] / "data" / "bugs"
 DEFAULT_BUG_CATALOG_PATH = _BUGS_DIR / "bug_catalog.yaml"
 HELDOUT_BUG_CATALOG_PATH = _BUGS_DIR / "heldout_catalog.yaml"
+HELDOUT_V2_BUG_CATALOG_PATH = _BUGS_DIR / "heldout_v2_catalog.yaml"
 
 # --- bug ids (one constant per hook) ---------------------------------------------------------
 NRC_ORDER_DID_BEFORE_SESSION = "nrc_order_did_before_session"
@@ -117,7 +120,44 @@ HELDOUT_BUG_IDS: frozenset[str] = frozenset(
     }
 )
 
-ALL_BUG_IDS: frozenset[str] = IMPLEMENTED_BUG_IDS | HELDOUT_BUG_IDS
+# --- held-out v2 bug ids (third catalog, same hook mechanism) --------------------------------
+SESSION_REENTRY_KEEPS_UNLOCK = "session_reentry_keeps_unlock"
+S3_RESTART_SKIPPED_ON_NEGATIVE_RESPONSE = "s3_restart_skipped_on_negative_response"
+S3_TIMEOUT_RESETS_LOCKOUT_COUNTERS = "s3_timeout_resets_lockout_counters"
+ECU_RESET_KEEPS_SESSION = "ecu_reset_keeps_session"
+SEED_REQUEST_KEEPS_STALE_PENDING_SEED = "seed_request_keeps_stale_pending_seed"
+KEY_COMPARE_PREFIX_ONLY = "key_compare_prefix_only"
+LOCKOUT_COUNTER_POOLED_ACROSS_LEVELS = "lockout_counter_pooled_across_levels"
+NRC_ORDER_RANGE_BEFORE_SECURITY = "nrc_order_range_before_security"
+NRC_ORDER_NVM_FAULT_BEFORE_GROUP_CHECK = "nrc_order_nvm_fault_before_group_check"
+READ_DTC_TRAILING_BYTES_ACCEPTED = "read_dtc_trailing_bytes_accepted"
+ROUTINE_OPTION_RECORD_OVERLONG_ACCEPTED = "routine_option_record_overlong_accepted"
+WRITE_RANGE_UPPER_BOUND_EXCLUSIVE = "write_range_upper_bound_exclusive"
+MULTI_DID_READ_DEDUPS_REPEATS = "multi_did_read_dedups_repeats"
+ROUTINE_RESTART_AFTER_STOP_BLOCKED = "routine_restart_after_stop_blocked"
+SUPPRESSED_SEED_REQUEST_NOT_STORED = "suppressed_seed_request_not_stored"
+
+HELDOUT_V2_BUG_IDS: frozenset[str] = frozenset(
+    {
+        SESSION_REENTRY_KEEPS_UNLOCK,
+        S3_RESTART_SKIPPED_ON_NEGATIVE_RESPONSE,
+        S3_TIMEOUT_RESETS_LOCKOUT_COUNTERS,
+        ECU_RESET_KEEPS_SESSION,
+        SEED_REQUEST_KEEPS_STALE_PENDING_SEED,
+        KEY_COMPARE_PREFIX_ONLY,
+        LOCKOUT_COUNTER_POOLED_ACROSS_LEVELS,
+        NRC_ORDER_RANGE_BEFORE_SECURITY,
+        NRC_ORDER_NVM_FAULT_BEFORE_GROUP_CHECK,
+        READ_DTC_TRAILING_BYTES_ACCEPTED,
+        ROUTINE_OPTION_RECORD_OVERLONG_ACCEPTED,
+        WRITE_RANGE_UPPER_BOUND_EXCLUSIVE,
+        MULTI_DID_READ_DEDUPS_REPEATS,
+        ROUTINE_RESTART_AFTER_STOP_BLOCKED,
+        SUPPRESSED_SEED_REQUEST_NOT_STORED,
+    }
+)
+
+ALL_BUG_IDS: frozenset[str] = IMPLEMENTED_BUG_IDS | HELDOUT_BUG_IDS | HELDOUT_V2_BUG_IDS
 
 
 class BugDef(BaseModel):
@@ -129,6 +169,7 @@ class BugDef(BaseModel):
     category: BugCategory
     expected_detection: list[TestCategory] = Field(min_length=1)
     heldout: bool = False
+    heldout_v2: bool = False
 
 
 class BugCatalog(BaseModel):

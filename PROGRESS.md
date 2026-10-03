@@ -673,3 +673,12 @@ Quote fields containing commas. Validate the file with a short python snippet (c
 ## Final message to me
 The validation output, the count of requirements containing hex IDs, which are ambiguous, and any decisions (one line each) for me to log.
 ````
+
+## C4 — done (2026-10-03T23:07:27+05:30)
+
+- Held-out bugs v2: 15 defects, with a unit test for each. The full suite gave 1117 passed and 13 skipped, and ruff is clean.
+- Natural requirements v2: 16 requirements, all `split=test2`. Format check passed.
+- Freeze check:
+  - Recorded: testgen `a4b6491…`, llm `95ebf49…`, agent `9696c35…`
+  - Current: the same three hashes
+  - `prompts.py` blob `c0c6d5a…` and `data/gold` tree `7787401…` also match
