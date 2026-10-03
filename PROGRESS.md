@@ -535,3 +535,42 @@ The ollama model did not beat mock on any headline metric. Its parsed-target rec
   - pytest, default: 912 passed, 13 skipped.
   - needs_model: 13 passed, from the B4 run (not re-run after B5, which only changed docs, UI and demo code).
   - Frozen trees: llm `3559f7e…`, agent `1d678f0…` and testgen `9a121b2…` are unchanged; `git diff` over the frozen code, data and outputs is empty.
+
+---
+
+# Part C (2026-10-03T21:34:59+05:30)
+
+## C0 — Baseline ("before Part C")
+
+- **HEAD:** `38aa7197d0a330f6f2f8f550fb3796ea5ae9db20`
+- **Tree hashes:** testgen `9a121b2742c5f85fa48fd4f5340caf3b85979c67`, llm `3559f7e7e0e53b5d08212b5cbccd5aa06e6bba71`, agent `1d678f0f41eb23962defd6c8ea387bea4fcffb59`
+- **Working tree:** clean except for the untracked `FIX_PART_C.md`, which looks like the owner's copy of the Part C brief. It is excluded from commits.
+- **Ollama:** reachable, serving `qwen2.5:3b-instruct-q4_K_M`. chromadb, fastembed and pypdf are installed.
+
+**Baseline headline numbers (from `outputs/eval_report.json`, v1 sets that have now been seen)**
+
+| Metric | mock | ollama |
+|---|---|---|
+| Held-out v1 bug detection, generated / gold / union | 3/12, 3/12, 5/12 | 3/12, 3/12, 5/12 |
+| In-sample 26-bug detection, generated | 25/26 | 21/26 |
+| Natural v1 test split: parsed P / R / F1 | 0.933 / 0.560 / 0.700 | 0.512 / 0.880 / 0.647 |
+| Natural v1 test split: category recall | 67.9% | 64.3% |
+| Natural v1 test split: precondition recall | 80.0% | 73.3% |
+| Ollama parsed false positives (test split) | 1 | 21 |
+| Rejected planner choices | 0 | 10 |
+| Latency per requirement, mean / p95 | 0.25 s / 0.45 s | 30.8 s / 43.4 s |
+| Explain calls per requirement | one per test (about 5 to 18) | one per test (about 3 to 8) |
+| SWS disagreements open | 9 (D1 to D9) | 9 |
+
+## Part C plan
+
+| Step | Work | Who |
+|---|---|---|
+| C1 | Template-id normalisation, identifier grounding, batched explain. Mock output stays byte-identical. | Subagent, Sonnet |
+| C2 | Fix SWS D2, D5, D6, D7. The rules engine and the contract are done first. The simulator is then written independently from the contract and the SWS description, without reading the engine. Gold tests are then updated by hand. | Subagents: Opus for the engine and contract, Sonnet for the simulator and the gold tests |
+| C3 | General spec-driven coverage templates (at most 32 in total), then **Part C freeze** | Subagent, Opus |
+| C4 | Held-out bugs v2 (15) and natural requirements v2 (16), each written blind by a subagent with strict read limits | Two subagents, Sonnet |
+| C5 | Re-measure: v2 as the headline, v1 labelled "seen", 3 Ollama runs on natural v2, before/after table, interpretation | Subagent, Opus |
+| C6 | Docs, UI, UI checklist, final checks, final commit | Subagent, Sonnet |
+
+Steps run in this order, because C1, C2 and C3 all change the pipeline or the oracle and each must be verified before the next starts. The orchestrator verifies and commits after every step.
