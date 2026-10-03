@@ -142,6 +142,8 @@ class SimulatedEcu:
             if not (self.bug(B.S3_NOT_REFRESHED_BY_TESTER_PRESENT) and req[0] == 0x3E):
                 self.mem.last_request_ms = self.now_ms
             frames = self._respond(req)
+            if self.bug(B.SUPPRESSED_REQUEST_DOES_NOT_RESTART_S3) and not frames:
+                self.mem.last_request_ms = previous_ms
             if (
                 self.bug(B.S3_RESTART_SKIPPED_ON_NEGATIVE_RESPONSE)
                 and frames
@@ -166,6 +168,9 @@ class SimulatedEcu:
                 mem.drop_volatile(DEFAULT_SESSION)
                 if self.bug(B.S3_TIMEOUT_REVERTS_WRITTEN_DIDS):
                     mem.did_store = EcuMemory.power_on(self.spec).did_store
+                if self.bug(B.S3_TIMEOUT_CLEARS_DTC_STATUS):
+                    for code in mem.dtc_status:
+                        mem.dtc_status[code] = 0x00
                 if self.bug(B.S3_TIMEOUT_RESETS_LOCKOUT_COUNTERS):
                     for level in mem.lockouts:
                         mem.lockouts[level] = LevelLockout()
@@ -173,6 +178,8 @@ class SimulatedEcu:
             for lock in mem.lockouts.values():
                 if lock.deadline_ms is not None and self.now_ms >= lock.deadline_ms:
                     lock.deadline_ms = None
+                    if self.bug(B.LOCKOUT_EXPIRY_RESETS_ATTEMPT_COUNT):
+                        lock.failures = 0
 
     def _respond(self, req: bytes) -> list[bytes]:
         sid = req[0]
@@ -212,6 +219,14 @@ class SimulatedEcu:
         session = self.spec.get_session(self.mem.session)
         if session is None or sid not in session.allowed_services:
             raise Reject(NRC_SERVICE_WRONG_SESSION)
+        if (
+            self.bug(B.NRC_ORDER_SUBFUNCTION_BEFORE_LENGTH)
+            and handler.uses_subfunction
+            and handler.generic_subfunction_gate
+            and len(req) >= 2
+            and (req[1] & 0x7F) not in handler.subfunctions(self)
+        ):
+            raise Reject(NRC_SUBFUNCTION_NOT_SUPPORTED)
         if not handler.length_ok(req):
             raise Reject(NRC_BAD_LENGTH)
         sub: int | None = None

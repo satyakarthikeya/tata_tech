@@ -1,0 +1,143 @@
+# HELD-OUT v3 injectable faults for the simulated BCM (uds_assistant/simulator).
+# Same schema as bug_catalog.yaml plus `heldout_v3: true`. These ids live in
+# uds_assistant.simulator.bugs.HELDOUT_V3_BUG_IDS and are implemented by explicit
+# hooks in uds_assistant/simulator/{ecu,services}.py.
+# category: nrc_order | session | security | timing | data | format | sequence
+# expected_detection: test categories (positive | negative | session | security | timing)
+
+bugs:
+  - id: session_switch_keeps_pending_seed
+    title: "Session change keeps the pending security seed"
+    description: >
+      A positive DiagnosticSessionControl (including re-entering the active session) does not
+      clear the pending seeds, so a seed requested before the switch can still be answered with
+      a key afterwards instead of the sequence error 0x24.
+    category: session
+    expected_detection: [session, security, negative]
+    heldout_v3: true
+
+  - id: session_response_p2_star_in_ms
+    title: "Session response reports P2* in milliseconds instead of 10 ms units"
+    description: >
+      The positive 0x10 response encodes P2* as 5000 (0x1388) instead of 500 (0x01F4), so the
+      two timing bytes after P2 are wrong for every session.
+    category: timing
+    expected_detection: [positive, session, timing]
+    heldout_v3: true
+
+  - id: failed_key_keeps_pending_seed
+    title: "Wrong key does not consume the pending seed"
+    description: >
+      After a wrong key the pending seed stays valid, so a second key for the same seed is
+      evaluated instead of being refused with 0x24, and a correct retry unlocks.
+    category: security
+    expected_detection: [security, negative]
+    heldout_v3: true
+
+  - id: lockout_expiry_resets_attempt_count
+    title: "Lockout expiry clears the failed-attempt count"
+    description: >
+      When the lockout delay runs out the failed-attempt count is also reset to 0, so the next
+      wrong key answers 0x35 instead of 0x36 and the delay is not re-armed.
+    category: security
+    expected_detection: [security, timing, negative]
+    heldout_v3: true
+
+  - id: nrc_order_subfunction_before_length
+    title: "Subfunction support checked before the generic length check"
+    description: >
+      For services with a subfunction byte, an unsupported subfunction is answered 0x12 even
+      when the request also has the wrong total length, instead of 0x13.
+    category: nrc_order
+    expected_detection: [negative]
+    heldout_v3: true
+
+  - id: nrc_order_write_range_before_condition
+    title: "Write value range checked before the required condition"
+    description: >
+      An out-of-range value written to a DID with a precondition (factory reset flag while the
+      vehicle moves) answers 0x31 instead of the condition-not-correct NRC 0x22.
+    category: nrc_order
+    expected_detection: [negative]
+    heldout_v3: true
+
+  - id: routine_results_trailing_bytes_accepted
+    title: "RequestResults accepts extra trailing bytes"
+    description: >
+      A requestResults (control type 03) longer than 4 bytes is processed normally instead of
+      being rejected with 0x13.
+    category: format
+    expected_detection: [negative]
+    heldout_v3: true
+
+  - id: read_did_speed_not_clamped
+    title: "Vehicle speed DID wraps modulo 256 instead of saturating at 255"
+    description: >
+      DID 0140 returns speed & 0xFF, so a speed above 255 kph reads back a small wrapped value
+      instead of 0xFF.
+    category: data
+    expected_detection: [positive]
+    heldout_v3: true
+
+  - id: write_stores_value_before_range_rejection
+    title: "Rejected out-of-range write is still stored"
+    description: >
+      A write whose value is outside the DID's range answers 0x31 but the value has already
+      been committed, so a later read returns the rejected value.
+    category: data
+    expected_detection: [negative, positive]
+    heldout_v3: true
+
+  - id: routine_stop_reports_completed_status
+    title: "Stop response carries the completed status byte"
+    description: >
+      The positive stopRoutine response ends with status 02 (completed) instead of 03
+      (stopped).
+    category: data
+    expected_detection: [positive]
+    heldout_v3: true
+
+  - id: dtc_clear_single_clears_neighbour
+    title: "Clearing one DTC also clears the next DTC in spec order"
+    description: >
+      0x14 with a single DTC number resets that DTC and the following one in the spec list, so
+      an unrelated stored fault disappears.
+    category: data
+    expected_detection: [negative, positive]
+    heldout_v3: true
+
+  - id: dtc_read_reports_masked_status
+    title: "DTC report returns status ANDed with the request mask"
+    description: >
+      0x19 02 reports status & mask instead of status & availability mask, hiding the status
+      bits that were not part of the request mask.
+    category: data
+    expected_detection: [positive]
+    heldout_v3: true
+
+  - id: ecu_reset_resets_seed_counter
+    title: "ECU reset restarts the ECU-wide seed counter"
+    description: >
+      0x11 sets the seed counter back to 0, so the first seed issued after a reset repeats an
+      earlier seed instead of continuing the sequence.
+    category: security
+    expected_detection: [security, session]
+    heldout_v3: true
+
+  - id: s3_timeout_clears_dtc_status
+    title: "S3 timeout wipes stored DTC statuses"
+    description: >
+      When the S3 timer expires the ECU also zeroes every DTC status byte, so stored faults are
+      lost after a tester goes idle.
+    category: timing
+    expected_detection: [timing, session]
+    heldout_v3: true
+
+  - id: suppressed_request_does_not_restart_s3
+    title: "Suppressed positive responses do not restart S3"
+    description: >
+      A request whose positive response is suppressed (for example 3E 80) leaves the S3 timer
+      unchanged, so a tester using only suppressed keep-alives loses the session.
+    category: timing
+    expected_detection: [timing, session]
+    heldout_v3: true

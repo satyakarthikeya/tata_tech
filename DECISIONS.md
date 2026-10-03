@@ -471,3 +471,30 @@ Both agents were launched after the Part C freeze. Their exact prompts are recor
 - **[PD-FIX-HEX]** Fix (orchestrator): a parsed hex identifier is rewritten to the spec's spelling when its numeric value equals exactly one known identifier (`0x150` becomes `0x0150`, `0x2e` becomes `0x2E`). The value must be hex, and there is no nearest-match guessing. An unknown id is still dropped.
 - **[PD-FIX-CHECK]** After the two fixes I re-ran the dev harness once as revision 6. It matches revision 2 (parsed F1 0.839, category recall 0.682, precondition recall 1.0, 0 rejections), so the fixes changed no dev outcome.
 - **[PD-FIX-TEST]** `test_empty_shortlist_falls_back_to_the_unconstrained_schema` asserted the old behaviour. It is now `test_empty_shortlist_does_not_call_the_model`.
+
+### D4 (fresh blind v3 sets, written after the Part D freeze)
+
+Both agents were launched after the Part D freeze. Their exact prompts are recorded in PROGRESS.md.
+
+- **[PD4-BUGS]** Held-out bugs v3: 15 new defects in `data/bugs/heldout_v3_catalog.yaml`, each tagged `heldout_v3: true`.
+  - The agent could read the spec, the behaviour contract, protocol, simulator and the three existing catalogs. It could not read any generator, template, conformance module, prompt, eval code or report.
+  - The ids, by category:
+    - session: `session_switch_keeps_pending_seed`
+    - security: `failed_key_keeps_pending_seed`, `lockout_expiry_resets_attempt_count`, `ecu_reset_resets_seed_counter`
+    - NRC order: `nrc_order_subfunction_before_length`, `nrc_order_write_range_before_condition`
+    - length and format: `routine_results_trailing_bytes_accepted`
+    - DID and routine: `read_did_speed_not_clamped`, `write_stores_value_before_range_rejection`, `routine_stop_reports_completed_status`
+    - DTC: `dtc_clear_single_clears_neighbour`, `dtc_read_reports_masked_status`
+    - timing and state after S3 or reset: `session_response_p2_star_in_ms`, `s3_timeout_clears_dtc_status`, `suppressed_request_does_not_restart_s3`
+  - Every bug is observable on the wire, and each has a unit test asserting the exact differing bytes.
+  - DTC statuses cannot be changed over UDS, so the three DTC bugs (and the S3 one) are observed after setting statuses through the environment setter, in the same way as vehicle speed and the NVM fault. The S3 bug is only visible when a status is non-zero.
+  - The agent dropped a candidate ("S3 timeout keeps the unlock") because every way of observing it goes through a 0x10 that clears that state anyway.
+  - With all bugs off, behaviour is unchanged: the simulator and protocol tests pass (282).
+- **[PD4-REQS]** Natural requirements v3: 16 requirements in `data/requirements_natural_v3.csv`, all `split=test3`.
+  - The agent could read only the spec and the seed requirements. It could not read any natural set (v1 or v2) or any code.
+  - Only 2 contain a hex id (NAT3-006 and NAT3-008).
+  - The 2 ambiguous rows are NAT3-014 (which reset type, and what "clean" means) and NAT3-015 (which wiper setting, and which mode and unlock).
+  - NAT3-016 asks for tyre pressure, which the spec does not define, so it has empty targets and the precondition `none`.
+  - The agent wrote them in everyday engineering wording rather than the spec's field names.
+- **[PD4-LABELS]** The labelling is not fully consistent about setup services. The agent reports that `target_services` lists every service a test must exercise, including setup steps such as 0x10 and 0x27 for a write requirement, but that some rows list only the main service. This adds some noise to service precision and recall on v3, and the interpretation will say so.
+- **[PD4-CHECK]** After the agents finished I confirmed that the testgen, llm and agent trees, the prompts file and `data/gold` are unchanged, and that the test that scans the generator source and instantiated tests for bug ids passes with the new ids.

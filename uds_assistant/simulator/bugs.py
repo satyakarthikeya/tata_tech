@@ -10,7 +10,8 @@ A second, *held-out* set of faults (:data:`HELDOUT_BUG_IDS`, documented in
 ``data/bugs/heldout_catalog.yaml``) uses the same hook mechanism but is kept
 out of :data:`IMPLEMENTED_BUG_IDS`, so anything iterating the original catalog
 is unaffected. A third set (:data:`HELDOUT_V2_BUG_IDS`, documented in
-``data/bugs/heldout_v2_catalog.yaml``) follows the same pattern.
+``data/bugs/heldout_v2_catalog.yaml``) and a fourth (:data:`HELDOUT_V3_BUG_IDS`,
+``data/bugs/heldout_v3_catalog.yaml``) follow the same pattern.
 :data:`ALL_BUG_IDS` is the union accepted by the simulator.
 """
 
@@ -29,6 +30,7 @@ _BUGS_DIR = Path(__file__).resolve().parents[2] / "data" / "bugs"
 DEFAULT_BUG_CATALOG_PATH = _BUGS_DIR / "bug_catalog.yaml"
 HELDOUT_BUG_CATALOG_PATH = _BUGS_DIR / "heldout_catalog.yaml"
 HELDOUT_V2_BUG_CATALOG_PATH = _BUGS_DIR / "heldout_v2_catalog.yaml"
+HELDOUT_V3_BUG_CATALOG_PATH = _BUGS_DIR / "heldout_v3_catalog.yaml"
 
 # --- bug ids (one constant per hook) ---------------------------------------------------------
 NRC_ORDER_DID_BEFORE_SESSION = "nrc_order_did_before_session"
@@ -157,7 +159,46 @@ HELDOUT_V2_BUG_IDS: frozenset[str] = frozenset(
     }
 )
 
-ALL_BUG_IDS: frozenset[str] = IMPLEMENTED_BUG_IDS | HELDOUT_BUG_IDS | HELDOUT_V2_BUG_IDS
+# --- held-out v3 bug ids (fourth catalog, same hook mechanism) ------------------
+SESSION_SWITCH_KEEPS_PENDING_SEED = "session_switch_keeps_pending_seed"
+SESSION_RESPONSE_P2_STAR_IN_MS = "session_response_p2_star_in_ms"
+FAILED_KEY_KEEPS_PENDING_SEED = "failed_key_keeps_pending_seed"
+LOCKOUT_EXPIRY_RESETS_ATTEMPT_COUNT = "lockout_expiry_resets_attempt_count"
+NRC_ORDER_SUBFUNCTION_BEFORE_LENGTH = "nrc_order_subfunction_before_length"
+NRC_ORDER_WRITE_RANGE_BEFORE_CONDITION = "nrc_order_write_range_before_condition"
+ROUTINE_RESULTS_TRAILING_BYTES_ACCEPTED = "routine_results_trailing_bytes_accepted"
+READ_DID_SPEED_NOT_CLAMPED = "read_did_speed_not_clamped"
+WRITE_STORES_VALUE_BEFORE_RANGE_REJECTION = "write_stores_value_before_range_rejection"
+ROUTINE_STOP_REPORTS_COMPLETED_STATUS = "routine_stop_reports_completed_status"
+DTC_CLEAR_SINGLE_CLEARS_NEIGHBOUR = "dtc_clear_single_clears_neighbour"
+DTC_READ_REPORTS_MASKED_STATUS = "dtc_read_reports_masked_status"
+ECU_RESET_RESETS_SEED_COUNTER = "ecu_reset_resets_seed_counter"
+S3_TIMEOUT_CLEARS_DTC_STATUS = "s3_timeout_clears_dtc_status"
+SUPPRESSED_REQUEST_DOES_NOT_RESTART_S3 = "suppressed_request_does_not_restart_s3"
+
+HELDOUT_V3_BUG_IDS: frozenset[str] = frozenset(
+    {
+        SESSION_SWITCH_KEEPS_PENDING_SEED,
+        SESSION_RESPONSE_P2_STAR_IN_MS,
+        FAILED_KEY_KEEPS_PENDING_SEED,
+        LOCKOUT_EXPIRY_RESETS_ATTEMPT_COUNT,
+        NRC_ORDER_SUBFUNCTION_BEFORE_LENGTH,
+        NRC_ORDER_WRITE_RANGE_BEFORE_CONDITION,
+        ROUTINE_RESULTS_TRAILING_BYTES_ACCEPTED,
+        READ_DID_SPEED_NOT_CLAMPED,
+        WRITE_STORES_VALUE_BEFORE_RANGE_REJECTION,
+        ROUTINE_STOP_REPORTS_COMPLETED_STATUS,
+        DTC_CLEAR_SINGLE_CLEARS_NEIGHBOUR,
+        DTC_READ_REPORTS_MASKED_STATUS,
+        ECU_RESET_RESETS_SEED_COUNTER,
+        S3_TIMEOUT_CLEARS_DTC_STATUS,
+        SUPPRESSED_REQUEST_DOES_NOT_RESTART_S3,
+    }
+)
+
+ALL_BUG_IDS: frozenset[str] = (
+    IMPLEMENTED_BUG_IDS | HELDOUT_BUG_IDS | HELDOUT_V2_BUG_IDS | HELDOUT_V3_BUG_IDS
+)
 
 
 class BugDef(BaseModel):
@@ -170,6 +211,7 @@ class BugDef(BaseModel):
     expected_detection: list[TestCategory] = Field(min_length=1)
     heldout: bool = False
     heldout_v2: bool = False
+    heldout_v3: bool = False
 
 
 class BugCatalog(BaseModel):
