@@ -218,3 +218,114 @@ def primary_service(template_id: str, params: BaseModel) -> str:
     if template_id in _PRIMARY_SERVICE:
         return hex2(_PRIMARY_SERVICE[template_id])
     return hex2(TEMPLATES[template_id].applicable_services[0])
+
+
+# ----------------------------------------------------------------- compact plan shortlist
+
+_INTENT_CATEGORIES: dict[str, str] = {
+    "positive": "positive", "read": "positive", "write": "positive", "routine": "positive",
+    "dtc": "positive", "suppress": "positive",
+    "negative": "negative", "range": "negative", "length": "negative",
+    "subfunction": "negative", "conditions": "negative", "sequence": "negative",
+    "session": "session",
+    "security": "security", "lockout": "security",
+    "timing": "timing",
+}
+SHORTLIST_PER_TEMPLATE = 4
+"""At most this many options of one template enter the compact plan shortlist."""
+SHORTLIST_MIN_SCORE = 3
+"""Relevance an option needs (a matching primary service or entity) to be shortlisted."""
+
+
+class ShortlistEntry(BaseModel):
+    """One option offered in a compact plan prompt (indices are the real catalog ones)."""
+
+    template_id: str
+    option_index: int
+    category: str
+    detail: str
+    score: int
+
+
+def _option_score(
+    spec: EcuSpec, tpl: TemplateOptions, opt: TemplateOption, parsed: dict[str, list[str]],
+    categories: set[str],
+) -> int:
+    refs = opt.refs
+    mine = {(k, v) for k in ("dids", "routines", "dtcs") for v in getattr(refs, k)}
+    wanted = {(k, v) for k in ("dids", "routines", "dtcs") for v in parsed.get(k, [])}
+    hits = len(mine & wanted)
+    params = applicable_params(spec, tpl.template_id)[opt.index]
+    services = set(parsed.get("services", []))
+    base = 4 * hits + (3 if primary_service(tpl.template_id, params) in services else 0)
+    if base == 0:
+        return 1 if services & set(refs.services) else 0
+    score = base
+    if set(refs.sessions) & set(parsed.get("sessions", [])):
+        score += 1
+    if set(refs.security_levels) & set(parsed.get("security_levels", [])):
+        score += 1
+    if tpl.category in categories:
+        score += 1
+    if mine and wanted and not hits:
+        score -= 6  # about a different DID / routine / DTC than the requirement names
+    return score
+
+
+def plan_shortlist(
+    spec: EcuSpec,
+    catalog: list[TemplateOptions],
+    parsed: dict[str, list[str]],
+    *,
+    exclude: set[tuple[str, int]] | None = None,
+    per_template: int = SHORTLIST_PER_TEMPLATE,
+) -> list[ShortlistEntry]:
+    """Options relevant to a parsed requirement, best first (deterministic).
+
+    An option is relevant when it touches a parsed DID / routine / DTC, or its primary
+    service is a parsed service; session, security-level and intent-category matches add
+    to the score. Options touching other entities of a kind the requirement names are
+    demoted. Ties keep catalog order. ``exclude`` drops (template_id, option_index) keys
+    (already kept or rejected). The caller cuts the list to fit its token budget.
+    """
+    exclude = exclude or set()
+    categories = {_INTENT_CATEGORIES[i] for i in parsed.get("intents", [])
+                  if i in _INTENT_CATEGORIES}
+    scored: list[tuple[int, int, ShortlistEntry]] = []
+    order = 0
+    for tpl in catalog:
+        for opt in tpl.options:
+            order += 1
+            if (tpl.template_id, opt.index) in exclude:
+                continue
+            score = _option_score(spec, tpl, opt, parsed, categories)
+            detail = opt.summary[len(tpl.description):].strip(" ,") \
+                if opt.summary.startswith(tpl.description) else opt.summary
+            scored.append((score, order, ShortlistEntry(
+                template_id=tpl.template_id, option_index=opt.index, category=tpl.category,
+                detail=detail, score=score)))
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    threshold = SHORTLIST_MIN_SCORE
+    if not any(s >= threshold for s, _, _ in scored):
+        threshold = 1
+    out: list[ShortlistEntry] = []
+    per: dict[str, int] = {}
+    for score, _, entry in scored:
+        if score < threshold:
+            break
+        if per.get(entry.template_id, 0) >= per_template:
+            continue
+        per[entry.template_id] = per.get(entry.template_id, 0) + 1
+        out.append(entry)
+    return out
+
+
+def render_shortlist(catalog: list[TemplateOptions], entries: list[ShortlistEntry]) -> str:
+    """One header line per template, then one compact line per offered option."""
+    desc = {t.template_id: t.description for t in catalog}
+    lines: list[str] = []
+    for tid in dict.fromkeys(e.template_id for e in entries):
+        group = [e for e in entries if e.template_id == tid]
+        lines.append(f"template_id {tid} ({group[0].category}): {desc[tid]}")
+        lines += [f"  option_index {e.option_index}: {e.detail or '-'}" for e in group]
+    return "\n".join(lines)

@@ -159,6 +159,8 @@ class LLMStats:
     """Public calls that ended in :class:`LLMError`."""
     latency_ms: float = 0.0
     """Wall-clock time spent inside public calls."""
+    truncations: int = 0
+    """Chat requests whose prompt was (likely) truncated to fit the context window."""
 
     def snapshot(self) -> dict[str, float]:
         """A plain-dict copy of the counters."""
@@ -186,6 +188,39 @@ class LLMClient(Protocol):
     def complete_text(self, system: str, prompt: str) -> str:
         """Return free-text prose answering ``prompt``."""
         ...
+
+
+CHARS_PER_TOKEN = 3
+"""Conservative prompt-size estimate. qwen2.5 tokenizes the hex-heavy JSON context at
+about 2.9 chars/token (measured: the 46 kB plan prompt was 16.2k tokens), so 3 is used
+rather than the usual 4 for English prose."""
+
+
+def estimate_tokens(*texts: str) -> int:
+    """Rough upper estimate of the token count of ``texts`` (see :data:`CHARS_PER_TOKEN`)."""
+    return -(-sum(len(t) for t in texts) // CHARS_PER_TOKEN)
+
+
+def context_budget(llm: object) -> int | None:
+    """The backend's context window in tokens, or None if it has no limit (mock).
+
+    Optional capability: a backend may expose ``context_tokens: int | None``. It is not
+    part of the :class:`LLMClient` protocol so existing backends need no change.
+    """
+    value = getattr(llm, "context_tokens", None)
+    return value if isinstance(value, int) and value > 0 else None
+
+
+def drain_truncation_events(llm: object, start: int) -> list[str]:
+    """Truncation messages a backend recorded since index ``start`` (empty if unsupported)."""
+    events = getattr(llm, "truncation_events", None)
+    return list(events[start:]) if isinstance(events, list) else []
+
+
+def truncation_mark(llm: object) -> int:
+    """Current length of the backend's truncation-event list (0 if unsupported)."""
+    events = getattr(llm, "truncation_events", None)
+    return len(events) if isinstance(events, list) else 0
 
 
 def build_prompt(instruction: str, context: dict[str, object]) -> str:

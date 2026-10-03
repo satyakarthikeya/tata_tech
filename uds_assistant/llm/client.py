@@ -26,7 +26,7 @@ from typing import Any, TypeVar
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from uds_assistant.llm.base import LLMError, LLMStats
+from uds_assistant.llm.base import LLMError, LLMStats, estimate_tokens
 from uds_assistant.llm.prompts import SCHEMA_RETRY_INSTRUCTION
 
 T = TypeVar("T", bound=BaseModel)
@@ -37,6 +37,7 @@ DEFAULT_NUM_CTX = 4096
 DEFAULT_KEEP_ALIVE = "10m"
 DEFAULT_TEMPERATURE = 0
 DEFAULT_SEED = 0
+TRUNCATION_MARGIN_TOKENS = 16
 
 
 def ollama_base_url() -> str:
@@ -96,8 +97,49 @@ class OllamaClient:
         self.temperature = temperature
         self.stats = LLMStats()
         self.fallback_events: list[str] = []
+        self.truncation_events: list[str] = []
+        """Verbatim "prompt likely truncated: ..." messages, one per affected request."""
         self._transport = transport
         self._sleep = sleep
+
+    @property
+    def context_tokens(self) -> int:
+        """Context window (tokens) the agent must budget prompts against: ``num_ctx``."""
+        return self.num_ctx
+
+    # ------------------------------------------------------------------ truncation check
+
+    def check_truncation(self, body: dict[str, Any], payload: dict[str, Any]) -> str | None:
+        """Record and return a truncation message if this request's prompt was likely cut.
+
+        Ollama silently shortens a prompt longer than ``num_ctx``: it keeps the first few
+        tokens and the tail, and the evaluated prompt is then about ``num_ctx / 2`` tokens
+        (measured on Ollama 0.35: ``prompt_eval_count`` 2050 for any over-long prompt at
+        ``num_ctx`` 4096). Flagged when ``prompt_eval_count`` reaches ``num_ctx`` (minus a
+        small margin), when it sits at that ``num_ctx / 2`` cut point while the estimated
+        prompt is much larger, or when the estimated prompt alone exceeds ``num_ctx``.
+        """
+        texts = [str(m.get("content", "")) for m in body.get("messages", [])]
+        est = estimate_tokens(*texts)
+        raw = payload.get("prompt_eval_count")
+        pec = raw if isinstance(raw, int) else None
+        n = self.num_ctx
+        at_limit = pec is not None and pec >= n - TRUNCATION_MARGIN_TOKENS
+        at_cut = (
+            pec is not None
+            and abs(pec - n // 2) <= TRUNCATION_MARGIN_TOKENS
+            and est > 0.75 * n
+        )
+        too_big = est > n
+        if not (at_limit or at_cut or too_big):
+            return None
+        message = (
+            f"prompt likely truncated: prompt_eval_count={pec if pec is not None else 'n/a'} "
+            f"num_ctx={n} estimated_prompt_tokens={est}"
+        )
+        self.stats.truncations += 1
+        self.truncation_events.append(message)
+        return message
 
     # ------------------------------------------------------------------ request building
 
@@ -145,6 +187,7 @@ class OllamaClient:
                 content = (payload.get("message") or {}).get("content")
                 if not isinstance(content, str):
                     raise LLMError(f"Ollama response has no message content: {payload!r}")
+                self.check_truncation(body, payload)
                 return content
             except (httpx.TransportError, httpx.HTTPStatusError) as exc:
                 last_error = exc

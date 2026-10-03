@@ -415,3 +415,77 @@ B1 and B2 touch different areas and run in parallel. The orchestrator verifies e
 - needs_model tests for llm and agent: 3 passed.
 
 **Verification:** ruff clean; 855 passed, 13 skipped (needs_model).
+
+## B3 — prompt tuning log (dev split only)
+
+Harness: `scripts/tune_dev.py` (LLM_MODE=ollama, `qwen2.5:3b-instruct-q4_K_M`, num_ctx 4096, BM25, plain engine; explain LLM call stubbed in the harness only). Only the 8 `split == "dev"` rows of `requirements_natural.csv` are loaded (filtered right after the loader, asserted before the pipeline and before scoring). Scoring uses `uds_assistant.eval.understanding.score_requirement` + `aggregate_by_split(...)["dev"]`. Results: `outputs/prompt_tuning/rev_<N>.json`.
+
+**Selection rule (fixed before revision 1):** maximise parsed F1 + category recall (micro) + precondition recall (micro); tie-break on fewer mean tests per requirement, then more parsed exact matches.
+
+**Key finding:** at num_ctx 4096 the plan prompt (~16,200 tokens, mostly the 154-option catalog) is truncated by Ollama to its last ~2,050 tokens (`truncating input prompt ... keep=4`, 8 of 8 plan calls in every revision). The planner never sees the instruction or the requirement and returns the same 18 tests for every requirement. Category and precondition recall therefore cannot change through prompt text, and only the parse prompt was tuned. PLAN_INSTRUCTION is unchanged. Fixing this needs a code or config change outside B3: a filtered or compact catalog in `plan`, or a larger num_ctx.
+
+| Rev | Change | Parsed exact | Exercised exact | Parsed P / R / F1 | Cat. recall | Precond. recall | Fallbacks | Tests/req | JSON fails / retries | Score | Timestamp |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | Baseline (B2 prompts) | 0/8 | 0/8 | 0.214 / 0.706 / 0.329 | 0.591 | 1.000 | 0 | 18.0 | 0 / 0 | 1.920 | 2026-10-03T13:40:57+05:30 |
+| 1 | Parse: precise extraction, phrase-to-identifier guide, session/security condition rule, "leave empty" push | 0/8 | 0/8 | 0.500 / 0.059 / 0.105 | 0.591 | 1.000 | 7 | 18.0 | 0 / 0 | 1.696 | 2026-10-03T13:45:02+05:30 |
+| 2 | Parse: services never empty, "short list" push removed, two invented few-shot examples | 1/8 | 0/8 | 0.481 / 0.765 / 0.591 | 0.591 | 1.000 | 0 | 18.0 | 0 / 0 | 2.182 | 2026-10-03T13:49:27+05:30 |
+| 3 | Parse: examples removed (they were copied), DID/routine name matching, 0x27 only when unlock is mentioned, 0xF186 only for current-session reads | 1/8 | 0/8 | 0.391 / 0.529 / 0.450 | 0.591 | 1.000 | 0 | 18.0 | 0 / 0 | 2.041 | 2026-10-03T13:53:19+05:30 |
+| 4 | Parse: rev 3 plus three invented examples (gated write, routine, read in every session) | 2/8 | 0/8 | 0.382 / 0.765 / 0.510 | 0.591 | 1.000 | 0 | 18.0 | 0 / 0 | 2.101 | 2026-10-03T13:56:59+05:30 |
+| 5 | Parse: rewritten as a 5-step procedure (main service, DIDs by name, sessions, security only if mentioned, intents), read example first | 1/8 | 0/8 | 0.560 / 0.824 / 0.667 | 0.591 | 1.000 | 0 | 18.0 | 0 / 0 | **2.258** | 2026-10-03T14:00:44+05:30 |
+| 6 | Parse: rev 5 plus "dids empty when no value is named" and intents in the examples | 1/8 | 0/8 | 0.382 / 0.765 / 0.510 | 0.591 | 1.000 | 0 | 18.0 | 0 / 0 | 2.101 | 2026-10-03T14:04:33+05:30 |
+
+**Selected: revision 5.** It has the highest score, from parsed F1 alone, since category and precondition recall are the same in every revision. `prompts.py` was restored to the rev 5 text, verified equal to the prompts recorded in `rev_5.json`.
+
+Caveats:
+- Revision to revision variance is large. Each is a single greedy run on 8 rows, and small wording changes moved F1 by up to 0.16.
+- Parse output from rev 5 still adds the example DID 0x0140 on two rows, and leaves `intents` empty.
+
+Diagnostic (not a candidate): the rev 5 prompts were run with `OLLAMA_NUM_CTX=32768`. The server log shows the plan prompt (16.2k tokens) processed untruncated in about 11 s. The run hit the 10-minute harness timeout before finishing, so it produced no scores.
+
+`pytest tests/llm tests/agent`: 130 passed, 3 skipped. `ruff check .`: clean.
+
+### B3 round 2: truncation fix, then re-tuning (dev split only)
+
+The orchestrator kept num_ctx 4096, so the fix went into the pipeline.
+
+**Plan-context budget**
+- A backend may now expose `context_tokens`; `OllamaClient` sets it to num_ctx and MockLLM has none.
+- When it is set, `plan` builds a compact prompt:
+  - a deterministic shortlist of options relevant to the parsed requirement (`options.plan_shortlist`), at most 24 options and at most 4 per template;
+  - each option on one line, with its real catalog `option_index`;
+  - the requirement and the instruction after the option list (`PLAN_COMPACT_TEMPLATE`).
+- The list is cut until system + prompt fit within 60% of the window, estimated at 3 chars per token.
+- Choices outside the shortlist are rejected. Validation, instantiation and byte provenance are unchanged.
+
+**Truncation detection**
+- `OllamaClient` reads `prompt_eval_count` and flags a request when any of these holds:
+  - the count is within 16 tokens of num_ctx;
+  - the count sits at Ollama's num_ctx/2 cut point while the estimated prompt is above 0.75 × num_ctx;
+  - the estimated prompt is above num_ctx.
+- Each flagged request increments `LLMStats.truncations` and adds a verbatim `prompt likely truncated: prompt_eval_count=… num_ctx=… estimated_prompt_tokens=…` event, which the nodes copy into the run's `fallback_events`.
+
+**Mock unchanged**
+- MockLLM output for all 15 seed requirements is identical before and after (`outputs/prompt_tuning/mock_equivalence.json`).
+- The only difference is the new `truncations: 0` counter in `llm_stats`.
+- `tests/agent/test_plan_budget.py` pins the legacy full-catalog plan prompt for every seed requirement.
+
+| Rev | Change | Parsed exact | Exercised exact | Parsed P / R / F1 | Cat. recall | Precond. recall | Fallbacks | Tests/req | JSON fails / retries | Truncations (server log / client) | Mean shortlist | Score | Timestamp |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 7 | Pipeline fix: budgeted compact plan prompt and truncation detection; prompts = rev 5 | 1/8 | 0/8 | 0.519 / 0.824 / 0.636 | 0.773 | 1.000 | 0 | 6.62 | 0 / 0 | 0 / 0 | 19.2 | 2.409 | 2026-10-03T14:24:45+05:30 |
+| 8 | PLAN_INSTRUCTION: selective (usually 4-8 tests), own identifiers only, one-line definition per category, rationale names the requirement part | 1/8 | 0/8 | 0.583 / 0.824 / 0.683 | 0.727 | 1.000 | 0 | 5.38 | 0 / 0 | 0 / 0 | 18.6 | **2.410** | 2026-10-03T14:26:43+05:30 |
+| 9 | PLAN_INSTRUCTION: rev 8 plus a per-category "when to include" rule naming templates | 1/8 | 0/8 | 0.583 / 0.824 / 0.683 | 0.727 | 0.667 | 1 | 4.62 | 0 / 0 | 0 / 0 | 18.6 | 2.077 | 2026-10-03T14:28:40+05:30 |
+| 10 | PLAN_INSTRUCTION back to rev 8; shortlist header re-rendered as `template_id X: desc [category c]` | 1/8 | 0/8 | 0.583 / 0.824 / 0.683 | 0.727 | 0.889 | 0 | 4.00 | 0 / 0 | 0 / 0 | 18.6 | 2.299 | 2026-10-03T14:30:40+05:30 |
+
+What went wrong in revisions 9 and 10:
+- **Rev 9 regressed.** On NAT-007 the model copied the header's `(negative)` into `template_id`, so all 6 choices were unknown ids and 0 tests were kept. It also picked templates the instruction named but the shortlist did not offer.
+- **Rev 10 cost more than it fixed.** The new header removed the copying, but precondition recall fell.
+
+**Selected: revision 8** under the same rule (highest dev score). Rev 8 scores 2.410 against rev 7's 2.409, so the two are effectively tied, and rev 8 is still ahead on the tie-break (5.38 vs 6.62 tests per requirement).
+
+Restored state:
+- `prompts.py` matches the prompts recorded in `rev_8.json` exactly.
+- The `options.render_shortlist` header is back to the rev 8 form.
+
+Noise: the parse prompt was the same in revisions 5 and 7–10, yet parsed F1 moved between 0.636 and 0.683. Greedy decoding on the GPU is not bit-reproducible across calls, so differences under about 0.05 are within noise.
+
+No plan prompt in revisions 7–10 was truncated: 0 server-log truncation warnings and 0 client truncation events, against 8 per run before the fix. Full suite: 895 passed, 13 skipped. `ruff check .`: clean.

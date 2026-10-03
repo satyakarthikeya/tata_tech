@@ -1,0 +1,1153 @@
+{
+  "revision": "6",
+  "note": "parse: rev5 + 'dids empty when no value is named' + intents shown in the examples",
+  "split": "dev",
+  "n_requirements": 8,
+  "timestamp": "2026-10-03T14:04:33+0530",
+  "model": "qwen2.5:3b-instruct-q4_K_M",
+  "num_ctx": 4096,
+  "retriever": "bm25",
+  "explain": "stubbed in harness (template explanation kept); does not affect scores",
+  "wall_s": 191.1,
+  "summary": {
+    "targets_parsed_exact": 1,
+    "targets_exercised_exact": 0,
+    "parsed_precision": 0.3824,
+    "parsed_recall": 0.7647,
+    "parsed_f1": 0.5098,
+    "exercised_f1": 0.2149,
+    "category_recall_micro": 0.5909,
+    "precondition_recall_micro": 1.0,
+    "fallback_count": 0,
+    "mean_tests_per_req": 18.0,
+    "json_failures": 0,
+    "llm_retries": 0,
+    "llm_errors": 0,
+    "prompt_truncations": 8,
+    "selection_score": 2.1007
+  },
+  "aggregate_dev": {
+    "requirements": 8,
+    "targets_parsed": {
+      "exact": 1,
+      "exact_rate": 0.125,
+      "tp": 13,
+      "fp": 21,
+      "fn": 4,
+      "precision": 0.3824,
+      "recall": 0.7647,
+      "f1": 0.5098
+    },
+    "targets_exercised": {
+      "exact": 0,
+      "exact_rate": 0.0,
+      "tp": 13,
+      "fp": 91,
+      "fn": 4,
+      "precision": 0.125,
+      "recall": 0.7647,
+      "f1": 0.2149
+    },
+    "categories": {
+      "scored_requirements": 8,
+      "hit": 13,
+      "required": 22,
+      "micro_recall": 0.5909,
+      "macro_recall": 0.6458
+    },
+    "preconditions": {
+      "scored_requirements": 4,
+      "hit": 9,
+      "required": 9,
+      "micro_recall": 1.0,
+      "macro_recall": 1.0
+    },
+    "fallback": {
+      "count": 0,
+      "ids": [],
+      "unexpected_count": 0,
+      "unexpected_ids": [],
+      "note": "unexpected = excluding requirements with an empty label set (e.g. NAT-020), for which producing nothing is correct"
+    }
+  },
+  "truncation_warnings": [
+    "time=2026-10-03T14:01:29.665+05:30 level=WARN source=llama_server.go:320 msg=\"truncating input prompt\" limit=2050 prompt=16209 keep=4 new=2050",
+    "time=2026-10-03T14:01:53.662+05:30 level=WARN source=llama_server.go:320 msg=\"truncating input prompt\" limit=2050 prompt=16270 keep=4 new=2050",
+    "time=2026-10-03T14:02:16.861+05:30 level=WARN source=llama_server.go:320 msg=\"truncating input prompt\" limit=2050 prompt=16199 keep=4 new=2050",
+    "time=2026-10-03T14:02:41.107+05:30 level=WARN source=llama_server.go:320 msg=\"truncating input prompt\" limit=2050 prompt=16226 keep=4 new=2050",
+    "time=2026-10-03T14:03:05.191+05:30 level=WARN source=llama_server.go:320 msg=\"truncating input prompt\" limit=2050 prompt=16215 keep=4 new=2050",
+    "time=2026-10-03T14:03:29.014+05:30 level=WARN source=llama_server.go:320 msg=\"truncating input prompt\" limit=2050 prompt=16186 keep=4 new=2050",
+    "time=2026-10-03T14:03:53.211+05:30 level=WARN source=llama_server.go:320 msg=\"truncating input prompt\" limit=2050 prompt=16219 keep=4 new=2050",
+    "time=2026-10-03T14:04:16.547+05:30 level=WARN source=llama_server.go:320 msg=\"truncating input prompt\" limit=2050 prompt=16187 keep=4 new=2050"
+  ],
+  "prompts_sha256": "e38711bf61a664b8",
+  "prompts": {
+    "EXPLAIN_INSTRUCTION": "Explain in 2-4 sentences, for a test engineer, what this test checks, why it matters for the requirement, and what outcome is expected. Do not invent byte values.",
+    "PARSE_INSTRUCTION": "Extract the UDS identifiers in requirement_text, using only keys from spec_index. Work in this order and add nothing the text does not mention or clearly imply.\n1. services: the service for the main action (never empty). read/report a value -> 0x22; write/set/change a value or calibration -> 0x2E; switch/enter/return to a session or mode -> 0x10; unlock/seed/key -> 0x27; ECU reset/reboot -> 0x11; keep-alive/tester present -> 0x3E; start/stop/results of a routine or self-test -> 0x31; read fault memory/trouble codes -> 0x19; clear them -> 0x14.\n2. dids / routines: match the words of the text to the names in spec_index (a stored setting is a DID, something started or run is a routine). Only values the text names; if it names none (e.g. resets, sessions, keep-alive), dids is empty.\n3. sessions: default -> 0x01, programming/flash -> 0x02, extended/diagnostic mode -> 0x03. Also add service 0x10 only if being in that session is a condition ('shall require extended mode', 'only in the flash session'); 'in any/every session' is not.\n4. security: only if the text mentions unlock, security access, seed/key or a level: add service 0x27 and the level (level 1 -> 0x01, programming-level -> 0x03). Otherwise leave security_levels empty and do not add 0x27.\n5. intents from allowed_intents, 2-4 keywords.\nExamples (other requirements; never copy their identifiers):\n'Vehicle speed shall be readable in every session.' -> services [0x22], dids [0x0140], sessions [0x01,0x02,0x03], intents [read, positive]\n'The door actuator calibration must give results only after it was started.' -> services [0x31], routines [0x0202], intents [routine, sequence, negative]\n'Changing the ambient colour shall need extended mode and a level 1 unlock.' -> services [0x10,0x27,0x2E], dids [0x0101], sessions [0x03], security_levels [0x01], intents [write, security, session]",
+    "PLAN_INSTRUCTION": "Choose test cases that verify the requirement thoroughly: positive behaviour plus negative, session, security and timing checks where relevant. Each choice is a template_id from the catalog and an option_index from that template's options, with a one-sentence rationale. Do not repeat choices listed under rejected or already_kept.",
+    "SCHEMA_RETRY_INSTRUCTION": "Your previous reply was not valid JSON for the required schema. Error: {error}\nReply again with only a JSON object that matches the schema.",
+    "SYSTEM_PROMPT": "You are a UDS (ISO 14229) diagnostics test-planning assistant for an automotive ECU. You never write request or response bytes. You only reference identifiers that exist in the provided spec index, choose template ids and option indices from the provided catalog, and write short plain-English prose. Answer with JSON matching the schema when one is required."
+  },
+  "requirements": [
+    {
+      "id": "NAT-001",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 18,
+      "label_targets": [
+        "did:0xF190",
+        "service:0x22"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 1,
+        "fp": 4,
+        "fn": 1,
+        "missed": [
+          "did:0xF190"
+        ],
+        "extra": [
+          "did:0x0140",
+          "service:0x10",
+          "service:0x2E",
+          "service:0x3E"
+        ]
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 1,
+        "fp": 12,
+        "fn": 1,
+        "missed": [
+          "did:0xF190"
+        ],
+        "extra": [
+          "did:0xDEAD",
+          "did:0xF186",
+          "routine:0x0201",
+          "routine:0x0202",
+          "routine:0x0203",
+          "routine:0xDEAD",
+          "service:0x10",
+          "service:0x11",
+          "service:0x27",
+          "service:0x2E",
+          "service:0x31",
+          "service:0x3E"
+        ]
+      },
+      "categories": {
+        "required": 1,
+        "hit": 1,
+        "recall": 1.0,
+        "missed": []
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "timing"
+      ],
+      "preconditions": {
+        "required": 0,
+        "hit": 0,
+        "recall": null,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "routine_started",
+        "security_level_1",
+        "security_level_3",
+        "vehicle_stationary"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x10",
+          "0x22",
+          "0x2E",
+          "0x3E"
+        ],
+        "dids": [
+          "0x0140"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x02",
+          "0x03"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [],
+        "keywords": []
+      },
+      "notes": [],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "s3_keepalive_boundary",
+        "s3_keepalive_boundary",
+        "nrc_priority_session_over_identifier",
+        "nrc_priority_session_over_identifier",
+        "routine_start_results",
+        "routine_start_results",
+        "routine_start_results"
+      ],
+      "llm_stats": {
+        "calls": 2.0,
+        "http_requests": 2.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 23596.9
+      },
+      "fallback_events": [],
+      "wall_s": 23.7
+    },
+    {
+      "id": "NAT-003",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 18,
+      "label_targets": [
+        "service:0x10"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 1,
+        "fp": 13,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0x0140",
+          "did:0x0150",
+          "did:0xF186",
+          "did:0xF187",
+          "did:0xF18C",
+          "service:0x11",
+          "service:0x14",
+          "service:0x19",
+          "service:0x22",
+          "service:0x27",
+          "service:0x2E",
+          "service:0x31",
+          "service:0x3E"
+        ]
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 1,
+        "fp": 12,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0xDEAD",
+          "did:0xF186",
+          "routine:0x0201",
+          "routine:0x0202",
+          "routine:0x0203",
+          "routine:0xDEAD",
+          "service:0x11",
+          "service:0x22",
+          "service:0x27",
+          "service:0x2E",
+          "service:0x31",
+          "service:0x3E"
+        ]
+      },
+      "categories": {
+        "required": 2,
+        "hit": 1,
+        "recall": 0.5,
+        "missed": [
+          "session"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "timing"
+      ],
+      "preconditions": {
+        "required": 0,
+        "hit": 0,
+        "recall": null,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "routine_started",
+        "security_level_1",
+        "security_level_3",
+        "vehicle_stationary"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x10",
+          "0x11",
+          "0x14",
+          "0x19",
+          "0x22",
+          "0x27",
+          "0x2E",
+          "0x31",
+          "0x3E"
+        ],
+        "dids": [
+          "0xF186",
+          "0xF187",
+          "0xF18C",
+          "0x0140",
+          "0x0150"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x03"
+        ],
+        "security_levels": [
+          "0x01"
+        ],
+        "dtcs": [],
+        "intents": [
+          "session",
+          "security"
+        ],
+        "keywords": []
+      },
+      "notes": [],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "s3_keepalive_boundary",
+        "s3_keepalive_boundary",
+        "nrc_priority_session_over_identifier",
+        "nrc_priority_session_over_identifier",
+        "routine_start_results",
+        "routine_start_results",
+        "routine_start_results"
+      ],
+      "llm_stats": {
+        "calls": 2.0,
+        "http_requests": 2.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 24211.6
+      },
+      "fallback_events": [],
+      "wall_s": 24.3
+    },
+    {
+      "id": "NAT-005",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 18,
+      "label_targets": [
+        "did:0x0100",
+        "service:0x10",
+        "service:0x27",
+        "service:0x2E"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 2,
+        "fp": 0,
+        "fn": 2,
+        "missed": [
+          "service:0x10",
+          "service:0x27"
+        ],
+        "extra": []
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 3,
+        "fp": 10,
+        "fn": 1,
+        "missed": [
+          "did:0x0100"
+        ],
+        "extra": [
+          "did:0xDEAD",
+          "did:0xF186",
+          "routine:0x0201",
+          "routine:0x0202",
+          "routine:0x0203",
+          "routine:0xDEAD",
+          "service:0x11",
+          "service:0x22",
+          "service:0x31",
+          "service:0x3E"
+        ]
+      },
+      "categories": {
+        "required": 4,
+        "hit": 2,
+        "recall": 0.5,
+        "missed": [
+          "security",
+          "session"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "timing"
+      ],
+      "preconditions": {
+        "required": 2,
+        "hit": 2,
+        "recall": 1.0,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "routine_started",
+        "security_level_1",
+        "security_level_3",
+        "vehicle_stationary"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x2E"
+        ],
+        "dids": [
+          "0x0100"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x03"
+        ],
+        "security_levels": [
+          "0x01"
+        ],
+        "dtcs": [],
+        "intents": [
+          "write",
+          "security",
+          "session"
+        ],
+        "keywords": []
+      },
+      "notes": [],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "s3_keepalive_boundary",
+        "s3_keepalive_boundary",
+        "nrc_priority_session_over_identifier",
+        "nrc_priority_session_over_identifier",
+        "routine_start_results",
+        "routine_start_results",
+        "routine_start_results"
+      ],
+      "llm_stats": {
+        "calls": 2.0,
+        "http_requests": 2.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 23190.9
+      },
+      "fallback_events": [],
+      "wall_s": 23.2
+    },
+    {
+      "id": "NAT-007",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 18,
+      "label_targets": [
+        "did:0x0130",
+        "service:0x2E"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 2,
+        "fp": 2,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "service:0x10",
+          "service:0x22"
+        ]
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 1,
+        "fp": 12,
+        "fn": 1,
+        "missed": [
+          "did:0x0130"
+        ],
+        "extra": [
+          "did:0xDEAD",
+          "did:0xF186",
+          "routine:0x0201",
+          "routine:0x0202",
+          "routine:0x0203",
+          "routine:0xDEAD",
+          "service:0x10",
+          "service:0x11",
+          "service:0x22",
+          "service:0x27",
+          "service:0x31",
+          "service:0x3E"
+        ]
+      },
+      "categories": {
+        "required": 2,
+        "hit": 1,
+        "recall": 0.5,
+        "missed": [
+          "security"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "timing"
+      ],
+      "preconditions": {
+        "required": 2,
+        "hit": 2,
+        "recall": 1.0,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "routine_started",
+        "security_level_1",
+        "security_level_3",
+        "vehicle_stationary"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x22",
+          "0x2E",
+          "0x10"
+        ],
+        "dids": [
+          "0x0130"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x02",
+          "0x03"
+        ],
+        "security_levels": [
+          "0x01",
+          "0x03"
+        ],
+        "dtcs": [],
+        "intents": [
+          "negative",
+          "read",
+          "write",
+          "session",
+          "security"
+        ],
+        "keywords": []
+      },
+      "notes": [],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "s3_keepalive_boundary",
+        "s3_keepalive_boundary",
+        "nrc_priority_session_over_identifier",
+        "nrc_priority_session_over_identifier",
+        "routine_start_results",
+        "routine_start_results",
+        "routine_start_results"
+      ],
+      "llm_stats": {
+        "calls": 2.0,
+        "http_requests": 2.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 24356.7
+      },
+      "fallback_events": [],
+      "wall_s": 24.4
+    },
+    {
+      "id": "NAT-009",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 18,
+      "label_targets": [
+        "did:0x0150",
+        "service:0x10",
+        "service:0x27",
+        "service:0x2E"
+      ],
+      "parsed": {
+        "exact": true,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "missed": [],
+        "extra": []
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 3,
+        "fp": 10,
+        "fn": 1,
+        "missed": [
+          "did:0x0150"
+        ],
+        "extra": [
+          "did:0xDEAD",
+          "did:0xF186",
+          "routine:0x0201",
+          "routine:0x0202",
+          "routine:0x0203",
+          "routine:0xDEAD",
+          "service:0x11",
+          "service:0x22",
+          "service:0x31",
+          "service:0x3E"
+        ]
+      },
+      "categories": {
+        "required": 4,
+        "hit": 2,
+        "recall": 0.5,
+        "missed": [
+          "security",
+          "session"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "timing"
+      ],
+      "preconditions": {
+        "required": 3,
+        "hit": 3,
+        "recall": 1.0,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "routine_started",
+        "security_level_1",
+        "security_level_3",
+        "vehicle_stationary"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x10",
+          "0x27",
+          "0x2E"
+        ],
+        "dids": [
+          "0x0150"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x02",
+          "0x03"
+        ],
+        "security_levels": [
+          "0x01"
+        ],
+        "dtcs": [],
+        "intents": [
+          "write",
+          "security",
+          "session"
+        ],
+        "keywords": []
+      },
+      "notes": [],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "s3_keepalive_boundary",
+        "s3_keepalive_boundary",
+        "nrc_priority_session_over_identifier",
+        "nrc_priority_session_over_identifier",
+        "routine_start_results",
+        "routine_start_results",
+        "routine_start_results"
+      ],
+      "llm_stats": {
+        "calls": 2.0,
+        "http_requests": 2.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 24043.5
+      },
+      "fallback_events": [],
+      "wall_s": 24.1
+    },
+    {
+      "id": "NAT-011",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 18,
+      "label_targets": [
+        "routine:0x0201",
+        "service:0x31"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 1,
+        "fp": 0,
+        "fn": 1,
+        "missed": [
+          "routine:0x0201"
+        ],
+        "extra": []
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 2,
+        "fp": 11,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0xDEAD",
+          "did:0xF186",
+          "routine:0x0202",
+          "routine:0x0203",
+          "routine:0xDEAD",
+          "service:0x10",
+          "service:0x11",
+          "service:0x22",
+          "service:0x27",
+          "service:0x2E",
+          "service:0x3E"
+        ]
+      },
+      "categories": {
+        "required": 4,
+        "hit": 2,
+        "recall": 0.5,
+        "missed": [
+          "security",
+          "session"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "timing"
+      ],
+      "preconditions": {
+        "required": 2,
+        "hit": 2,
+        "recall": 1.0,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "routine_started",
+        "security_level_1",
+        "security_level_3",
+        "vehicle_stationary"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x31"
+        ],
+        "dids": [],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x03"
+        ],
+        "security_levels": [
+          "0x01"
+        ],
+        "dtcs": [],
+        "intents": [
+          "routine",
+          "sequence",
+          "negative"
+        ],
+        "keywords": []
+      },
+      "notes": [
+        "Dropped unknown did identifier 0x0201 (not in spec)."
+      ],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "s3_keepalive_boundary",
+        "s3_keepalive_boundary",
+        "nrc_priority_session_over_identifier",
+        "nrc_priority_session_over_identifier",
+        "routine_start_results",
+        "routine_start_results",
+        "routine_start_results"
+      ],
+      "llm_stats": {
+        "calls": 2.0,
+        "http_requests": 2.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 23811.9
+      },
+      "fallback_events": [],
+      "wall_s": 23.9
+    },
+    {
+      "id": "NAT-013",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 18,
+      "label_targets": [
+        "service:0x11"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 1,
+        "fp": 1,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0x0150"
+        ]
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 1,
+        "fp": 12,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0xDEAD",
+          "did:0xF186",
+          "routine:0x0201",
+          "routine:0x0202",
+          "routine:0x0203",
+          "routine:0xDEAD",
+          "service:0x10",
+          "service:0x22",
+          "service:0x27",
+          "service:0x2E",
+          "service:0x31",
+          "service:0x3E"
+        ]
+      },
+      "categories": {
+        "required": 2,
+        "hit": 2,
+        "recall": 1.0,
+        "missed": []
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "timing"
+      ],
+      "preconditions": {
+        "required": 0,
+        "hit": 0,
+        "recall": null,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "routine_started",
+        "security_level_1",
+        "security_level_3",
+        "vehicle_stationary"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x11"
+        ],
+        "dids": [
+          "0x0150"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x01",
+          "0x02",
+          "0x03"
+        ],
+        "security_levels": [
+          "0x01",
+          "0x03"
+        ],
+        "dtcs": [],
+        "intents": [
+          "negative",
+          "session",
+          "security",
+          "write"
+        ],
+        "keywords": []
+      },
+      "notes": [],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "s3_keepalive_boundary",
+        "s3_keepalive_boundary",
+        "nrc_priority_session_over_identifier",
+        "nrc_priority_session_over_identifier",
+        "routine_start_results",
+        "routine_start_results",
+        "routine_start_results"
+      ],
+      "llm_stats": {
+        "calls": 2.0,
+        "http_requests": 2.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 24213.6
+      },
+      "fallback_events": [],
+      "wall_s": 24.3
+    },
+    {
+      "id": "NAT-015",
+      "split": "dev",
+      "ambiguous": false,
+      "status": "completed",
+      "tests": 18,
+      "label_targets": [
+        "service:0x3E"
+      ],
+      "parsed": {
+        "exact": false,
+        "tp": 1,
+        "fp": 1,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0x0140"
+        ]
+      },
+      "exercised": {
+        "exact": false,
+        "tp": 1,
+        "fp": 12,
+        "fn": 0,
+        "missed": [],
+        "extra": [
+          "did:0xDEAD",
+          "did:0xF186",
+          "routine:0x0201",
+          "routine:0x0202",
+          "routine:0x0203",
+          "routine:0xDEAD",
+          "service:0x10",
+          "service:0x11",
+          "service:0x22",
+          "service:0x27",
+          "service:0x2E",
+          "service:0x31"
+        ]
+      },
+      "categories": {
+        "required": 3,
+        "hit": 2,
+        "recall": 0.6667,
+        "missed": [
+          "session"
+        ]
+      },
+      "produced_categories": [
+        "negative",
+        "positive",
+        "timing"
+      ],
+      "preconditions": {
+        "required": 0,
+        "hit": 0,
+        "recall": null,
+        "missed": []
+      },
+      "established_preconditions": [
+        "default_session",
+        "extended_session",
+        "programming_session",
+        "routine_started",
+        "security_level_1",
+        "security_level_3",
+        "vehicle_stationary"
+      ],
+      "fallback": false,
+      "fallback_reasons": [],
+      "parsed_raw": {
+        "services": [
+          "0x3E"
+        ],
+        "dids": [
+          "0x0140"
+        ],
+        "routines": [],
+        "sessions": [
+          "0x01"
+        ],
+        "security_levels": [],
+        "dtcs": [],
+        "intents": [
+          "positive",
+          "sequence",
+          "negative"
+        ],
+        "keywords": []
+      },
+      "notes": [],
+      "plan_attempts": 1,
+      "rejected": [],
+      "test_templates": [
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "negative_response_with_suppress_bit",
+        "s3_keepalive_boundary",
+        "s3_keepalive_boundary",
+        "nrc_priority_session_over_identifier",
+        "nrc_priority_session_over_identifier",
+        "routine_start_results",
+        "routine_start_results",
+        "routine_start_results"
+      ],
+      "llm_stats": {
+        "calls": 2.0,
+        "http_requests": 2.0,
+        "json_failures": 0.0,
+        "retries": 0.0,
+        "errors": 0.0,
+        "latency_ms": 23273.6
+      },
+      "fallback_events": [],
+      "wall_s": 23.3
+    }
+  ]
+}

@@ -1,0 +1,141 @@
+{
+ "what": "MockLLM pipeline output (plain engine, BM25) for all 15 seed requirements, before vs after the B3 context-budget/truncation changes; node_timings and llm latency excluded",
+ "all_identical": true,
+ "requirements": {
+  "REQ-001": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "7f404ff6b983e834",
+   "sha_after_minus_new_key": "7f404ff6b983e834",
+   "tests": 17
+  },
+  "REQ-002": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "7ff773eede90af28",
+   "sha_after_minus_new_key": "7ff773eede90af28",
+   "tests": 18
+  },
+  "REQ-003": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "4f4f6ddf1e9fd14b",
+   "sha_after_minus_new_key": "4f4f6ddf1e9fd14b",
+   "tests": 8
+  },
+  "REQ-004": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "c376a5216fa94555",
+   "sha_after_minus_new_key": "c376a5216fa94555",
+   "tests": 5
+  },
+  "REQ-005": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "eabba58de0fa1e4f",
+   "sha_after_minus_new_key": "eabba58de0fa1e4f",
+   "tests": 14
+  },
+  "REQ-006": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "b99fd14f2e09cc90",
+   "sha_after_minus_new_key": "b99fd14f2e09cc90",
+   "tests": 14
+  },
+  "REQ-007": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "4917cc172ef52e16",
+   "sha_after_minus_new_key": "4917cc172ef52e16",
+   "tests": 12
+  },
+  "REQ-008": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "ab74d55e1b28b93c",
+   "sha_after_minus_new_key": "ab74d55e1b28b93c",
+   "tests": 12
+  },
+  "REQ-009": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "89f6007a23dbbc6f",
+   "sha_after_minus_new_key": "89f6007a23dbbc6f",
+   "tests": 15
+  },
+  "REQ-010": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "a1af4be99909f1e1",
+   "sha_after_minus_new_key": "a1af4be99909f1e1",
+   "tests": 6
+  },
+  "REQ-011": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "63082c9b567b947d",
+   "sha_after_minus_new_key": "63082c9b567b947d",
+   "tests": 9
+  },
+  "REQ-012": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "6e8be6f25bde0862",
+   "sha_after_minus_new_key": "6e8be6f25bde0862",
+   "tests": 12
+  },
+  "REQ-013": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "5baecdbda0b58a68",
+   "sha_after_minus_new_key": "5baecdbda0b58a68",
+   "tests": 6
+  },
+  "REQ-014": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "30a8489b957eaef1",
+   "sha_after_minus_new_key": "30a8489b957eaef1",
+   "tests": 10
+  },
+  "REQ-015": {
+   "identical_excluding_new_zero_counter": true,
+   "added_llm_stats_keys": {
+    "truncations": 0.0
+   },
+   "sha_before": "feed212c6cf7eda9",
+   "sha_after_minus_new_key": "feed212c6cf7eda9",
+   "tests": 13
+  }
+ }
+}

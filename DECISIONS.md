@@ -197,3 +197,33 @@ This subagent was interrupted when the session ended before it could report back
   - 18 to 19 tests kept per requirement; planning was not selective.
   - Parse output was weak: identifiers not in the requirement were added, and `sessions` came back empty every time.
   - Explain dominates the time, at about 80 s per requirement (one call per test). Total was 103 to 126 s per requirement.
+
+### B3 (prompt tuning on the dev split)
+
+- **[PB-B3-TRUNC]** B3 found that the plan prompt was about 16.2k tokens, mostly the 154-option template catalog, but `num_ctx` is 4096.
+  - Ollama silently truncated the prompt to its last ~2k tokens, so the planner never saw the instruction or the requirement. It returned the same 18 tests for every requirement.
+  - Decision: keep `num_ctx=4096`, the owner's explicit 4 GB setting, and fix the pipeline instead:
+    - The plan node budgets its context only when the client declares a token limit. It sends a shortlist of relevant options, with the requirement placed after the options. Mock declares no limit, so its output is unchanged.
+    - `OllamaClient` detects truncation from `prompt_eval_count` and reports it verbatim.
+  - The fix is followed by more tuning on the dev split only.
+- **[PB-B3-REV5]** The first tuning round kept revision 5, which changes only `PARSE_INSTRUCTION`.
+  - Dev parsed F1 rose from 0.329 to 0.667.
+  - Category and precondition recall did not move, because of the truncation above.
+  - Each revision is a single run on 8 rows, so the scores are noisy.
+- **[PB-CTX-BUDGET]** When a backend declares `context_tokens` (Ollama does; mock does not), the plan node sends a compact plan prompt.
+  - It contains a shortlist of options ranked by relevance to the parsed requirement: at most 24 options, at most 4 per template.
+  - Each option keeps its real catalog index, so validation, instantiation and byte provenance are unchanged.
+  - The task comes after the options, and the prompt fits within 60% of `num_ctx`, estimated at 3 characters per token.
+  - A choice outside the shortlist is rejected.
+  - The mock keeps the full-catalog prompt, byte for byte. Its output on all 15 seed requirements is identical before and after, recorded in `outputs/prompt_tuning/mock_equivalence.json`.
+- **[PB-TRUNC-DETECT]** `OllamaClient` flags likely truncation in three cases:
+  - `prompt_eval_count` is close to `num_ctx`;
+  - `prompt_eval_count` sits at Ollama's cut point of `num_ctx`/2 while the estimated prompt is above 0.75 × `num_ctx`;
+  - the estimated prompt is larger than `num_ctx`.
+
+  Each flag is counted in `LLMStats.truncations` and quoted in the run's `fallback_events`.
+- **[PB-B3-SELECT]** Revision 8 is selected and frozen: the revision-5 parse prompt with the revision-8 plan prompt.
+  - It had the best dev score: 2.410 against 2.409 for revision 7, winning the tie-break with 5.38 tests per requirement against 6.62.
+  - Dev results: parsed F1 0.683, category recall 0.727, precondition recall 1.0, 0 truncations.
+  - Runs vary by about ±0.05 F1 because GPU decoding is not deterministic.
+- **[PB-B3-RISK]** The 3B model sometimes copies "(category)" into `template_id`; this showed up in revision 9, which was rejected. A possible fix is to strip that suffix before validation. It is deliberately not done, because it would come after the freeze.

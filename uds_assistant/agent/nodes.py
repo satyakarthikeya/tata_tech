@@ -14,10 +14,13 @@ from __future__ import annotations
 
 from uds_assistant.agent.options import (
     OptionRefs,
+    ShortlistEntry,
     TemplateOptions,
     build_catalog,
     option_refs,
+    plan_shortlist,
     primary_service,
+    render_shortlist,
     spec_index,
 )
 from uds_assistant.agent.state import (
@@ -34,10 +37,15 @@ from uds_assistant.llm.base import (
     PlannedTest,
     TestPlan,
     build_prompt,
+    context_budget,
+    drain_truncation_events,
+    estimate_tokens,
+    truncation_mark,
 )
 from uds_assistant.llm.prompts import (
     EXPLAIN_INSTRUCTION,
     PARSE_INSTRUCTION,
+    PLAN_COMPACT_TEMPLATE,
     PLAN_INSTRUCTION,
     SYSTEM_PROMPT,
 )
@@ -48,6 +56,18 @@ from uds_assistant.testgen.templates import TEMPLATES, applicable_params, valida
 
 COLLECTIONS = ("standard", "ecu_spec", "project")
 MAX_CITATIONS = 6
+PLAN_PROMPT_BUDGET = 0.6
+"""Fraction of a limited context window the plan prompt (system + user) may use; the
+rest is left for the JSON answer."""
+PLAN_SHORTLIST_MAX = 24
+"""Upper bound on options in a compact plan prompt (cut further to fit the budget)."""
+
+
+def _record_truncations(s: PipelineState, deps: PipelineDeps, node: str, mark: int) -> None:
+    """Copy truncation events the backend recorded since ``mark`` into the run (verbatim)."""
+    for event in drain_truncation_events(deps.llm, mark):
+        s.fallback_events.append(f"{node}: {event}")
+        s.log(node, event)
 
 
 def _catalog(deps: PipelineDeps) -> list[TemplateOptions]:
@@ -75,6 +95,7 @@ def parse(state: PipelineState, deps: PipelineDeps) -> PipelineState:
             "allowed_intents": list(ALL_INTENTS),
         },
     )
+    mark = truncation_mark(deps.llm)
     try:
         raw = deps.llm.complete_json(SYSTEM_PROMPT, prompt, ParsedRequirement)
         parsed = ParsedRequirement.model_validate(raw.model_dump())
@@ -82,6 +103,7 @@ def parse(state: PipelineState, deps: PipelineDeps) -> PipelineState:
         s.log("parse", f"LLM parse failed ({exc}); continuing with an empty parse.")
         s.fallback_events.append(f"parse: LLM call failed ({exc}); used an empty parse")
         parsed = ParsedRequirement(intents=["positive"])
+    _record_truncations(s, deps, "parse", mark)
 
     kept: dict[str, list[str]] = {}
     for field_name in ("services", "dids", "routines", "sessions", "security_levels", "dtcs"):
@@ -152,6 +174,65 @@ def _choice_key(template_id: str, index: int) -> tuple[str, int]:
     return (template_id, index)
 
 
+def _parsed_lists(parsed: ParsedRequirement) -> dict[str, list[str]]:
+    data = parsed.model_dump()
+    return {k: [str(v) for v in data[k]] for k in
+            ("services", "dids", "routines", "sessions", "security_levels", "dtcs", "intents")}
+
+
+def _parsed_line(parsed: dict[str, list[str]]) -> str:
+    return "; ".join(f"{k} {', '.join(v) if v else '-'}" for k, v in parsed.items())
+
+
+def compact_plan_prompt(
+    state: PipelineState,
+    deps: PipelineDeps,
+    catalog: list[TemplateOptions],
+    exclude: set[tuple[str, int]],
+    budget_tokens: int,
+) -> tuple[str, list[ShortlistEntry]]:
+    """Budgeted plan prompt for a backend with a context limit.
+
+    Options are shortlisted by relevance to the parsed requirement
+    (:func:`~uds_assistant.agent.options.plan_shortlist`) and shown with their real
+    catalog ``option_index``, so validation, instantiation and byte provenance are
+    unchanged. The list is cut (lowest-ranked first) until system + prompt fit
+    :data:`PLAN_PROMPT_BUDGET` of the window; the requirement and the instruction come
+    after the options.
+    """
+    parsed = _parsed_lists(state.parsed or ParsedRequirement())
+    ranked = plan_shortlist(deps.spec, catalog, parsed, exclude=exclude)[:PLAN_SHORTLIST_MAX]
+    limit = int(budget_tokens * PLAN_PROMPT_BUDGET)
+    kept = len(state.validated)
+
+    def render(entries: list[ShortlistEntry], fb: list[str]) -> str:
+        history = ""
+        if kept:
+            history += f"Already kept: {kept} test(s); offer only new ones.\n"
+        if fb:
+            history += "Validation feedback: " + " | ".join(fb) + "\n"
+        if history:
+            history += "\n"
+        return PLAN_COMPACT_TEMPLATE.format(
+            options=render_shortlist(catalog, entries) if entries else "(none left)",
+            history=history,
+            requirement_id=state.requirement_id,
+            requirement_text=state.requirement_text,
+            parsed=_parsed_line(parsed),
+            instruction=PLAN_INSTRUCTION,
+        )
+
+    feedback = [f[:160] for f in state.feedback[-3:]]
+    entries = ranked
+    prompt = render(entries, feedback)
+    while entries and estimate_tokens(SYSTEM_PROMPT, prompt) > limit:
+        entries = entries[:-1]
+        prompt = render(entries, feedback)
+    if estimate_tokens(SYSTEM_PROMPT, prompt) > limit:
+        prompt = render(entries, [])
+    return prompt, entries
+
+
 def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
     """LLM -> :class:`TestPlan`, restricted to registered templates and enumerated options."""
     s = state.model_copy(deep=True)
@@ -160,21 +241,34 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
     catalog = _catalog(deps)
     kept_keys = {_choice_key(v.choice.template_id, v.choice.option_index) for v in s.validated}
     rejected_keys = {_choice_key(r.template_id, r.option_index) for r in s.rejected}
-    prompt = build_prompt(
-        PLAN_INSTRUCTION,
-        {
-            "task": "plan",
-            "requirement_id": s.requirement_id,
-            "requirement_text": s.requirement_text,
-            "requirement": (s.parsed or ParsedRequirement()).model_dump(),
-            "templates": [t.model_dump() for t in catalog],
-            "rejected": [r.model_dump() for r in s.rejected],
-            "already_kept": [
-                {"template_id": k[0], "option_index": k[1]} for k in sorted(kept_keys)
-            ],
-            "feedback": s.feedback,
-        },
-    )
+    budget = context_budget(deps.llm)
+    shortlist: set[tuple[str, int]] | None = None
+    if budget is None:
+        # Unlimited backend (mock): the full catalog as JSON context, unchanged.
+        prompt = build_prompt(
+            PLAN_INSTRUCTION,
+            {
+                "task": "plan",
+                "requirement_id": s.requirement_id,
+                "requirement_text": s.requirement_text,
+                "requirement": (s.parsed or ParsedRequirement()).model_dump(),
+                "templates": [t.model_dump() for t in catalog],
+                "rejected": [r.model_dump() for r in s.rejected],
+                "already_kept": [
+                    {"template_id": k[0], "option_index": k[1]} for k in sorted(kept_keys)
+                ],
+                "feedback": s.feedback,
+            },
+        )
+    else:
+        prompt, entries = compact_plan_prompt(s, deps, catalog, kept_keys | rejected_keys, budget)
+        shortlist = {(e.template_id, e.option_index) for e in entries}
+        s.log(
+            "plan",
+            f"compact prompt: {len(entries)} shortlisted options, ~"
+            f"{estimate_tokens(SYSTEM_PROMPT, prompt)} of {budget} context tokens",
+        )
+    mark = truncation_mark(deps.llm)
     try:
         raw = deps.llm.complete_json(SYSTEM_PROMPT, prompt, TestPlan)
         # Re-validate from a plain dict: drops any extra (e.g. byte) fields a
@@ -184,6 +278,7 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
         s.log("plan", f"LLM plan failed ({exc}); no new choices this round.")
         s.fallback_events.append(f"plan: LLM call failed ({exc}); no new choices this round")
         test_plan = TestPlan()
+    _record_truncations(s, deps, "plan", mark)
     s.plan = test_plan
 
     offered = {t.template_id: len(t.options) for t in catalog}
@@ -201,6 +296,8 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
             )
         elif key in rejected_keys:
             reason = "choice previously failed validation"
+        elif shortlist is not None and key not in shortlist and key not in kept_keys:
+            reason = "option was not in the offered shortlist"
         if reason is not None:
             s.rejected.append(
                 RejectedChoice(
@@ -490,8 +587,10 @@ def explain(state: PipelineState, deps: PipelineDeps) -> PipelineState:
                 },
             },
         )
+        mark = truncation_mark(deps.llm)
         try:
             text = deps.llm.complete_text(SYSTEM_PROMPT, prompt).strip()
+            _record_truncations(s, deps, "explain", mark)
         except LLMError as exc:
             s.log("explain", f"{test.id}: LLM explanation failed ({exc}); kept template text.")
             s.fallback_events.append(
