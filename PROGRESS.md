@@ -726,3 +726,36 @@ The validation output, the count of requirements containing hex IDs, which are a
   - `RUN_MODEL_TESTS=1 pytest -m needs_model` with the real Ollama server and Chroma/fastembed: 13 passed in 123.61 s.
   - Freeze: the testgen, llm and agent trees, the prompts file and `data/gold` match the Part C freeze hashes, and `git diff` over the frozen code paths is empty.
 - **Not done, listed in FINAL_REPORT.md:** the UI has not been opened in a real browser by a person, only one model was tested, no real ECU was used, and 5 SWS disagreements remain open (D1, D3, D4, D8, D9).
+
+---
+
+# Part D (2026-10-04T03:11:32+05:30)
+
+Part D starts from HEAD `9383d0bc6f129366e16d035a378809cddfb02648`. The Part C freeze ended with C6.
+
+## D0 — The problem and a pre-registered plan
+
+**Weaknesses from Part C, all measured on fresh data:**
+1. The generated suite catches only 2 of the 15 held-out v2 bugs, in both modes. 11 misses came from no generated test applying the stimulus, and 2 from tests that apply it but never observe the response that would expose the bug.
+2. The model finds many more targets than the mock, but parsed precision is 0.565 on natural v2, with 30 false positives (25 services, 5 DIDs). The identifier grounding from C1 does not cover services.
+3. Rejected planner choices went up: 15 across the 35 old requirements and 12 on v2. They are invented template names, option numbers out of range, and options outside the shortlist.
+
+**Honesty rule.** The v1 and v2 bug sets and the natural v1 and v2 requirement sets have now all been seen. From here they are labelled "seen". An improvement counts only on fresh v3 sets, which will be written blind after a Part D freeze.
+
+**Fixes (general mechanisms, none aimed at a particular bug or requirement):**
+
+| Step | Fix |
+|---|---|
+| D1a | Parse precision: every parsed service must have evidence (a domain keyword in the text, an implied link from a kept identifier, or support from retrieved spec text). The planner schema is constrained so only offered template/option choices can be chosen. Built and tested with fake models only. |
+| D2 | A requirement-independent conformance sweep: systematic differential testing against the rules engine, with state setups, request mutations and generic observation probes after each stimulus. |
+| D1b | Dev-only tuning with the real model (8 natural v1 dev rows and the seed requirements), then the Part D freeze. Needs the GPU. |
+| D4 | Fresh blind sets: 15 bugs (v3) and 16 requirements (v3). |
+| D5 | Real evaluation, mock and ollama, with a 3-run noise check, before/after and interpretation. Needs the GPU. |
+| D6 | Docs, final checks and commit. |
+
+**Pre-registered metrics (decided before any v3 result):**
+- Headline for bugs: the generated suite means the system's full output, which is the requirement-driven tests for the 15 seed requirements plus the conformance sweep.
+- Also reported separately: requirement-driven tests only (comparable with Part C), and the conformance sweep alone.
+- Headline for requirements: natural v3 parsed precision, recall and F1, category recall and precondition recall.
+- Rejected planner choices and parsed false positives are reported with their types.
+- v1 and v2 results are reported as seen. Nothing is tuned on v3.
