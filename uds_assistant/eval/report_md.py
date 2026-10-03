@@ -1120,10 +1120,86 @@ def _freeze(report: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _part_d(report: dict[str, Any]) -> list[str]:
+    """Part D rows (report version 4): requirement-driven vs conformance sweep vs full output."""
+    conf = report.get("conformance")
+    if not conf:
+        return []
+    lines = ["## Part D — conformance sweep and full-output bug detection", ""]
+    if conf.get("status") != "completed":
+        return lines + [f"Not run: {conf.get('reason', conf.get('status'))}.", ""]
+    lines += [
+        ("_Part D rows. The existing headline above keeps its Part C meaning (requirement-driven "
+         "suite). (a) = requirement-driven tests from the 15 seed requirements (the Part C "
+         "'generated' suite); (b) = the requirement-independent conformance sweep alone; (c) = "
+         "the system's full output, (a) ∪ (b). The conformance sweep is generated from the spec "
+         "alone, uses no LLM and is identical in every mode; only (a), and therefore (c), "
+         "depend on the mode._"),
+        "",
+    ]
+    modes = _completed(report)
+    header = ["Bug set"] + [f"{m}: (a) / (b) / (c)" for m in modes]
+    rows = []
+    for key, info in report.get("part_d_catalogs", {}).items():
+        cells = [f"{key}: {info['label']}"]
+        for m in modes:
+            r = report["modes"][m].get("part_d_detection", {}).get(key)
+            if not isinstance(r, dict):
+                cells.append("not run")
+                continue
+            a, b, c = r["requirement_driven"], r["conformance"], r["full_output"]
+            cells.append(f"{a['detected']}/{a['bugs']} / {b['detected']}/{b['bugs']} / "
+                         f"**{c['detected']}/{c['bugs']}**")
+        rows.append(cells)
+    lines += _table(header, rows)
+    lines.append("")
+    for m in modes:
+        pdd = report["modes"][m].get("part_d_detection", {})
+        for key, r in pdd.items():
+            if not isinstance(r, dict):
+                continue
+            missed = r["full_output"]["undetected"]
+            lines.append(f"- {m} / {key}: missed by the full output: "
+                         f"{', '.join(f'`{x}`' for x in missed) or 'none'}; only the sweep: "
+                         f"{len(r['full_output']['only_conformance'])}, only requirement-driven: "
+                         f"{len(r['full_output']['only_requirement_driven'])}.")
+    prov = conf["provenance"]
+    rt = conf["bug_matrix_runtime_s"]
+    st = conf["stats"]
+    lines += [
+        "",
+        (f"- **Conformance sweep:** {conf['tests']} tests ({conf['steps']} steps), template "
+         f"`{conf['template_id']}` (not offered to the planner); {st['setups']} setups x "
+         f"{st['stimuli']} stimuli = {st['candidates']} candidates, cap {st['cap']}."),
+        (f"- **Generation time:** {conf['generation_s']} s (selection {st['selection_s']} s, "
+         f"instantiation + oracle validation {st['instantiation_s']} s)."),
+        f"- **Clean simulator:** {conf['clean_simulator_passed']}/{conf['tests']} pass.",
+        (f"- **Byte provenance (conformance):** {prov['passed']}/{prov['checked']} "
+         f"{'OK' if prov['ok'] else '**FAILED**'}."),
+        ("- **Bug-matrix runtime (conformance sweep):** "
+         + ", ".join(f"{k} {v} s" for k, v in rt.items() if k != "total")
+         + f"; total {rt['total']} s."),
+        "",
+        "Selection phases (greedy covering, see metric definitions):",
+        "",
+    ]
+    lines += _table(["Phase", "item kinds", "items", "covered", "tests added"],
+                    [[p["phase"], ", ".join(p["kinds"]), p["items"], p["covered"],
+                      p["added_tests"]] for p in st["phases"]])
+    lines += ["", "Selected tests by stimulus family (service) and by setup dimension:", ""]
+    lines += _table(["family", "tests"], [[k, v] for k, v in st["selected_by_family"].items()])
+    lines.append("")
+    lines += _table(["setup dimension", "tests"],
+                    [[k, v] for k, v in st["selected_by_setup_dimension"].items()])
+    lines.append("")
+    return lines
+
+
 def render_markdown(report: dict[str, Any]) -> str:
     """Return the Markdown report text."""
     lines = _header(report)
     lines += _headline(report)
+    lines += _part_d(report)
     lines += _interpretation(report)
     lines += _noise_section(report)
     lines += _side_by_side(report)

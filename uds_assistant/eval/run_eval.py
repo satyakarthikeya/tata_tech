@@ -57,6 +57,11 @@ from uds_assistant.simulator import (
 )
 from uds_assistant.spec.schema import load_spec
 from uds_assistant.store.audit import AuditStore
+from uds_assistant.testgen.conformance import (
+    CONFORMANCE_TEMPLATE_ID,
+    SELECTION_METHOD,
+    build_conformance_suite,
+)
 from uds_assistant.testgen.model import TestCase, dump_tests, load_tests
 from uds_assistant.testgen.templates import TEMPLATE_SET_NOTES, TEMPLATE_SET_VERSION, TEMPLATES
 
@@ -94,7 +99,7 @@ HEADLINE_ORDER = (
     "requirement_understanding_dev",
     "in_sample_bug_detection",
 )
-REPORT_VERSION = 3
+REPORT_VERSION = 4
 V2_DEFINITIONS: dict[str, str] = {
     "heldout_v2_bug_detection_rate": (
         "Same procedure as bug_detection_rate on the 15 held-out v2 bugs in "
@@ -117,6 +122,38 @@ V2_DEFINITIONS: dict[str, str] = {
     ),
 }
 """Extra metric definitions added in report version 3."""
+
+PART_D_CATALOGS: tuple[tuple[str, str, str | None], ...] = (
+    ("heldout_v2", "held-out v2 (15 bugs, SEEN: their Part C results were known before Part D)",
+     "HELDOUT_V2_BUG_CATALOG_PATH"),
+    ("heldout_v1", "held-out v1 (12 bugs, SEEN)", "HELDOUT_BUG_CATALOG_PATH"),
+    ("in_sample", "in-sample (26 bugs, templates tuned on these)", None),
+    ("heldout_v3", "held-out v3 (FRESH, written blind after the Part D freeze)",
+     "HELDOUT_V3_BUG_CATALOG_PATH"),
+)
+"""Part D detection catalogs: (key, label, path constant in ``uds_assistant.simulator``).
+
+``None`` is the default (in-sample) catalog. A catalog whose path constant is not exported by
+the simulator, or whose file does not exist, is skipped: this is the hook for a later v3 set.
+"""
+PART_D_DEFINITIONS: dict[str, str] = {
+    "part_d_detection": (
+        "Per bug catalog and LLM mode: (a) requirement_driven = the tests generated from the 15 "
+        "seed requirements (exactly the Part C 'generated' suite, comparable with Part C); "
+        "(b) conformance = the requirement-independent conformance sweep alone "
+        "(uds_assistant/testgen/conformance.py, generated deterministically from the spec; it "
+        "uses no LLM and is the same in every mode); (c) full_output = (a) union (b), the "
+        "system's full output. A bug counts as detected by a suite when a test that passes on "
+        "the clean simulator fails with the bug enabled; (c) is computed per bug from (a) and "
+        "(b) because every test runs on a fresh simulator."
+    ),
+    "conformance_sweep": (
+        "Setups (spec-derived states) x stimuli (spec-derived requests and mutations), each "
+        "followed by a fixed probe set; every expected byte from the rules engine; reduced by "
+        "deterministic greedy covering. " + SELECTION_METHOD
+    ),
+}
+"""Metric definitions added in report version 4 (Part D)."""
 PROGRESS_FILE = "PROGRESS.md"
 FREEZE_SECTION = "Part C freeze"
 
@@ -712,6 +749,91 @@ def _noise_check(
     }, extra_provenance
 
 
+def _det_summary(det: dict[str, Any]) -> dict[str, Any]:
+    return {"tests": det["tests"], "valid_tests": det["valid_tests"],
+            "invalid_tests": len(det["invalid_tests"]), "bugs": det["bugs"],
+            "detected": det["detected"], "rate": det["rate"], "undetected": det["undetected"]}
+
+
+def union_from_detections(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """Per-bug union of two ``metrics.bug_detection`` dicts over the same catalog."""
+    da = {p["bug_id"]: bool(p["detected"]) for p in a["per_bug"]}
+    db = {p["bug_id"]: bool(p["detected"]) for p in b["per_bug"]}
+    bugs = [p["bug_id"] for p in a["per_bug"]]
+    detected = [x for x in bugs if da[x] or db.get(x, False)]
+    return {
+        "tests": a["tests"] + b["tests"],
+        "bugs": len(bugs),
+        "detected": len(detected),
+        "rate": round(len(detected) / len(bugs), 4) if bugs else None,
+        "undetected": [x for x in bugs if x not in detected],
+        "only_requirement_driven": [x for x in bugs if da[x] and not db.get(x, False)],
+        "only_conformance": [x for x in bugs if db.get(x, False) and not da[x]],
+    }
+
+
+def _part_d_row(label: str, req: dict[str, Any], conf: dict[str, Any]) -> dict[str, Any]:
+    return {"label": label, "requirement_driven": _det_summary(req),
+            "conformance": _det_summary(conf), "full_output": union_from_detections(req, conf)}
+
+
+def resolve_part_d_catalogs(default_catalog: Any) -> dict[str, tuple[str, Any]]:
+    """Load every Part D catalog that exists (see :data:`PART_D_CATALOGS`), in order."""
+    import uds_assistant.simulator as sim
+
+    out: dict[str, tuple[str, Any]] = {}
+    for key, label, attr in PART_D_CATALOGS:
+        if attr is None:
+            out[key] = (label, default_catalog)
+            continue
+        path = getattr(sim, attr, None)
+        if path is None or not Path(path).exists():
+            continue
+        out[key] = (label, load_bug_catalog(path))
+    return out
+
+
+def _conformance_block(
+    spec: Any, catalogs: dict[str, tuple[str, Any]],
+) -> tuple[dict[str, Any], list[TestCase], dict[str, dict[str, Any]]]:
+    """Generate the conformance sweep (LLM-independent) and run it against every catalog."""
+    t0 = time.perf_counter()
+    suite = build_conformance_suite(spec)
+    gen_s = time.perf_counter() - t0
+    tests = suite.tests
+    t = time.perf_counter()
+    clean = run_suite(tests, spec)
+    clean_s = time.perf_counter() - t
+    t = time.perf_counter()
+    prov = check_provenance(spec, tests)
+    prov_s = time.perf_counter() - t
+    dets: dict[str, dict[str, Any]] = {}
+    runtimes: dict[str, float] = {}
+    for key, (_label, cat) in catalogs.items():
+        t = time.perf_counter()
+        dets[key] = m.bug_detection(run_bug_matrix(tests, spec, cat.ids, catalog=cat))
+        runtimes[key] = round(time.perf_counter() - t, 3)
+    block = {
+        "status": "completed",
+        "llm_independent": True,
+        "note": ("The conformance sweep is generated from the spec alone (no requirement, no "
+                 "LLM, no bug catalog), so it is identical in every LLM mode."),
+        "template_id": CONFORMANCE_TEMPLATE_ID,
+        "tests": len(tests),
+        "steps": suite.stats["steps"],
+        "clean_simulator_passed": clean.passed_count,
+        "generation_s": round(gen_s, 3),
+        "clean_run_s": round(clean_s, 3),
+        "provenance_s": round(prov_s, 3),
+        "bug_matrix_runtime_s": {**runtimes, "total": round(sum(runtimes.values()), 3)},
+        "bugs_per_catalog": {k: len(c.ids) for k, (_l, c) in catalogs.items()},
+        "provenance": prov,
+        "stats": suite.stats,
+        "detection": {k: _det_summary(d) for k, d in dets.items()},
+    }
+    return block, tests, dets
+
+
 def _run_mode(
     llm: Any,
     *,
@@ -734,6 +856,8 @@ def _run_mode(
     noise_runs: int,
     timings: dict[str, float],
     label: str,
+    part_d_catalogs: dict[str, tuple[str, Any]] | None = None,
+    conformance_dets: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], list[TestCase]]:
     """Generate tests with one LLM backend and compute every LLM-dependent metric."""
     # --- generation (seed requirements) ------------------------------------------------
@@ -774,6 +898,23 @@ def _run_mode(
         spec, heldout_v2_catalog, gold, gold_heldout_v2, generated, nat_tests,
         nat2_tests if natural else None)
     timings[f"{label}.execution_and_bug_matrices"] = time.perf_counter() - t
+
+    # --- Part D: requirement-driven vs conformance sweep vs full output ------------------
+    t = time.perf_counter()
+    part_d: dict[str, Any] = {"status": "not run (conformance sweep skipped)"}
+    if conformance_dets is not None and part_d_catalogs is not None:
+        req_dets: dict[str, dict[str, Any]] = {
+            "in_sample": m.bug_detection(gen_matrix),
+            "heldout_v1": m.bug_detection(gen_heldout),
+            "heldout_v2": heldout_v2_block["generated"],
+        }
+        for key, (_lbl, cat) in part_d_catalogs.items():
+            if key not in req_dets:
+                req_dets[key] = m.bug_detection(
+                    run_bug_matrix(generated, spec, cat.ids, catalog=cat))
+        part_d = {key: _part_d_row(lbl, req_dets[key], conformance_dets[key])
+                  for key, (lbl, _cat) in part_d_catalogs.items()}
+    timings[f"{label}.part_d_detection"] = time.perf_counter() - t
 
     # --- noise check (extra runs over natural v2; ollama only) ---------------------------
     t = time.perf_counter()
@@ -865,6 +1006,7 @@ def _run_mode(
         "latency": latency,
         "events": _events_block(seed_stats, nat_stats, nat2_stats),
         "provenance": provenance,
+        "part_d_detection": part_d,
     }
     timings[f"{label}.metrics"] = time.perf_counter() - t
     return block, generated
@@ -906,6 +1048,7 @@ def run_evaluation(
     agreement_requests: int = DEFAULT_REQUESTS,
     compare_mock: bool = True,
     noise_runs: int = 1,
+    conformance: bool = True,
 ) -> dict[str, Any]:
     """Run the full evaluation and write ``eval_report.{json,md}`` into ``out_dir``.
 
@@ -923,7 +1066,9 @@ def run_evaluation(
     rest only the noise check; mock is deterministic and runs once, plus an equality
     re-run). Every generated test
     of every mode is checked for byte provenance (:mod:`.provenance`);
-    ``report["provenance_ok"]`` is False if any test fails.
+    ``report["provenance_ok"]`` is False if any test fails. ``conformance=False`` skips the
+    Part D conformance sweep (reported as "not run"); otherwise it is generated once (it is
+    LLM-independent), checked for byte provenance and run against every Part D catalog.
     """
     if mode not in LLM_MODES:
         raise ValueError(f"mode must be one of {LLM_MODES}, got {mode!r}")
@@ -978,6 +1123,18 @@ def run_evaluation(
                                      catalog=heldout_v2_catalog)
     timings["gold_suites"] = time.perf_counter() - t
 
+    # --- LLM-independent: Part D conformance sweep --------------------------------------
+    t = time.perf_counter()
+    part_d_catalogs = resolve_part_d_catalogs(catalog)
+    conformance_dets: dict[str, dict[str, Any]] | None = None
+    if conformance:
+        conformance_report, _conf_tests, conformance_dets = _conformance_block(
+            spec, part_d_catalogs)
+    else:
+        conformance_report = {"status": "not run",
+                              "reason": "conformance=False / --skip-conformance given"}
+    timings["conformance_sweep"] = time.perf_counter() - t
+
     # --- per-mode generation + metrics ------------------------------------------------
     store = AuditStore(out / "audit.sqlite")
     llms: list[tuple[str, Any]] = []
@@ -992,7 +1149,8 @@ def run_evaluation(
         "heldout_v2_catalog": heldout_v2_catalog, "gold": gold,
         "gold_matrix": gold_matrix, "gold_heldout": gold_heldout,
         "gold_heldout_v2": gold_heldout_v2, "natural": natural, "noise_runs": noise_runs,
-        "timings": timings,
+        "timings": timings, "part_d_catalogs": part_d_catalogs,
+        "conformance_dets": conformance_dets,
     }
     modes: dict[str, Any] = {}
     generated_by_mode: dict[str, list[TestCase]] = {}
@@ -1079,10 +1237,14 @@ def run_evaluation(
         "simulator_rules_agreement": agreement,
         "udsoncan_virtual_can": can_result,
         "metric_definitions": {**m.METRIC_DEFINITIONS, **u.UNDERSTANDING_DEFINITIONS,
-                               **V2_DEFINITIONS},
+                               **V2_DEFINITIONS, **PART_D_DEFINITIONS},
         "precondition_mapping": u.PRECONDITION_MAPPING,
         "modes": modes,
-        "provenance_ok": all(modes[n]["provenance"]["ok"] for n in generated_by_mode),
+        "conformance": conformance_report,
+        "part_d_catalogs": {k: {"label": lbl, "bugs": len(c.ids)}
+                            for k, (lbl, c) in part_d_catalogs.items()},
+        "provenance_ok": (all(modes[n]["provenance"]["ok"] for n in generated_by_mode)
+                          and conformance_report.get("provenance", {"ok": True})["ok"]),
         "exports": export_info,
         "runtime_seconds": {k: round(v, 3) for k, v in timings.items()},
         "audit_db": "audit.sqlite",
@@ -1155,6 +1317,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--noise-runs", type=int, default=1, metavar="N",
                         help="ollama only: run the pipeline over natural v2 N times in total "
                         "(run 1 feeds the tables, all runs go into the noise check; default 1)")
+    parser.add_argument("--skip-conformance", action="store_true",
+                        help="skip the Part D conformance sweep (for fast test runs)")
     parser.add_argument("--before-after", action="store_true",
                         help="also render <out>/partC/before_after.md from the frozen baseline")
     parser.add_argument("--rerender", action="store_true",
@@ -1183,6 +1347,7 @@ def main(argv: list[str] | None = None) -> int:
         args.mode, args.out, args.engine, run_exported=not args.no_export_run,
         run_can=not args.skip_can, run_retrieval_compare=not args.skip_retrieval_compare,
         compare_mock=not args.no_mock_compare, noise_runs=args.noise_runs,
+        conformance=not args.skip_conformance,
     )
     for name in report["modes_run"]:
         block = report["modes"][name]
@@ -1212,6 +1377,19 @@ def main(argv: list[str] | None = None) -> int:
             f"union {det['union']['detected']}/{det['union']['bugs']}; "
             f"byte provenance {prov['passed']}/{prov['checked']}"
         )
+        pdd = block.get("part_d_detection", {})
+        if "status" not in pdd:
+            print(f"mode={name} PART D detection (requirement-driven / conformance sweep / full "
+                  "output): " + "; ".join(
+                      f"{k} {r['requirement_driven']['detected']}/{r['requirement_driven']['bugs']}"
+                      f" / {r['conformance']['detected']}/{r['conformance']['bugs']}"
+                      f" / {r['full_output']['detected']}/{r['full_output']['bugs']}"
+                      for k, r in pdd.items()))
+    conf = report["conformance"]
+    if conf.get("status") == "completed":
+        print(f"conformance sweep (LLM-independent): {conf['tests']} tests, generated in "
+              f"{conf['generation_s']} s, bug matrices {conf['bug_matrix_runtime_s']['total']} s, "
+              f"byte provenance {conf['provenance']['passed']}/{conf['provenance']['checked']}")
     print(f"actual mode={report['actual_mode']} (requested {report['requested_mode']})")
     run = report["exports"].get("run")
     if run:
@@ -1225,6 +1403,9 @@ def main(argv: list[str] | None = None) -> int:
             for f in provenance_failures(report["modes"][name]["provenance"]):
                 print(f"BYTE PROVENANCE FAILURE [{name}] {f['test_id']}: {f['problems']}",
                       file=sys.stderr)
+        for f in report["conformance"].get("provenance", {}).get("failures", []):
+            print(f"BYTE PROVENANCE FAILURE [conformance] {f['test_id']}: {f['problems']}",
+                  file=sys.stderr)
         return PROVENANCE_EXIT_CODE
     return 0
 

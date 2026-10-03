@@ -435,3 +435,24 @@ Both agents were launched after the Part C freeze. Their exact prompts are recor
   - The lexicon may be extended during D1b dev tuning only, using the 8 dev rows and the seed requirements.
   - The agent built and tested it with its own made-up sentences and never opened any natural-requirements file.
 - **[PD-MOCK-EQ]** Mock output on the 15 seed requirements is unchanged across 30 runs (two engines), recorded in `outputs/partD/mock_equivalence_D1a.json`. The "before" snapshot was taken from the working tree while another agent was editing, so I will re-check the final state.
+
+### D2 (requirement-independent conformance sweep)
+
+- **[PD2-SWEEP]** The conformance sweep is built only from the spec and the behaviour contract, with no bug catalog, no trigger lists and no simulator bug imports (a test checks this).
+  - A case is a setup, then one stimulus, then a fixed probe set.
+  - There are 54 setups, 215 stimuli and one probe set called `state_v1`.
+  - Every expected byte comes from the rules engine. Keys use the seed actually observed on the wire, and a suppressed seed counts as unseen.
+  - The probes read every DID, request every routine's results, request a seed per level, wait past S3 and read every DID again, then read DTCs.
+- **[PD2-SELECT]** The full cross product is 11,610 candidates. Selection is a deterministic lazy-greedy cover, in four priority phases, capped at 1200 tests. Phase 1 (every stimulus and response class, and every setup and service pair) is fully covered, and the cap is reached during phase 2.
+  - Phase 2 covered 1336 of 2038 transition items, so coverage is incomplete by design.
+  - Generation takes 4.7 s. The bug matrices for all 53 seen bugs take 44.8 s.
+- **[PD2-REGISTRY]** The sweep template is in a separate registry outside `TEMPLATES`, and provenance checks look in both. The planner and the mock are unchanged: the mock's 206 seed tests are identical in 206 of 206 cases (isolated worktree check, `outputs/partD/mock_equivalence_D2.json`).
+- **[PD2-EVAL]** The eval is now report version 4. For each bug catalog it reports three rows: (a) requirement-driven tests, (b) the sweep alone, and (c) the full output, which is a per-bug union of the two. The sweep uses no LLM, so (b) is the same in every mode. A `--skip-conformance` flag exists for quick runs, and there is a hook for a v3 catalog.
+- **[PD2-RESULT]** On the seen sets in mock mode (reported once, not tuned):
+  - v2 (15 bugs): 2/15 requirement-driven, 9/15 for the sweep, 9/15 full output.
+  - v1 (12 bugs): 10/12, 10/12, 12/12.
+  - In-sample (26 bugs): 25/26, 26/26, 26/26.
+  - Six v2 bugs are still missed, and no case was added for them.
+  - These numbers are not evidence of improvement: the sets are seen. The sweep was designed without them, but v3 is the real test.
+- **[PD2-FREEZE]** The Part C freeze table no longer matches, because D1a changed the agent and llm trees and the sweep adds a file under testgen. A Part D freeze table is needed.
+- **[PD2-RUNTIME]** The full test suite now takes about 9.5 minutes, because the report fixture runs the sweep (about 55 s) and the conformance tests take about 40 s.

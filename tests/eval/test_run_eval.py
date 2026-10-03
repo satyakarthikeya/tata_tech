@@ -152,7 +152,7 @@ def test_ollama_mode_falls_back_and_records_actual_mode(
     monkeypatch.setattr(llm_factory, "ollama_reachable", lambda *a, **k: False)
     report = run_eval.run_evaluation(
         "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
-        run_retrieval_compare=False,
+        run_retrieval_compare=False, conformance=False,
     )
     assert report["requested_mode"] == "ollama"
     assert report["actual_mode"] == "mock" and report["mode_fallback"] is True
@@ -274,7 +274,7 @@ def test_headline_keys_and_values(full_report: tuple[Path, dict[str, Any]]) -> N
     assert report["freeze"]["all_ok"] == (
         all(v["matches"] and v["worktree_clean"] for v in report["freeze"]["paths"].values())
         and report["freeze"]["commit"]["recorded_is_ancestor_of_head"] is True)
-    assert report["report_version"] == 3
+    assert report["report_version"] == 4
     order = head["order"]
     assert order[:2] == ["heldout_v2_bug_detection", "requirement_understanding_v2"]
     assert order[-4:] == ["heldout_bug_detection", "requirement_understanding",
@@ -367,7 +367,7 @@ def test_ollama_mode_runs_mock_side_by_side(tmp_path: Path, monkeypatch: pytest.
     _patch_fake_ollama(monkeypatch)
     report = run_eval.run_evaluation(
         "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
-        run_can=False, run_retrieval_compare=False, agreement_requests=20,
+        run_can=False, run_retrieval_compare=False, agreement_requests=20, conformance=False,
     )
     assert report["actual_mode"] == "ollama" and report["mode_fallback"] is False
     assert report["modes_run"] == ["mock", "ollama"]
@@ -392,7 +392,7 @@ def test_no_mock_compare_skips_mock(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     report = run_eval.run_evaluation(
         "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
         run_can=False, run_retrieval_compare=False, natural=False, agreement_requests=20,
-        compare_mock=False,
+        compare_mock=False, conformance=False,
     )
     assert report["modes_run"] == ["ollama"]
     assert report["modes"]["mock"]["status"] == "not run"
@@ -415,7 +415,7 @@ def test_provenance_failure_exits_nonzero_after_writing_report(
     monkeypatch.setattr(run_eval, "check_provenance", tampered)
     monkeypatch.setattr(run_eval, "run_evaluation", functools.partial(
         run_eval.run_evaluation, requirement_ids=["REQ-001"], natural=False,
-        agreement_requests=20))
+        agreement_requests=20, conformance=False))
     code = run_eval.main(["--mode", "mock", "--out", str(tmp_path), "--engine", "plain",
                           "--skip-can", "--skip-retrieval-compare", "--no-export-run"])
     assert code == run_eval.PROVENANCE_EXIT_CODE
@@ -622,6 +622,7 @@ def test_noise_runs_report_every_run_and_mean_range(
     report = run_eval.run_evaluation(
         "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
         run_can=False, run_retrieval_compare=False, agreement_requests=20, noise_runs=3,
+        conformance=False,
     )
     nc = report["modes"]["ollama"]["noise_check"]
     assert nc["status"] == "completed" and nc["requested_runs"] == 3 and len(nc["runs"]) == 3
@@ -664,6 +665,7 @@ def test_noise_runs_default_is_one_and_validated(
     report = run_eval.run_evaluation(
         "ollama", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
         run_can=False, run_retrieval_compare=False, agreement_requests=20, compare_mock=False,
+        conformance=False,
     )
     nc = report["modes"]["ollama"]["noise_check"]
     assert len(nc["runs"]) == 1 and nc["requested_runs"] == 1
@@ -694,7 +696,8 @@ def test_provenance_failure_in_a_noise_run_exits_nonzero(
 
     monkeypatch.setattr(run_eval, "check_provenance", tamper_second_nat2_check)
     monkeypatch.setattr(run_eval, "run_evaluation", functools.partial(
-        run_eval.run_evaluation, requirement_ids=["REQ-001"], agreement_requests=20))
+        run_eval.run_evaluation, requirement_ids=["REQ-001"], agreement_requests=20,
+        conformance=False))
     code = run_eval.main(["--mode", "ollama", "--out", str(tmp_path), "--engine", "plain",
                           "--skip-can", "--skip-retrieval-compare", "--no-export-run",
                           "--no-mock-compare", "--noise-runs", "3"])
@@ -734,3 +737,54 @@ def test_before_after_from_the_full_mock_report(
     n_open = ba.sws_open_count(
         (REPO_ROOT / "docs" / "SWS_DISAGREEMENTS.md").read_text(encoding="utf-8"))["open"]
     assert f"| SWS disagreements open | 9 | {n_open} | 9 | {n_open} |" in md
+
+
+# ----------------------------------------------------------------------------- Part D (D2)
+
+
+def test_part_d_conformance_rows(full_report: tuple[Path, dict[str, Any]]) -> None:
+    """Structure only: (a) requirement-driven, (b) conformance sweep, (c) = (a) union (b)."""
+    out, report = full_report
+    conf = report["conformance"]
+    assert conf["status"] == "completed" and conf["llm_independent"] is True
+    assert 0 < conf["tests"] <= 1200 and conf["clean_simulator_passed"] == conf["tests"]
+    assert conf["provenance"]["ok"] and conf["provenance"]["checked"] == conf["tests"]
+    assert conf["bug_matrix_runtime_s"]["total"] > 0 and conf["generation_s"] > 0
+    assert set(report["part_d_catalogs"]) >= {"heldout_v2", "heldout_v1", "in_sample"}
+    block = report["modes"]["mock"]
+    pdd = block["part_d_detection"]
+    assert set(pdd) == set(report["part_d_catalogs"])
+    v2 = pdd["heldout_v2"]
+    assert v2["requirement_driven"]["detected"] == (
+        block["heldout_v2_bug_detection"]["generated"]["detected"])
+    assert pdd["heldout_v1"]["requirement_driven"]["detected"] == (
+        block["heldout_bug_detection"]["generated"]["detected"])
+    assert pdd["in_sample"]["requirement_driven"]["detected"] == (
+        block["bug_detection"]["generated"]["detected"])
+    for row in pdd.values():
+        a, b, c = row["requirement_driven"], row["conformance"], row["full_output"]
+        assert max(a["detected"], b["detected"]) <= c["detected"] <= a["detected"] + b["detected"]
+        assert c["bugs"] == a["bugs"] == b["bugs"]
+    assert report["conformance"]["detection"]["heldout_v2"]["detected"] == v2["conformance"]["detected"]
+    assert "part_d_detection" in report["metric_definitions"]
+    md = (out / "eval_report.md").read_text(encoding="utf-8")
+    assert "## Part D — conformance sweep and full-output bug detection" in md
+    assert "identical in every mode" in md
+
+
+def test_union_from_detections_and_catalog_hook() -> None:
+    a = {"tests": 2, "per_bug": [{"bug_id": "x", "detected": True},
+                                 {"bug_id": "y", "detected": False},
+                                 {"bug_id": "z", "detected": False}]}
+    b = {"tests": 3, "per_bug": [{"bug_id": "x", "detected": False},
+                                 {"bug_id": "y", "detected": True},
+                                 {"bug_id": "z", "detected": False}]}
+    u = run_eval.union_from_detections(a, b)
+    assert u["detected"] == 2 and u["undetected"] == ["z"] and u["tests"] == 5
+    assert u["only_requirement_driven"] == ["x"] and u["only_conformance"] == ["y"]
+    from uds_assistant.simulator import load_bug_catalog
+
+    cats = run_eval.resolve_part_d_catalogs(load_bug_catalog())
+    assert list(cats)[:3] == ["heldout_v2", "heldout_v1", "in_sample"]
+    keys = [k for k, _l, _a in run_eval.PART_D_CATALOGS]
+    assert "heldout_v3" in keys  # the hook for a later fresh set (skipped while absent)

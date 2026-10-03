@@ -759,3 +759,11 @@ Part D starts from HEAD `9383d0bc6f129366e16d035a378809cddfb02648`. The Part C f
 - Headline for requirements: natural v3 parsed precision, recall and F1, category recall and precondition recall.
 - Rejected planner choices and parsed false positives are reported with their types.
 - v1 and v2 results are reported as seen. Nothing is tuned on v3.
+
+## D1a and D2 — done (2026-10-04T03:53:56+05:30)
+
+- **D1a** (commit a0ecd5c): service evidence grounding, optional evidence quotes, and constrained planner decoding. Built and tested with fake models only.
+- **D2:** the requirement-independent conformance sweep, with 1200 tests and every expected byte from the rules engine.
+- **Verification:** full suite 1257 passed, 14 skipped in 576 s; ruff clean; the rules, simulator, data, agent and llm trees are untouched by D2.
+- **Seen sets, mock mode (reported once, not tuned):** v2 requirement-driven 2/15, sweep alone 9/15, full output 9/15; v1 10/12, 10/12, 12/12; in-sample 25/26, 26/26, 26/26. These sets are seen. The fresh v3 sets decide whether this counts as improvement.
+- **Still to do:** D1b dev-only tuning with the real model (needs the GPU), the Part D freeze, the blind v3 sets (D4), the real evaluation (D5, needs the GPU), and the docs (D6).

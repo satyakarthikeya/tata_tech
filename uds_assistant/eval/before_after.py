@@ -216,9 +216,18 @@ def render_before_after(baseline: dict[str, Any], report: dict[str, Any],
     def held(key: str) -> Any:
         return lambda a: _det_txt(_det(a[key]))
 
+    def part_d(a: dict[str, Any]) -> str:
+        r = (a.get("part_d_detection") or {}).get("heldout_v2")
+        if not isinstance(r, dict):
+            return "n/a (no Part D rows in this report)"
+        b, c = r["conformance"], r["full_output"]
+        return f"{b['detected']}/{b['bugs']} / {c['detected']}/{c['bugs']}"
+
     rows: list[list[str]] = [
         ["**Held-out v2, FRESH (15 bugs): generated / gold / union**",
          *cells(None, held("heldout_v2_bug_detection"))],
+        ["Part D, held-out v2 (SEEN after Part C): conformance sweep alone / full output",
+         *cells(None, part_d)],
         ["Held-out v1, SEEN (12 bugs): generated / gold / union",
          *cells(lambda b: _det_txt(b["heldout_v1"]), held("heldout_bug_detection"))],
         ["In-sample (26 bugs): generated / gold / union",

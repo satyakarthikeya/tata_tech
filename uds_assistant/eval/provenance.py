@@ -2,7 +2,9 @@
 
 The correctness rule of the project is that the LLM never produces bytes that reach a
 final test. This module checks that rule after the fact: each generated test is
-re-instantiated from ``TEMPLATES[test.template_id].instantiate(spec, params)`` where
+re-instantiated from ``TEMPLATES[test.template_id].instantiate(spec, params)`` (or, for the
+requirement-independent conformance sweep, from its own registry, which the planner never
+sees; :func:`uds_assistant.testgen.conformance.resolve_template`) where
 ``params`` are the test's *stored* parameters re-validated through the template's
 ``params_model``, and every step (request bytes, expected responses, time / environment /
 DTC-status steps, including their descriptions and timing limits) must be identical.
@@ -18,8 +20,8 @@ from collections.abc import Iterable
 from typing import Any
 
 from uds_assistant.spec.schema import EcuSpec
+from uds_assistant.testgen.conformance import resolve_template
 from uds_assistant.testgen.model import TestCase
-from uds_assistant.testgen.templates import TEMPLATES
 
 MAX_FAILURE_DETAILS = 50
 """Cap on the failure records stored in the report (the counts are always complete)."""
@@ -43,9 +45,9 @@ def _step_diffs(got: list[dict[str, Any]], want: list[dict[str, Any]]) -> list[s
 def check_test(spec: EcuSpec, test: TestCase) -> list[str]:
     """Return the provenance problems of one generated test (empty list = provenance OK)."""
     tid = test.template_id
-    if tid is None or tid not in TEMPLATES:
+    template = resolve_template(tid)
+    if template is None:
         return [f"template_id {tid!r} is not a registered template"]
-    template = TEMPLATES[tid]
     try:
         params = template.params_model.model_validate(test.parameters)
     except ValueError as exc:
@@ -102,7 +104,8 @@ def check_provenance(spec: EcuSpec, tests: Iterable[TestCase]) -> dict[str, Any]
         "failures": failures[:MAX_FAILURE_DETAILS],
         "definition": (
             "each generated test re-instantiated from TEMPLATES[template_id].instantiate(spec, "
-            "params_model.model_validate(test.parameters)); template_id must be registered, "
+            "params_model.model_validate(test.parameters)) (conformance-sweep tests: from the "
+            "conformance registry, which the planner never sees); template_id must be registered, "
             "parameters must round-trip, and every step must be identical (request and "
             "expected-response bytes, time/environment/DTC steps, descriptions, timing limits)."
         ),
