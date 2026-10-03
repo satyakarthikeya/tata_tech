@@ -584,3 +584,23 @@ Steps run in this order, because C1, C2 and C3 all change the pipeline or the or
   - The udsoncan virtual-CAN sequence passes.
 - Full suite: 1023 passed, 13 skipped. Ruff is clean.
 - Open SWS disagreements: 9 before, 5 now.
+
+## C1 to C3 — done (2026-10-03T22:58:04+05:30)
+
+- **C1:** template-id normalisation, identifier grounding and batched explain. Mock output is unchanged: all 171 tests had identical steps.
+- **C2:** D2, D5, D6 and D7 are fixed in the engine, the simulator and the contract. Agreement was 100% on two seeds with more than 13,000 requests each. All 60 gold tests and the CAN sequence pass.
+- **C3:** template set v3, with 27 templates and a v3 set version.
+- **Verification:** full suite 1083 passed, 13 skipped; ruff clean.
+
+## Part C freeze (2026-10-03T22:58:04+05:30)
+
+No change to templates, prompts, planner or gold is allowed from here until the end of C6.
+
+| What | Hash |
+|---|---|
+| Commit | `5a36eb432ed5aa05fb4a8ccb6776e8232a43d309` |
+| `uds_assistant/testgen` tree | `a4b6491fc2d01421c4cff10143aabd3c75017df1` |
+| `uds_assistant/llm` tree | `95ebf497e3e31a4d6d1377ca960b15e94e5cad66` |
+| `uds_assistant/agent` tree | `9696c352234501d72ac54c18af5189317482321d` |
+| `uds_assistant/llm/prompts.py` blob | `c0c6d5a6f0b64790beb13bf0179a6ef7877f31f7` |
+| `data/gold` tree | `778740195a3dc923ae2f6a34fd4b78e11d87b024` |
