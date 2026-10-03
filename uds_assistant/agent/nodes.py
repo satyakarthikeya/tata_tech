@@ -64,8 +64,11 @@ MAX_CITATIONS = 6
 PLAN_PROMPT_BUDGET = 0.6
 """Fraction of a limited context window the plan prompt (system + user) may use; the
 rest is left for the JSON answer."""
-PLAN_SHORTLIST_MAX = 24
-"""Upper bound on options in a compact plan prompt (cut further to fit the budget)."""
+PLAN_SHORTLIST_MAX = 30
+"""Upper bound on options in a compact plan prompt (cut further to fit the budget). Raised
+from 24 in Part C3: with template set v3 the full relevant list of a write requirement grew
+to 26 and the old cap dropped a previously offered option; 30 options stay at ~1.7k of the
+~2.4k-token plan budget for num_ctx 4096."""
 EXPLAIN_TOKENS_PER_TEST = 90
 """Estimated answer tokens for one explanation (2-3 sentences plus JSON framing). A batch is
 sized so that prompt tokens + this * tests stays inside the context window; with num_ctx

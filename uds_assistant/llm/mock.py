@@ -119,6 +119,14 @@ _PER_SESSION_TEMPLATES = frozenset(
 )
 _MAX_OPTIONS_PER_TEMPLATE = 6
 
+# Requirement wording about stored values (template set v3: write_did_value_retained).
+_RETENTION_KEYWORDS: tuple[str, ...] = (
+    "retain", "persist", "surviv", "non-volatile", "nonvolatile", "kept", "lost",
+)
+_BYTE_ORDER_KEYWORDS: tuple[str, ...] = (
+    "byte order", "endian", "big-endian", "multi-byte", "most significant",
+)
+
 
 class MockLLM:
     """Deterministic keyword/regex "LLM" used in mock mode and in tests."""
@@ -270,6 +278,10 @@ def _plan(ctx: dict[str, Any]) -> TestPlan:
         for r in ctx.get("rejected", []) or []
     }
     templates: list[dict[str, Any]] = ctx.get("templates", []) or []
+    text = str(ctx.get("requirement_text", "")).lower()
+    retention = any(_has(text, kw) for kw in _RETENTION_KEYWORDS)
+    byte_order = any(_has(text, kw) for kw in _BYTE_ORDER_KEYWORDS)
+    suppress_routine = "suppress" in intents and "0x31" in r_services
 
     def first_pass(tid: str, opt: dict[str, Any]) -> str | None:
         """Identifier-driven choices; return a rationale or None."""
@@ -281,6 +293,8 @@ def _plan(ctx: dict[str, Any]) -> TestPlan:
                 _hits(opt, "dids", r_dids) or "unknown_identifier" in opt.get("flags", [])
             ):
                 return "Negative read: DID unknown or not readable in this session."
+            if _hits(opt, "dids", r_dids):
+                return "Referenced DID is not readable in every session; verify it is refused here."
         elif tid in (
             "write_did_secured_positive",
             "write_did_without_security",
@@ -310,8 +324,29 @@ def _plan(ctx: dict[str, Any]) -> TestPlan:
             r_services & {"0x19", "0x14"} or "dtc" in intents or _hits(opt, "dtcs", r_dtcs)
         ):
             return "Requirement concerns DTCs; clearing one DTC must not clear the others."
-        elif tid == "routine_start_results" and _hits(opt, "routines", r_routines):
-            return "Requirement references this routine; run it and read its results."
+        elif tid == "routine_start_results":
+            if _hits(opt, "routines", r_routines):
+                return "Requirement references this routine; run it and read its results."
+            if not r_routines and suppress_routine and "suppress bit" in str(opt.get("summary", "")):
+                return "Suppress bit on RoutineControl named; start with it set, read results."
+        # ---- template set v3: state-transition and edge probes, same identifier keys ----
+        elif tid == "read_did_invalid_length":
+            if _hits(opt, "dids", r_dids) and ("read" in intents or "0x22" in r_services):
+                return "Referenced DID is read; malformed DID-list lengths must be rejected."
+            if not r_dids and "0x22" in r_services and "length" in intents:
+                return "Requirement concerns read request length; probe malformed DID lists."
+        elif tid == "session_change_resets_routine":
+            if _hits(opt, "routines", r_routines):
+                return "Referenced routine; its status must not survive a session change/reset."
+            if not r_routines and "routine" in intents and r_services & {"0x10", "0x11"}:
+                return "Routines and session change/reset named; check routine status is cleared."
+        elif tid == "write_did_value_retained":
+            if _hits(opt, "dids", r_dids) and ("write" in intents or "0x2E" in r_services):
+                return "Referenced DID is written; check the stored value and that it is kept."
+            if not r_dids and byte_order and "multi_byte_value" in opt.get("flags", []):
+                return "Byte order of multi-byte values named; write one and read it back."
+            if not r_dids and retention and ("write" in intents or "0x2E" in r_services):
+                return "Retention of written values named; write, time out/reset, read back."
         return None
 
     chosen: list[PlannedTest] = []
@@ -342,6 +377,8 @@ def _plan(ctx: dict[str, Any]) -> TestPlan:
             if r_sessions:
                 unknown = [p for p in unknown if _hits(p[0], "sessions", r_sessions)] or unknown
             picks = known + unknown[:1]
+        elif tid == "read_did_invalid_length" and not r_dids:
+            picks = picks[:1]  # generic length probe: one DID is enough
         take(tid, picks)
 
     # Second pass: derived checks use identifiers implied by the first pass
@@ -364,6 +401,7 @@ def _plan(ctx: dict[str, Any]) -> TestPlan:
                 "security_invalid_key_lockout",
                 "session_change_relocks_security",
                 "seed_replay_rejected",
+                "seed_request_while_unlocked",
             ):
                 if _hits(opt, "security_levels", implied["security_levels"]) and (
                     intents & {"security", "lockout", "write"}
@@ -375,6 +413,8 @@ def _plan(ctx: dict[str, Any]) -> TestPlan:
                             "Security level involved; verify a session change re-locks it.",
                         "seed_replay_rejected":
                             "Security level involved; verify a replayed key is rejected.",
+                        "seed_request_while_unlocked":
+                            "Security level involved; a seed request while unlocked keeps it.",
                     }[tid]
             elif tid == "s3_timeout_reverts_session":
                 if _hits(opt, "sessions", implied["sessions"]) and (

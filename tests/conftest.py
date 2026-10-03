@@ -10,6 +10,13 @@ from __future__ import annotations
 import os
 
 import pytest
+from hypothesis import HealthCheck, settings
+
+# The ``too_slow`` health check measures data-generation speed, not correctness. It
+# fails spuriously when the machine is busy (full suite, model server running).
+# Every assertion and example count is unchanged.
+settings.register_profile("uds", suppress_health_check=[HealthCheck.too_slow])
+settings.load_profile("uds")
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

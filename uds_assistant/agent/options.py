@@ -155,6 +155,27 @@ def describe_option(spec: EcuSpec, template_id: str, index: int, params: BaseMod
     if isinstance(p.get("code"), str):
         _add(refs.dtcs, str(p["code"]))
         bits.append(f"DTC {p['code']}")
+    # Variant fields (template set v3). Only non-default values are described, so the
+    # summaries of pre-existing options are unchanged.
+    if p.get("security") == "locked":
+        bits.append("while security is still locked")
+    if p.get("recovery") == "ecu_reset":
+        bits.append("then ECU reset during the lockout delay")
+    if p.get("suppress_positive") is True:
+        bits.append("with the suppress bit set")
+    for key in ("transition", "after"):
+        value = p.get(key)
+        if isinstance(value, str):
+            if value == "ecu_reset":
+                bits.append("across an ECU reset")
+            elif value == "session_change":
+                bits.append("across a session change")
+            elif value == "s3_timeout":
+                bits.append("across an S3 session timeout")
+    if writes and isinstance(did_id, int):
+        did = spec.get_did(did_id)
+        if did is not None and did.length > 1:
+            flags.append("multi_byte_value")
 
     summary = f"{tpl.description} " + ", ".join(bits) if bits else tpl.description
     return TemplateOption(index=index, summary=summary.strip(), refs=refs, flags=flags)
@@ -205,6 +226,10 @@ _PRIMARY_SERVICE: dict[str, int] = {
     "dtc_clear_specific_keeps_others": 0x14,
     "s3_keepalive_boundary": 0x3E,
     "routine_start_results": 0x31,
+    "read_did_invalid_length": 0x22,
+    "seed_request_while_unlocked": 0x27,
+    "session_change_resets_routine": 0x31,
+    "write_did_value_retained": 0x2E,
 }
 
 

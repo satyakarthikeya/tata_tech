@@ -9,8 +9,9 @@ from uds_assistant.testgen.templates import TEMPLATES, applicable_params, valida
 
 
 def test_registry_size() -> None:
-    # Upper bound raised from 20 in Phase 7 (template set v2, DECISIONS.md [EVAL-TPL-V2]).
-    assert 8 <= len(TEMPLATES) <= 30
+    # Upper bound raised from 20 in Phase 7 (template set v2, DECISIONS.md [EVAL-TPL-V2]) and
+    # to 32 in Part C3 (template set v3: hard cap for the coverage templates).
+    assert 8 <= len(TEMPLATES) <= 32
 
 
 @pytest.mark.parametrize("template_id", sorted(TEMPLATES))

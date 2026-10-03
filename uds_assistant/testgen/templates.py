@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -32,6 +33,7 @@ from uds_assistant.rules.engine import RuleResult, RulesSession
 from uds_assistant.rules.state import dtc_code_to_int, with_dtc_status
 from uds_assistant.spec.schema import DidDef, EcuSpec
 from uds_assistant.testgen import templates_v2 as v2
+from uds_assistant.testgen import templates_v3 as v3
 from uds_assistant.testgen.model import (
     AdvanceTimeStep,
     Citation,
@@ -461,9 +463,23 @@ def _unsupported_subfunction_applicable(spec: EcuSpec) -> list[UnsupportedSubfun
 
 class SecurityLockoutParams(BaseModel):
     level: int
+    recovery: Literal["delay", "ecu_reset"] = "delay"
+    """How the tester tries to leave the lockout: wait for the delay (base variant), or first
+    reset the ECU while the delay is still running (the lockout must outlive the reset)."""
+
+
+def _session_allows(spec: EcuSpec, session: int, sid: int) -> bool:
+    sess = spec.get_session(session)
+    return sess is not None and sid in sess.allowed_services
 
 
 def _security_lockout_instantiate(spec: EcuSpec, p: SecurityLockoutParams) -> TestCase:
+    """Behaviour class: invalid-key counting, lockout delay and lockout lifetime.
+
+    Wrong keys up to ``max_attempts`` arm the level's delay; seed requests are refused while
+    it runs. The ``ecu_reset`` variant resets the ECU during the delay and requests a seed
+    again (a reset must not be a way around the delay). Both variants end with delay expiry.
+    """
     level_def = spec.get_security_level(p.level)
     assert level_def is not None
     session = level_def.allowed_sessions[0]
@@ -480,6 +496,17 @@ def _security_lockout_instantiate(spec: EcuSpec, p: SecurityLockoutParams) -> Te
         security_request_seed(level_def.seed_subfunction),
         "Request seed during lockout -> expect NRC 0x37.",
     )
+    reset = p.recovery == "ecu_reset"
+    if reset:
+        b.send(
+            ecu_reset(spec.ecu_reset.supported_subfunctions[0]),
+            "Reset the ECU while the lockout delay is still running.",
+        )
+        b.goto_session(session, "Re-enter the level's session after the reset.")
+        b.send(
+            security_request_seed(level_def.seed_subfunction),
+            "Request seed right after the reset -> the running delay still applies.",
+        )
     b.advance(level_def.delay_ms + 1, "Advance past the lockout delay.")
     # The wait also exceeds S3, so the ECU is back in the default session where
     # SecurityAccess is not allowed; re-enter the level's session first so the
@@ -490,20 +517,30 @@ def _security_lockout_instantiate(spec: EcuSpec, p: SecurityLockoutParams) -> Te
         "Request seed after delay expiry -> seed issued again.",
     )
     return TestCase(
-        id=f"tpl_security_lockout_{p.level:02x}",
-        title=f"SecurityAccess level {p.level:#x} lockout after {level_def.max_attempts} wrong keys",
+        id=f"tpl_security_lockout_{p.level:02x}" + ("_reset" if reset else ""),
+        title=f"SecurityAccess level {p.level:#x} lockout after {level_def.max_attempts} wrong keys"
+        + (", delay kept across an ECU reset" if reset else ""),
         category="security",
         template_id="security_invalid_key_lockout",
         parameters=p.model_dump(),
         steps=b.steps,
         citations=[Citation(source="behaviour_contract", ref="0x27 SecurityAccess")],
-        explanation="Wrong keys give 0x35 until max_attempts, then 0x36 and arm a delay (0x37 while active).",
+        explanation="Wrong keys give 0x35 until max_attempts, then 0x36 and arm a delay (0x37 while active)."
+        + (" An ECU reset during the delay does not end it." if reset else ""),
         origin="generated",
     )
 
 
 def _security_lockout_applicable(spec: EcuSpec) -> list[SecurityLockoutParams]:
-    return [SecurityLockoutParams(level=lvl.level) for lvl in spec.security_levels]
+    """Every level (delay variant), then every level whose session allows ECUReset (reset variant)."""
+    out = [SecurityLockoutParams(level=lvl.level) for lvl in spec.security_levels]
+    if spec.ecu_reset.supported_subfunctions:
+        out += [
+            SecurityLockoutParams(level=lvl.level, recovery="ecu_reset")
+            for lvl in spec.security_levels
+            if lvl.allowed_sessions and _session_allows(spec, lvl.allowed_sessions[0], 0x11)
+        ]
+    return out
 
 
 # --------------------------------------------------------------------- s3_timeout_reverts_session
@@ -590,10 +627,21 @@ def _routine_sequence_applicable(spec: EcuSpec) -> list[RoutineSequenceParams]:
 class ConditionNotMetParams(BaseModel):
     kind: str  # "did" or "routine"
     target: int
+    security: Literal["unlocked", "locked"] = "unlocked"
+    """``unlocked`` (base): only the precondition fails. ``locked``: the precondition fails AND
+    the required security level is still locked, which probes the NRC priority of the two."""
 
 
 def _condition_not_met_instantiate(spec: EcuSpec, p: ConditionNotMetParams) -> TestCase:
+    """Behaviour class: environmental preconditions on writes / routine starts and their NRC rank.
+
+    The base variant unlocks and violates only the precondition. The ``locked`` variant
+    violates the precondition while the required level is still locked, so the answer shows
+    which of the two checks the ECU evaluates first (expected value from the oracle).
+    """
     b = _Builder(spec)
+    locked = p.security == "locked"
+    lock_txt = " and security locked" if locked else ""
     if p.kind == "did":
         did_def = spec.get_did(p.target)
         assert did_def is not None and did_def.write_security_level is not None
@@ -602,44 +650,59 @@ def _condition_not_met_instantiate(spec: EcuSpec, p: ConditionNotMetParams) -> T
         value = did_def.value_range.min if did_def.value_range is not None else 0
         b.goto_session(session)
         b.set_environment(vehicle_speed_kph=10, description="Vehicle moving.")
-        b.unlock(level)
+        if not locked:
+            b.unlock(level)
         b.send(
             write_did(p.target, _value_bytes(value, did_def.length)),
-            "Write while vehicle is moving -> expect NRC 0x22.",
+            "Write while moving and still locked -> the security check ranks first."
+            if locked else "Write while vehicle is moving -> expect NRC 0x22.",
         )
-        title = f"Write DID {did_def.name} while vehicle is moving"
+        title = f"Write DID {did_def.name} while vehicle is moving{lock_txt}"
     else:
         routine = spec.get_routine(p.target)
         assert routine is not None
         session = routine.sessions[0]
         b.goto_session(session)
         b.set_environment(vehicle_speed_kph=10, description="Vehicle moving.")
-        if routine.security_level is not None:
+        if routine.security_level is not None and not locked:
             b.unlock(routine.security_level)
         b.send(
             routine_control(0x01, p.target, bytes(routine.option_record_length)),
-            "Start routine while vehicle is moving -> expect NRC 0x22.",
+            "Start routine while moving and still locked -> the security check ranks first."
+            if locked else "Start routine while vehicle is moving -> expect NRC 0x22.",
         )
-        title = f"Start routine {routine.name} while vehicle is moving"
+        title = f"Start routine {routine.name} while vehicle is moving{lock_txt}"
     return TestCase(
-        id=f"tpl_condition_not_met_{p.kind}_{p.target:04x}",
+        id=f"tpl_condition_not_met_{p.kind}_{p.target:04x}" + ("_locked" if locked else ""),
         title=title,
         category="negative",
         template_id="condition_not_met",
         parameters=p.model_dump(),
         steps=b.steps,
         citations=[Citation(source="behaviour_contract", ref="conditions.requires")],
-        explanation="vehicle_stationary required but speed != 0 -> NRC 0x22.",
+        explanation=(
+            "Precondition failing while the level is locked -> the security NRC outranks the "
+            "condition NRC." if locked else "vehicle_stationary required but speed != 0 -> NRC 0x22."
+        ),
         origin="generated",
     )
 
 
 def _condition_not_met_applicable(spec: EcuSpec) -> list[ConditionNotMetParams]:
-    out = [ConditionNotMetParams(kind="did", target=d.id) for d in _condition_gated_dids(spec)]
+    """Every condition-gated DID / routine (unlocked), then those that also need a level (locked)."""
+    gated_dids = _condition_gated_dids(spec)
+    gated_routines = [r for r in spec.routines if r.conditions.requires]
+    out = [ConditionNotMetParams(kind="did", target=d.id) for d in gated_dids]
+    out += [ConditionNotMetParams(kind="routine", target=r.id) for r in gated_routines]
     out += [
-        ConditionNotMetParams(kind="routine", target=r.id)
-        for r in spec.routines
-        if r.conditions.requires
+        ConditionNotMetParams(kind="did", target=d.id, security="locked")
+        for d in gated_dids
+        if d.write_security_level is not None
+    ]
+    out += [
+        ConditionNotMetParams(kind="routine", target=r.id, security="locked")
+        for r in gated_routines
+        if r.security_level is not None
     ]
     return out
 
@@ -735,7 +798,7 @@ class Template:
         return self.instantiate_fn(spec, model)
 
 
-TEMPLATE_SET_VERSION = "v2"
+TEMPLATE_SET_VERSION = "v3"
 """Bumped whenever templates are added/changed; recorded in the evaluation report."""
 
 TEMPLATE_SET_NOTES: dict[str, str] = {
@@ -747,6 +810,14 @@ TEMPLATE_SET_NOTES: dict[str, str] = {
         "routine start+results incl. 0x78) and a fix so routine starts carry the spec'd option "
         "record. Added in Phase 7 AFTER inspecting which catalog bugs v1 missed; the same "
         "author wrote the bug catalog, so v2 detection is an optimistic, non-independent number."
+    ),
+    "v3": (
+        "v2 + 4 generic templates (malformed 0x22 lengths, seed request while unlocked, routine "
+        "status across session change / ECU reset, written DID value byte order + retention "
+        "across S3 timeout / ECU reset) and new parameter variants of 3 templates (lockout + "
+        "ECU reset, precondition failing while locked, routine start with the suppress bit). "
+        "Added in Part C3 from the static stimulus analysis of the held-out v1 misses, so v1 "
+        "held-out numbers after v3 are 'seen'; only fresh held-out sets measure v3 fairly."
     ),
 }
 
@@ -868,6 +939,32 @@ TEMPLATES: dict[str, Template] = {
         "routine_start_results", "Start a routine (incl. 0x78 response pending), read results.",
         "positive", [0x31, 0x27], v2.RoutineParams, v2.routine_start_results_instantiate,
         v2.routine_applicable,
+    ),
+    # ---- template set v3 (Part C3; see templates_v3.py) ----
+    "read_did_invalid_length": Template(
+        "read_did_invalid_length",
+        "Read a DID with a malformed DID list (empty, cut, dangling byte), then normally.",
+        "negative", [0x22], v3.ReadLengthParams, v3.read_length_instantiate,
+        v3.read_length_applicable, intended_nrcs=frozenset({0x13}),
+    ),
+    "seed_request_while_unlocked": Template(
+        "seed_request_while_unlocked",
+        "Unlock, request a seed again: zero seed, level stays unlocked.", "security",
+        [0x27], v3.UnlockedLevelParams, v3.seed_while_unlocked_instantiate,
+        v3.seed_while_unlocked_applicable,
+    ),
+    "session_change_resets_routine": Template(
+        "session_change_resets_routine",
+        "Start a routine, change session or reset the ECU, results must say not started.",
+        "session", [0x31, 0x10], v3.RoutineTransitionParams,
+        v3.routine_transition_instantiate, v3.routine_transition_applicable,
+        intended_nrcs=frozenset({0x24}),
+    ),
+    "write_did_value_retained": Template(
+        "write_did_value_retained",
+        "Write a distinct-byte value, read back, then S3 timeout or ECU reset and read again.",
+        "positive", [0x2E, 0x22], v3.RetentionParams, v3.retention_instantiate,
+        v3.retention_applicable,
     ),
 }
 

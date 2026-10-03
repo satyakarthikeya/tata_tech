@@ -404,10 +404,19 @@ def nrc_priority_applicable(spec: EcuSpec) -> list[SidSessionParams]:
 
 class RoutineParams(BaseModel):
     routine: int
+    suppress_positive: bool = False
+    """Start with the suppress-positive-response bit set (variant). The routine must still
+    run; a response that has to be sent anyway (after 0x78) must echo the plain sub-function."""
 
 
 def routine_start_results_instantiate(spec: EcuSpec, p: RoutineParams) -> TestCase:
-    """Preconditions -> start (0x78 first for long-running routines) -> results."""
+    """Behaviour class: routine start (incl. response-pending) followed by its results.
+
+    Preconditions -> start (0x78 first for long-running routines) -> results. The
+    ``suppress_positive`` variant sets the suppress bit on the start request: the state
+    effect must be the same, the immediate positive is withheld, but a final response that
+    follows a 0x78 is still sent and echoes the 7-bit sub-function.
+    """
     routine = spec.get_routine(p.routine)
     assert routine is not None
     b = _builder(spec)
@@ -417,15 +426,20 @@ def routine_start_results_instantiate(spec: EcuSpec, p: RoutineParams) -> TestCa
     if routine.security_level is not None:
         b.unlock(routine.security_level)
     pending = " -> response pending (0x78) then the final positive" if routine.long_running else ""
-    b.send(
-        routine_control(0x01, p.routine, bytes(routine.option_record_length)),
-        f"Start the routine{pending}.",
-    )
+    option = bytes(routine.option_record_length)
+    if p.suppress_positive:
+        start = UdsRequest(sid=0x31, subfunction=0x01, suppress_positive=True,
+                           data=p.routine.to_bytes(2, "big") + option)
+        b.send(start, f"Start the routine with the suppress bit set{pending}.")
+    else:
+        b.send(routine_control(0x01, p.routine, option), f"Start the routine{pending}.")
     if 0x03 in routine.allowed_subfunctions:
         b.send(routine_control(0x03, p.routine), "Request routine results.")
+    sup = "_suppress" if p.suppress_positive else ""
     return TestCase(
-        id=f"tpl_routine_start_results_{p.routine:04x}",
-        title=f"Start routine {routine.name} ({p.routine:#06x}) and read its results",
+        id=f"tpl_routine_start_results_{p.routine:04x}{sup}",
+        title=f"Start routine {routine.name} ({p.routine:#06x})"
+        + (" with the suppress bit" if p.suppress_positive else "") + " and read its results",
         category="timing" if routine.long_running else "positive",
         template_id="routine_start_results",
         parameters=p.model_dump(),
@@ -437,5 +451,11 @@ def routine_start_results_instantiate(spec: EcuSpec, p: RoutineParams) -> TestCa
 
 
 def routine_applicable(spec: EcuSpec) -> list[RoutineParams]:
-    """Every routine in the spec."""
-    return [RoutineParams(routine=r.id) for r in spec.routines]
+    """Every routine in the spec, then every routine again with the suppress bit on start."""
+    out = [RoutineParams(routine=r.id) for r in spec.routines]
+    out += [
+        RoutineParams(routine=r.id, suppress_positive=True)
+        for r in spec.routines
+        if 0x01 in r.allowed_subfunctions
+    ]
+    return out
