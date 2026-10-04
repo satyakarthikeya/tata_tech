@@ -1,4 +1,4 @@
-"""Requirement-independent conformance sweep (Part D2): differential testing against the oracle.
+"""Requirement-independent conformance sweep: differential testing against the oracle.
 
 Requirement-driven tests only apply the stimuli their templates happen to contain. The
 conformance sweep guarantees broad stimulus and observation coverage regardless of which

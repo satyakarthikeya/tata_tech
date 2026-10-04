@@ -1,10 +1,9 @@
-"""Pure metric functions for the evaluation report (PROJECT.md section 7).
+"""Pure metric functions for the evaluation report.
 
 Each function takes test cases (and the spec / corpus where needed) and returns
 a plain ``dict`` of counts and rates. Every rate is a fraction in ``[0, 1]``;
 an empty denominator gives ``None`` (rendered as "n/a"), never a made-up value.
-The exact definitions live in :data:`METRIC_DEFINITIONS` and are copied into
-the JSON and Markdown reports.
+The definitions are summarised in the report (``outputs/eval_report.md``).
 """
 
 from __future__ import annotations
@@ -25,81 +24,6 @@ from uds_assistant.testgen.templates import TEMPLATES, validate_test
 CATEGORIES = ("positive", "negative", "session", "security", "timing")
 FORMAT_NRCS = frozenset({0x11, 0x12, 0x13})
 """NRCs meaning "the request itself is malformed/unsupported" (service, sub-function, length)."""
-
-METRIC_DEFINITIONS: dict[str, str] = {
-    "request_validity": (
-        "Over every send step of every generated test: the request is replayed through the "
-        "rules-engine oracle in sequence (same set-up and time steps). A request counts as "
-        "well-formed if (a) protocol.codec.decode_request decodes it and (b) the oracle does not "
-        "reject it with a format NRC (0x11 serviceNotSupported, 0x12 subFunctionNotSupported, "
-        "0x13 incorrectMessageLengthOrInvalidFormat), unless that NRC is listed in the "
-        "template's declared intended_nrcs (a deliberate malformed-request probe such as "
-        "write_did_invalid_length -> 0x13). rate = well-formed / send steps. The unadjusted "
-        "rate (no intent exemption) is reported alongside."
-    ),
-    "expected_response_accuracy": (
-        "SELF-CONSISTENCY CHECK, circular by construction (expected bytes are produced by "
-        "the same oracle; reported in an appendix, not a headline). oracle: share of generated send steps whose expected response frames equal a fresh "
-        "rules-engine re-run of the test (and share of whole tests with zero mismatches). "
-        "simulator: share of generated tests passing on the bug-free independent simulator. "
-        "gold: (1) exact overlap = generated tests whose full step sequence (requests and "
-        "set-up/time steps, ignoring expected responses) is identical to a gold test; agreement "
-        "= identical expected responses on every step. (2) shared-prefix overlap = every "
-        "distinct send step reached by an identical step prefix from power-on in both a "
-        "generated and a gold test (deduplicated by prefix); agreement = identical expected "
-        "frames for that step."
-    ),
-    "coverage": (
-        "Number of generated tests per category (positive/negative/session/security/timing) "
-        "per requirement. rate = requirements with >= 1 generated test / requirements; "
-        "category_presence = categories with >= 1 test across the suite / 5."
-    ),
-    "template_reuse_rate": (
-        "Share of generated tests whose template_id is a registered template AND whose steps "
-        "are byte-identical to a fresh instantiation of that template with the test's stored "
-        "parameters (independent re-check of byte provenance)."
-    ),
-    "citation_validity": (
-        "Share of all citations attached to generated tests for which "
-        "rag.citations.citation_is_valid is true against the evaluation corpus (source+ref "
-        "exists; a quote must appear verbatim and its hex identifiers must belong to the chunk)."
-    ),
-    "bug_detection_rate": (
-        "Each catalog bug is enabled alone in a fresh simulator per test. A bug is detected if "
-        ">= 1 test that passes on the clean simulator fails with the bug enabled. Tests failing "
-        "on the clean simulator are reported as invalid and get no credit. rate = detected bugs "
-        "/ catalog bugs. Reported for the generated suite, the hand-written gold suite "
-        "(baseline) and their union. The 26-bug catalog (data/bugs/bug_catalog.yaml) is "
-        "IN-SAMPLE: templates v2 were added after inspecting which of these bugs v1 missed."
-    ),
-    "heldout_bug_detection_rate": (
-        "Same procedure as bug_detection_rate on the 12 held-out bugs in "
-        "data/bugs/heldout_catalog.yaml, written by a subagent that could not see templates, "
-        "gold tests, eval, LLM or agent code. HEADLINE = held-out generated-suite detection. "
-        "Missed-bug reasons come from a static trigger analysis (eval/heldout.py): whether "
-        "any test applies the stimulus the bug description needs; reporting only."
-    ),
-    "simulator_rules_agreement": (
-        "A deterministic seeded random sample (eval/agreement.py; >= 5000 requests over "
-        "60-step walks with clock advances, environment/DTC changes and computed seed/key "
-        "handshakes) is sent to a bug-free SimulatedEcu and a RulesSession in lockstep. "
-        "agreed = requests with byte-identical response frames; a walk stops at its first "
-        "disagreement."
-    ),
-    "udsoncan_virtual_can": (
-        "udsoncan.Client over ISO-TP on a python-can virtual bus against the simulator: "
-        "10 03 -> 27 01 seed -> 27 02 key -> 22 0100 -> 2E 0100 50 -> 22 0100 read-back == "
-        "0x50. pass/fail (fail includes any exception, with its text); 'skipped' with "
-        "--skip-can."
-    ),
-    "gold_clean_pass": "Gold tests passing on the bug-free simulator / gold tests.",
-    "pipeline_stats": (
-        "Per requirement: kept tests, dropped tests (failed validation), rejected planner "
-        "choices, plan attempts (retries = attempts - 1), run status."
-    ),
-    "runtime": "Wall-clock seconds per evaluation phase and in total (machine dependent).",
-}
-
 
 def _rate(num: int, den: int) -> float | None:
     return round(num / den, 4) if den else None

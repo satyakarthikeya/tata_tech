@@ -135,7 +135,7 @@ def run_pipeline(
             store.finish_run(run_id, "failed")
         raise
 
-    fallback_events = list(getattr(llm, "fallback_events", [])) + final.fallback_events
+    fallback_events = list(final.fallback_events)
     tests, provenance = annotate_tests(final, deps, fallback_events)
     if store is not None and run_id is not None:
         for t in tests:

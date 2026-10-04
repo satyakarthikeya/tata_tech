@@ -1,8 +1,9 @@
-"""FastAPI service: requirement -> validated tests -> simulator run -> eval -> export.
+"""FastAPI service: requirement -> validated tests -> simulator run -> export, plus cited Q&A.
 
 Factory: :func:`create_app(repo_root=None, db_path=None)`. A module-level ``app``
 is also built (lazily-safe: building it only loads lightweight deps already
-required by the package — fastapi, the spec, bm25 retrieval, the mock LLM).
+required by the package; the Chroma retriever is built on first use). Ollama is required:
+endpoints that need the LLM answer HTTP 503 with a "Start Ollama" hint when it is down.
 
 Governance (PROJECT.md §9): every ``/generate`` response carries a
 ``governance_banner`` reminding the engineer that generated tests require
@@ -13,7 +14,6 @@ the SQLite audit trail (:mod:`uds_assistant.store.audit`).
 from __future__ import annotations
 
 import sys
-import tempfile
 import uuid
 from importlib import metadata
 from pathlib import Path
@@ -23,9 +23,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from uds_assistant.agent import TargetEvidence, run_pipeline
-from uds_assistant.config import Config, get_config
 from uds_assistant.export import render_capl, render_pytest
-from uds_assistant.llm.factory import get_llm
+from uds_assistant.llm.client import ollama_base_url, ollama_reachable
+from uds_assistant.llm.factory import START_OLLAMA_HINT, OllamaUnavailableError, get_llm
 from uds_assistant.qa import AskRequest, AskResponse, answer_question
 from uds_assistant.qa.lookup import FactLookup
 from uds_assistant.rag.factory import get_retriever
@@ -46,9 +46,9 @@ GOVERNANCE_BANNER = "Generated tests require human review before execution on re
 
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
-    llm_mode_requested: str
-    llm_mode_actual: str
-    retriever: str
+    ollama_reachable: bool
+    ollama_hint: str | None = None
+    retriever: str = "ChromaRetriever"
     versions: dict[str, str]
 
 
@@ -86,16 +86,6 @@ class RunResponse(BaseModel):
     passed: int
     results: list[TestRunResult]
     governance_banner: str = GOVERNANCE_BANNER
-
-
-class EvalRequest(BaseModel):
-    mode: Literal["mock", "ollama"] = "mock"
-    requirement_ids: list[str] | None = None
-    out_dir: str | None = None
-    """Where to write the report. Defaults to a fresh temp dir so the committed
-    ``outputs/`` evaluation artifacts are never overwritten by an API call."""
-    run_exported: bool = False
-    """Run the exported pytest file in a subprocess too (slower); off by default."""
 
 
 class ExportRequest(BaseModel):
@@ -155,14 +145,14 @@ def _resolve_tests(app: FastAPI, run_id: int | None, tests: list[TestCase] | Non
 
 
 def create_app(repo_root: str | Path | None = None, db_path: str | Path | None = None) -> FastAPI:
-    """Build the FastAPI app, loading the spec/corpus/LLM/retriever once at startup."""
+    """Build the FastAPI app, loading the spec and corpus at startup (retriever/LLM on use)."""
     root = Path(repo_root) if repo_root is not None else REPO_ROOT
     if db_path is None:
         db_path = root / "outputs" / "api_audit.sqlite"
 
     app = FastAPI(
         title="UDS Diagnostics Assistant API",
-        description="Requirement -> cited test cases -> simulator run -> evaluation -> export. "
+        description="Requirement -> cited test cases -> simulator run -> export, plus cited Q&A. "
         "ECU spec is synthetic. " + GOVERNANCE_BANNER,
         version="0.1.0",
     )
@@ -171,21 +161,29 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
     app.state.store = AuditStore(db_path)
     app.state.spec = load_spec(root / "data" / "bcm_spec.yaml")
     app.state.corpus = build_corpus(root)
-    cfg = get_config()
-    app.state.config = cfg
-    app.state.retriever = get_retriever(cfg, chunks=app.state.corpus)
-    app.state.llm = get_llm(cfg)
+    app.state.retriever = None
     app.state.bug_catalog = load_bug_catalog()
     app.state.qa_lookup = FactLookup(app.state.spec, app.state.corpus)
+
+    def llm():
+        try:
+            return get_llm()
+        except OllamaUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    def retriever():
+        if app.state.retriever is None:
+            app.state.retriever = get_retriever(chunks=app.state.corpus)
+        return app.state.retriever
 
     # ------------------------------------------------------------------------------- health
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
+        up = ollama_reachable(ollama_base_url(), timeout_s=1.0)
         return HealthResponse(
-            llm_mode_requested=cfg.llm_mode,
-            llm_mode_actual=str(getattr(app.state.llm, "name", type(app.state.llm).__name__)),
-            retriever=type(app.state.retriever).__name__,
+            ollama_reachable=up,
+            ollama_hint=None if up else START_OLLAMA_HINT,
             versions=_versions(),
         )
 
@@ -206,8 +204,8 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
             req.requirement_text,
             requirement_id,
             app.state.spec,
-            app.state.llm,
-            app.state.retriever,
+            llm(),
+            retriever(),
             app.state.store,
         )
         return GenerateResponse(
@@ -224,15 +222,12 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
     @app.post("/ask", response_model=AskResponse)
     def ask(req: AskRequest) -> AskResponse:
         """Cited diagnostic Q&A: answers only from the approved sources, or ``not_found``."""
-        llm = app.state.llm
-        if req.mode is not None:
-            llm = get_llm(Config(llm_mode=req.mode, retriever=cfg.retriever, embedder=cfg.embedder))
         return answer_question(
             req.question,
             spec=app.state.spec,
             chunks=app.state.corpus,
-            retriever=app.state.retriever,
-            llm=llm,
+            retriever=retriever(),
+            llm=llm(),
             lookup=app.state.qa_lookup,
         )
 
@@ -254,23 +249,6 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
             passed=suite.passed_count,
             results=suite.results,
         )
-
-    # --------------------------------------------------------------------------------- eval
-
-    @app.post("/eval")
-    def run_eval_endpoint(req: EvalRequest) -> dict[str, Any]:
-        from uds_assistant.eval.run_eval import run_evaluation
-
-        out_dir = req.out_dir or tempfile.mkdtemp(prefix="uds_api_eval_")
-        report = run_evaluation(
-            mode=req.mode,
-            out_dir=out_dir,
-            repo_root=app.state.repo_root,
-            requirement_ids=req.requirement_ids,
-            write_exports=True,
-            run_exported=req.run_exported,
-        )
-        return report
 
     # ------------------------------------------------------------------------------- export
 

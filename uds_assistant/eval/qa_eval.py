@@ -25,34 +25,25 @@ case-insensitive):
 
 An answerable question is *accurate* when its status is ``answered`` and every atom is present.
 
-CLI::
-
-    python -m uds_assistant.eval.qa_eval --modes mock,ollama --out outputs/qa/qa_eval.json
+Run through ``python -m uds_assistant.eval.run_eval`` (section 7 of the report).
 """
 
 from __future__ import annotations
 
-import argparse
 import csv
-import json
 import re
-import subprocess
+import sys
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from uds_assistant.config import Config
 from uds_assistant.qa.answer import answer_question
 from uds_assistant.qa.lookup import FactLookup
 from uds_assistant.qa.models import AskResponse
 from uds_assistant.qa.text import collapse, contains_token
-from uds_assistant.rag.factory import get_retriever
-from uds_assistant.rag.ingest import build_corpus
 from uds_assistant.rag.model import Chunk
-from uds_assistant.spec.schema import load_spec
+from uds_assistant.spec.schema import EcuSpec
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 PREAMBLE_SLUG = "uds-reference-notes-own-words-summary"
 
 
@@ -193,29 +184,10 @@ def load_questions(path: Path) -> list[dict[str, Any]]:
     return out
 
 
-def git_hash(root: Path = REPO_ROOT) -> str:
-    """Current commit hash (``unknown`` outside git); ``+dirty`` if tracked files are modified."""
-    try:
-        h = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=root,
-                               capture_output=True, text=True, check=True).stdout.strip()
-        return h + ("+dirty" if dirty else "")
-    except Exception:  # noqa: BLE001
-        return "unknown"
-
-
-def run_mode(mode: str, questions: list[dict[str, Any]], root: Path) -> dict[str, Any]:
-    """Run every question in ``mode`` and score it."""
-    from uds_assistant.llm.factory import get_llm
-
-    chunks = build_corpus(root)
-    spec = load_spec(root / "data" / "bcm_spec.yaml")
-    cfg = Config(llm_mode=mode, retriever="bm25")  # type: ignore[arg-type]
-    retriever = get_retriever(cfg, chunks=chunks)
-    llm = get_llm(cfg)
-    actual = str(getattr(llm, "name", "mock"))
-    if mode == "ollama" and actual == "mock":
-        return {"mode": mode, "skipped": "Ollama not reachable; fell back to mock"}
+def run_qa(
+    questions: list[dict[str, Any]], *, spec: EcuSpec, chunks: list[Chunk], retriever: Any, llm: Any
+) -> dict[str, Any]:
+    """Answer every question with ``llm`` and score it; ``rows`` keeps the per-question detail."""
     lookup = FactLookup(spec, chunks)
     rows: list[dict[str, Any]] = []
     t0 = time.perf_counter()
@@ -224,86 +196,11 @@ def run_mode(mode: str, questions: list[dict[str, Any]], root: Path) -> dict[str
         resp = answer_question(q["question"], spec=spec, chunks=chunks, retriever=retriever,
                                llm=llm, lookup=lookup)
         rows.append({**q, "response": resp, "seconds": round(time.perf_counter() - t, 2)})
+        print(f"[qa] {q['id']}: {resp.status} ({rows[-1]['seconds']} s)", file=sys.stderr, flush=True)
     metrics = score_rows(rows, chunks)
-    metrics.update(mode=mode, llm=actual, total_seconds=round(time.perf_counter() - t0, 1))
+    metrics.update(llm=llm.name, total_seconds=round(time.perf_counter() - t0, 1))
     metrics["rows"] = [
-        {k: (v.model_dump() if isinstance(v, AskResponse) else v) for k, v in r.items()} for r in rows
+        {k: (v.model_dump() if isinstance(v, AskResponse) else v) for k, v in r.items()}
+        for r in rows
     ]
     return metrics
-
-
-def render_md(report: dict[str, Any]) -> str:
-    """Markdown report: summary table and per-question tables."""
-    lines = [
-        "# Diagnostic Q&A evaluation (blind set `data/qa_eval.csv`)",
-        "",
-        f"- git hash: `{report['git_hash']}`",
-        f"- timestamp (UTC): {report['timestamp']}",
-        "",
-        "| metric | " + " | ".join(m for m in report["modes"]) + " |",
-        "|---|" + "---|" * len(report["modes"]),
-    ]
-    def cell(m: str, f: str) -> str:
-        r = report["results"][m]
-        return "skipped" if "skipped" in r else f.format(r=r)
-    spec = [
-        ("answer accuracy (answerable)", "{r[answer_accuracy]:.1%} ({r[answer_accuracy_n]}/{r[n_answerable]})"),
-        ("citation correctness", "{r[citation_correctness]:.1%} ({r[citation_correctness_n]}/{r[n_answerable]})"),
-        ("citation precision", "{r[citation_precision]:.1%} ({r[citation_precision_counts][0]}/{r[citation_precision_counts][1]})"),
-        ("correct not-found (unanswerable)", "{r[correct_not_found_rate]:.0%} ({r[correct_not_found_n]}/{r[n_unanswerable]})"),
-        ("false not-found (answerable)", "{r[false_not_found]}"),
-        ("LLM fallback events", "{r[fallback_events]}"),
-        ("seconds", "{r[total_seconds]}"),
-    ]
-    for label, f in spec:
-        lines.append(f"| {label} | " + " | ".join(cell(m, f) for m in report["modes"]) + " |")
-    for m in report["modes"]:
-        r = report["results"][m]
-        lines += ["", f"## Per-question: {m}", ""]
-        if "skipped" in r:
-            lines.append(f"Skipped: {r['skipped']}")
-            continue
-        lines += ["| id | answerable | status | accurate | cited ok | missing facts | cited chunks | s |",
-                  "|---|---|---|---|---|---|---|---|"]
-        for row in r["rows"]:
-            resp = row["response"]
-            if row["answerable"]:
-                acc, cok = ("yes" if row["accurate"] else "NO"), ("yes" if row["citation_ok"] else "NO")
-                miss = ", ".join(row["missing_facts"]) or ""
-            else:
-                acc = "n/a"
-                cok = "correct" if row["correct_not_found"] else "WRONG (answered)"
-                miss = ""
-            cited = ", ".join(row["cited_chunks"]) if row["answerable"] else ", ".join(c["chunk_id"] for c in resp["citations"])
-            lines.append(f"| {row['id']} | {row['answerable']} | {resp['status']} | {acc} | {cok} | {miss} | {cited} | {row['seconds']} |")
-    return "\n".join(lines) + "\n"
-
-
-def main(argv: list[str] | None = None) -> None:
-    """CLI entry point (see module docstring)."""
-    ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
-    ap.add_argument("--modes", default="mock,ollama")
-    ap.add_argument("--out", default="outputs/qa/qa_eval.json")
-    ap.add_argument("--csv", default="data/qa_eval.csv")
-    args = ap.parse_args(argv)
-    modes = [m.strip() for m in args.modes.split(",") if m.strip()]
-    questions = load_questions(REPO_ROOT / args.csv)
-    report: dict[str, Any] = {
-        "git_hash": git_hash(),
-        "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
-        "modes": modes,
-        "results": {m: run_mode(m, questions, REPO_ROOT) for m in modes},
-    }
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
-    out.with_suffix(".md").write_text(render_md(report), encoding="utf-8")
-    for m in modes:
-        r = report["results"][m]
-        print(m, r.get("skipped") or {k: r[k] for k in (
-            "answer_accuracy", "citation_correctness", "citation_precision",
-            "correct_not_found_rate", "false_not_found")})
-
-
-if __name__ == "__main__":
-    main()

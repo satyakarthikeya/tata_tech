@@ -1,8 +1,8 @@
 """The stateful simulated ECU.
 
 Implemented independently of the rules engine, from ``docs/behaviour_contract.md``
-and the spec YAML. It must never import :mod:`uds_assistant.rules` (enforced by
-``tests/simulator/test_independence.py``).
+and the spec YAML. It must never import :mod:`uds_assistant.rules` (the check lived in
+the test suite of git tag ``v1-full-archive``).
 
 Structure: a pre-processing step (clock: S3 timeout, lockout expiry), a generic
 gate shared by all services (supported / session / length / subfunction), and a

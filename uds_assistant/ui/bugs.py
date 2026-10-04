@@ -1,4 +1,4 @@
-"""Bug choices for the simulator tab, grouped by catalog."""
+"""Bug choices for the simulator: the in-sample catalog plus the blind v3 set."""
 
 from __future__ import annotations
 
@@ -7,12 +7,7 @@ from pathlib import Path
 
 from uds_assistant.simulator import (
     DEFAULT_BUG_CATALOG_PATH,
-    HELDOUT_BUG_CATALOG_PATH,
-    HELDOUT_BUG_IDS,
-    HELDOUT_V2_BUG_CATALOG_PATH,
-    HELDOUT_V2_BUG_IDS,
     HELDOUT_V3_BUG_CATALOG_PATH,
-    HELDOUT_V3_BUG_IDS,
     load_bug_catalog,
 )
 
@@ -33,23 +28,20 @@ class BugOption:
         return f"[{self.group}] {self.id} ({self.title})"
 
 
-_GROUPS: tuple[tuple[str, Path, frozenset[str] | None], ...] = (
-    ("in-sample", DEFAULT_BUG_CATALOG_PATH, None),
-    ("held-out v1", HELDOUT_BUG_CATALOG_PATH, HELDOUT_BUG_IDS),
-    ("held-out v2", HELDOUT_V2_BUG_CATALOG_PATH, HELDOUT_V2_BUG_IDS),
-    ("held-out v3, fresh", HELDOUT_V3_BUG_CATALOG_PATH, HELDOUT_V3_BUG_IDS),
+_GROUPS: tuple[tuple[str, Path], ...] = (
+    ("in-sample", DEFAULT_BUG_CATALOG_PATH),
+    ("blind v3", HELDOUT_V3_BUG_CATALOG_PATH),
 )
 
 
 def bug_options() -> list[BugOption]:
     """All bugs, in-sample first; a catalog that cannot be loaded is skipped."""
     out: list[BugOption] = []
-    for group, path, ids in _GROUPS:
+    for group, path in _GROUPS:
         try:
             catalog = load_bug_catalog(path)
         except (OSError, ValueError):
             continue
         for b in catalog.bugs:
-            if ids is None or b.id in ids:
-                out.append(BugOption(b.id, group, b.title, " ".join(b.description.split())))
+            out.append(BugOption(b.id, group, b.title, " ".join(b.description.split())))
     return out

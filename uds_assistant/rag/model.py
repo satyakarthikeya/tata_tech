@@ -21,7 +21,7 @@ LAYERS: tuple[str, ...] = ("standard", "oem", "ecu", "project")
 """The four knowledge layers, kept in separate collections."""
 
 CORE_LAYERS: tuple[str, ...] = ("standard", "ecu", "project")
-"""Layers that share one BM25 index (the original three; scores unchanged by the OEM layer)."""
+"""Layers that share one Chroma collection (``oem`` has its own)."""
 
 LAYER_ALIASES: dict[str, str] = {"ecu_spec": "ecu"}
 """Old layer names still accepted in ``collections=`` filters."""
@@ -79,7 +79,7 @@ class Hit(BaseModel):
 
 
 class Retriever(Protocol):
-    """Interface every retrieval backend (BM25, Chroma, ...) implements."""
+    """Interface every retrieval backend (Chroma) implements."""
 
     def search(
         self, query: str, k: int = 5, collections: list[str] | None = None

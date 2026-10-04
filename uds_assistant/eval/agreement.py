@@ -5,8 +5,7 @@ environment changes, DTC injections and computed seed/key handshakes) is fed in
 lockstep to a bug-free :class:`SimulatedEcu` and a :class:`RulesSession`. Every
 request whose response frames are byte-identical counts as agreed. After a
 disagreement the walk is abandoned (the two states may have diverged) and a new
-walk starts. The generator is written for the evaluation and is independent of
-the test suite's agreement helpers (``tests/simulator/agreement.py``).
+walk starts.
 """
 
 from __future__ import annotations

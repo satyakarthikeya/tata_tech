@@ -9,8 +9,8 @@ Flow of :func:`answer_question`:
    retrieved chunks are split into sentences, and a sentence is *supported* when it matches the
    question's content words well enough (:data:`MIN_MATCHED`, :data:`MIN_COVERAGE`). No supported
    sentence -> ``not_found`` (refusing is preferred over guessing).
-3. **Phrasing**: mock mode uses a template (lookup facts / verbatim supported sentences). With an
-   LLM backend the model only rephrases; its output is verified (every looked-up value must still
+3. **Phrasing**: the template answer is the lookup facts / verbatim supported sentences; the
+   Ollama model only rephrases them, and its output is verified (every looked-up value must still
    appear, no number or hex value that is not in the facts / quotes / question, every claim's quote
    must be a substring of the chunk) and otherwise the template answer is used and a fallback
    event is recorded.
@@ -91,10 +91,6 @@ class _Sentence:
     score: float
 
 
-def _is_llm(llm: LLMClient | None) -> bool:
-    return llm is not None and getattr(llm, "name", "mock") != "mock"
-
-
 def _citation(chunk: Chunk, quote: str) -> QACitation:
     return QACitation(chunk_id=chunk.id, layer=chunk.layer, source=chunk.source_path, quote=quote)
 
@@ -103,7 +99,7 @@ def _not_found(reason: str, llm_name: str) -> AskResponse:
     conf, why = qa_confidence(status="not_found", deterministic=False)
     return AskResponse(
         answer=NOT_FOUND_ANSWER, citations=[], confidence=conf,
-        confidence_reason=f"{why} ({reason})", status="not_found", llm_mode=llm_name,
+        confidence_reason=f"{why} ({reason})", status="not_found", llm=llm_name,
     )
 
 
@@ -188,7 +184,7 @@ def _finish(
     )
     return AskResponse(
         answer=answer, citations=citations, confidence=conf, confidence_reason=why,
-        status="answered", fallback_events=fallback_events, llm_mode=llm_name,
+        status="answered", fallback_events=fallback_events, llm=llm_name,
     )
 
 
@@ -278,18 +274,17 @@ def answer_question(
     spec: EcuSpec,
     chunks: list[Chunk],
     retriever: Retriever,
-    llm: LLMClient | None = None,
+    llm: LLMClient,
     lookup: FactLookup | None = None,
 ) -> AskResponse:
     """Answer ``question`` from the approved sources, with citations, or refuse (``not_found``).
 
-    ``llm`` of ``None`` or a mock backend gives template answers; any other backend only phrases
-    (verified) facts and quotes it is handed.
+    The LLM only phrases (verified) facts and quotes it is handed; if its phrasing fails
+    verification the template answer is used and a fallback event is recorded.
     """
     question = question.strip()
     lk = lookup or FactLookup(spec, chunks)
-    use_llm = _is_llm(llm)
-    llm_name = str(getattr(llm, "name", "mock")) if use_llm else "mock"
+    llm_name = llm.name
     by_id = {c.id: c for c in chunks}
     events: list[str] = []
 
@@ -299,10 +294,7 @@ def answer_question(
 
     if res.facts:
         answer = _template_from_facts(res.facts)
-        if use_llm:
-            assert llm is not None
-            phrased = _phrase_facts(llm, question, res.facts, events)
-            answer = phrased or answer
+        answer = _phrase_facts(llm, question, res.facts, events) or answer
         cites = [(by_id[f.chunk_id], f.quote) for f in res.facts if f.chunk_id in by_id]
         return _finish(answer, cites, deterministic=True, coverage=1.0,
                        fallback_events=events, llm_name=llm_name)
@@ -323,12 +315,10 @@ def answer_question(
     cites = [(s.chunk, s.text) for s in chosen] + [
         (by_id[f.chunk_id], f.quote) for f in nrc_facts if f.chunk_id in by_id
     ]
-    if use_llm:
-        assert llm is not None
-        got = _phrase_claims(llm, question, sents[:4], nrc_facts, events)
-        if got is not None:
-            text, claim_cites = got
-            answer = text + (" " + " ".join(f.text for f in nrc_facts) if nrc_facts else "")
-            cites = claim_cites + [(by_id[f.chunk_id], f.quote) for f in nrc_facts if f.chunk_id in by_id]
+    got = _phrase_claims(llm, question, sents[:4], nrc_facts, events)
+    if got is not None:
+        text, claim_cites = got
+        answer = text + (" " + " ".join(f.text for f in nrc_facts) if nrc_facts else "")
+        cites = claim_cites + [(by_id[f.chunk_id], f.quote) for f in nrc_facts if f.chunk_id in by_id]
     return _finish(answer, cites, deterministic=False, coverage=best_cov,
                    fallback_events=events, llm_name=llm_name)

@@ -6,12 +6,9 @@ service handlers (search for the constant name). The catalog in
 evaluation report; a test checks the catalog and :data:`IMPLEMENTED_BUG_IDS`
 stay in sync.
 
-A second, *held-out* set of faults (:data:`HELDOUT_BUG_IDS`, documented in
-``data/bugs/heldout_catalog.yaml``) uses the same hook mechanism but is kept
-out of :data:`IMPLEMENTED_BUG_IDS`, so anything iterating the original catalog
-is unaffected. A third set (:data:`HELDOUT_V2_BUG_IDS`, documented in
-``data/bugs/heldout_v2_catalog.yaml``) and a fourth (:data:`HELDOUT_V3_BUG_IDS`,
-``data/bugs/heldout_v3_catalog.yaml``) follow the same pattern.
+The blind v3 set (:data:`HELDOUT_V3_BUG_IDS`, documented in
+``data/bugs/heldout_v3_catalog.yaml``) uses the same hook mechanism. A few further hooks
+(:data:`EXTRA_BUG_IDS`) are kept in the simulator but are not in any catalog.
 :data:`ALL_BUG_IDS` is the union accepted by the simulator.
 """
 
@@ -28,8 +25,6 @@ TestCategory = Literal["positive", "negative", "session", "security", "timing"]
 
 _BUGS_DIR = Path(__file__).resolve().parents[2] / "data" / "bugs"
 DEFAULT_BUG_CATALOG_PATH = _BUGS_DIR / "bug_catalog.yaml"
-HELDOUT_BUG_CATALOG_PATH = _BUGS_DIR / "heldout_catalog.yaml"
-HELDOUT_V2_BUG_CATALOG_PATH = _BUGS_DIR / "heldout_v2_catalog.yaml"
 HELDOUT_V3_BUG_CATALOG_PATH = _BUGS_DIR / "heldout_v3_catalog.yaml"
 
 # --- bug ids (one constant per hook) ---------------------------------------------------------
@@ -91,7 +86,7 @@ IMPLEMENTED_BUG_IDS: frozenset[str] = frozenset(
     }
 )
 
-# --- held-out bug ids (separate catalog, same hook mechanism) --------------------------------
+# --- extra injectable faults (simulator hooks only; not in any catalog) --------------------------------
 ROUTINE_STATE_SURVIVES_SESSION_CHANGE = "routine_state_survives_session_change"
 FAILED_ATTEMPTS_RESET_BY_SEED_REQUEST = "failed_attempts_reset_by_seed_request"
 SEED_RETURNED_WHILE_UNLOCKED = "seed_returned_while_unlocked"
@@ -105,24 +100,7 @@ S3_TIMEOUT_REVERTS_WRITTEN_DIDS = "s3_timeout_reverts_written_dids"
 SESSION_SUPPRESS_BIT_NOT_MASKED = "session_suppress_bit_not_masked"
 SUPPRESS_BIT_ECHOED_IN_RESPONSE = "suppress_bit_echoed_in_response"
 
-HELDOUT_BUG_IDS: frozenset[str] = frozenset(
-    {
-        ROUTINE_STATE_SURVIVES_SESSION_CHANGE,
-        FAILED_ATTEMPTS_RESET_BY_SEED_REQUEST,
-        SEED_RETURNED_WHILE_UNLOCKED,
-        NRC_ORDER_CONDITION_BEFORE_SECURITY,
-        READ_DID_ODD_LENGTH_TRUNCATED,
-        READ_DID_SESSION_RESTRICTION_IGNORED,
-        UINT16_DID_STORED_BYTE_SWAPPED,
-        S3_NOT_REFRESHED_BY_TESTER_PRESENT,
-        ECU_RESET_CLEARS_SECURITY_LOCKOUT,
-        S3_TIMEOUT_REVERTS_WRITTEN_DIDS,
-        SESSION_SUPPRESS_BIT_NOT_MASKED,
-        SUPPRESS_BIT_ECHOED_IN_RESPONSE,
-    }
-)
-
-# --- held-out v2 bug ids (third catalog, same hook mechanism) --------------------------------
+# --- more extra injectable faults (simulator hooks only; not in any catalog) --------------------------------
 SESSION_REENTRY_KEEPS_UNLOCK = "session_reentry_keeps_unlock"
 S3_RESTART_SKIPPED_ON_NEGATIVE_RESPONSE = "s3_restart_skipped_on_negative_response"
 S3_TIMEOUT_RESETS_LOCKOUT_COUNTERS = "s3_timeout_resets_lockout_counters"
@@ -139,8 +117,20 @@ MULTI_DID_READ_DEDUPS_REPEATS = "multi_did_read_dedups_repeats"
 ROUTINE_RESTART_AFTER_STOP_BLOCKED = "routine_restart_after_stop_blocked"
 SUPPRESSED_SEED_REQUEST_NOT_STORED = "suppressed_seed_request_not_stored"
 
-HELDOUT_V2_BUG_IDS: frozenset[str] = frozenset(
+EXTRA_BUG_IDS: frozenset[str] = frozenset(
     {
+        ROUTINE_STATE_SURVIVES_SESSION_CHANGE,
+        FAILED_ATTEMPTS_RESET_BY_SEED_REQUEST,
+        SEED_RETURNED_WHILE_UNLOCKED,
+        NRC_ORDER_CONDITION_BEFORE_SECURITY,
+        READ_DID_ODD_LENGTH_TRUNCATED,
+        READ_DID_SESSION_RESTRICTION_IGNORED,
+        UINT16_DID_STORED_BYTE_SWAPPED,
+        S3_NOT_REFRESHED_BY_TESTER_PRESENT,
+        ECU_RESET_CLEARS_SECURITY_LOCKOUT,
+        S3_TIMEOUT_REVERTS_WRITTEN_DIDS,
+        SESSION_SUPPRESS_BIT_NOT_MASKED,
+        SUPPRESS_BIT_ECHOED_IN_RESPONSE,
         SESSION_REENTRY_KEEPS_UNLOCK,
         S3_RESTART_SKIPPED_ON_NEGATIVE_RESPONSE,
         S3_TIMEOUT_RESETS_LOCKOUT_COUNTERS,
@@ -159,7 +149,7 @@ HELDOUT_V2_BUG_IDS: frozenset[str] = frozenset(
     }
 )
 
-# --- held-out v3 bug ids (fourth catalog, same hook mechanism) ------------------
+# --- blind set v3 (data/bugs/heldout_v3_catalog.yaml) ------------------
 SESSION_SWITCH_KEEPS_PENDING_SEED = "session_switch_keeps_pending_seed"
 SESSION_RESPONSE_P2_STAR_IN_MS = "session_response_p2_star_in_ms"
 FAILED_KEY_KEEPS_PENDING_SEED = "failed_key_keeps_pending_seed"
@@ -196,9 +186,7 @@ HELDOUT_V3_BUG_IDS: frozenset[str] = frozenset(
     }
 )
 
-ALL_BUG_IDS: frozenset[str] = (
-    IMPLEMENTED_BUG_IDS | HELDOUT_BUG_IDS | HELDOUT_V2_BUG_IDS | HELDOUT_V3_BUG_IDS
-)
+ALL_BUG_IDS: frozenset[str] = IMPLEMENTED_BUG_IDS | EXTRA_BUG_IDS | HELDOUT_V3_BUG_IDS
 
 
 class BugDef(BaseModel):
@@ -209,8 +197,6 @@ class BugDef(BaseModel):
     description: str
     category: BugCategory
     expected_detection: list[TestCategory] = Field(min_length=1)
-    heldout: bool = False
-    heldout_v2: bool = False
     heldout_v3: bool = False
 
 

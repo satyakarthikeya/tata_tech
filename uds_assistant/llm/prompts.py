@@ -2,9 +2,8 @@
 
 The agent nodes (:mod:`uds_assistant.agent.nodes`) build each user prompt as
 ``build_prompt(<INSTRUCTION>, <context dict>)``; the context block is JSON that
-:class:`~uds_assistant.llm.mock.MockLLM` parses and a real LLM reads as part of
-the prompt. The text here is the only natural-language prompt content; it must
-never ask the model for bytes (see AGENT.md correctness rules).
+the model reads as part of the prompt. The text here is the only natural-language
+prompt content; it must never ask the model for bytes (see docs/behaviour_contract.md).
 """
 
 from __future__ import annotations

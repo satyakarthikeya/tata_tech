@@ -1,15 +1,8 @@
-"""Embedding backends for the Chroma retriever (all heavy imports are lazy).
+"""BGE embeddings via fastembed (ONNX runtime, no torch); heavy imports are lazy.
 
-Two interchangeable backends implement the :class:`Embedder` protocol:
-
-* :class:`FastEmbedEmbedder` (default): ``fastembed`` (ONNX runtime) with
-  ``BAAI/bge-small-en-v1.5``. Small, no torch needed. The model cache lives in
-  a persistent, non-temp directory (``FASTEMBED_CACHE_PATH`` or
-  ``~/.cache/uds_assistant/fastembed``); if it is empty but fastembed's old
-  default temp cache already holds the model, that copy is reused.
-* :class:`SentenceTransformerEmbedder`: optional path
-  (``EMBEDDER=sentence-transformers``); imports ``sentence_transformers`` only
-  when instantiated.
+Model: ``BAAI/bge-small-en-v1.5``. The model cache lives in a persistent, non-temp directory
+(``FASTEMBED_CACHE_PATH`` or ``~/.cache/uds_assistant/fastembed``); if it is empty but
+fastembed's old default temp cache already holds the model, that copy is reused.
 """
 
 from __future__ import annotations
@@ -54,26 +47,8 @@ def _seed_cache_from_temp(cache_dir: Path) -> None:
             shutil.copytree(model_dir, cache_dir / model_dir.name, dirs_exist_ok=True)
 
 
-def fastembed_available() -> bool:
-    """True if ``fastembed`` is importable."""
-    try:
-        import fastembed  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
-def sentence_transformers_available() -> bool:
-    """True if ``sentence_transformers`` is importable."""
-    try:
-        import sentence_transformers  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
 class FastEmbedEmbedder:
-    """``fastembed.TextEmbedding`` wrapper (default backend)."""
+    """``fastembed.TextEmbedding`` wrapper."""
 
     def __init__(
         self, model_name: str = DEFAULT_MODEL_NAME, cache_dir: str | Path | None = None
@@ -89,31 +64,3 @@ class FastEmbedEmbedder:
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed ``texts`` (one vector each)."""
         return [[float(x) for x in vec] for vec in self._model.embed(texts)]
-
-
-class SentenceTransformerEmbedder:
-    """Optional ``sentence-transformers`` backend; never imported unless selected."""
-
-    def __init__(self, model_name: str = DEFAULT_MODEL_NAME) -> None:
-        from sentence_transformers import SentenceTransformer
-
-        self.name = f"sentence-transformers:{model_name}"
-        self._model = SentenceTransformer(model_name)
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed ``texts`` (one vector each)."""
-        return self._model.encode(texts, normalize_embeddings=True).tolist()
-
-
-def embedder_available(backend: str) -> bool:
-    """Whether the package for the named embedder backend is importable."""
-    if backend == "sentence-transformers":
-        return sentence_transformers_available()
-    return fastembed_available()
-
-
-def get_embedder(backend: str = "fastembed") -> Embedder:
-    """Instantiate the named embedder backend."""
-    if backend == "sentence-transformers":
-        return SentenceTransformerEmbedder()
-    return FastEmbedEmbedder()

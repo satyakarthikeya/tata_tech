@@ -2,14 +2,13 @@
 
 A small local model copies identifiers from the prompt's examples or the spec index into
 unrelated requirements and adds services the text never asked for. Everything here runs
-only for backends that hallucinate (``applies_grounding``, i.e. not the mock) and every
-removal is recorded as a :class:`Drop` (the parse node writes it to the notes and trace).
+on every parse and every removal is recorded as a :class:`Drop` (the parse node writes it to the notes and trace).
 
 Identifiers (DIDs, routines, DTCs) survive only if they are
 
 (a) *written in the requirement text* (hex form, any case, with or without ``0x``; a DTC
     code as written), or
-(b) *linked to a retrieved ecu chunk* (a BM25/Chroma search with the requirement
+(b) *linked to a retrieved ecu chunk* (a Chroma search with the requirement
     text, run here because ``parse`` runs before ``retrieve``) whose name matches words of
     the requirement text. The spec has no alias field, so the name is the only label; its
     underscore-separated words are compared with the requirement's words (light stemming,
@@ -29,7 +28,7 @@ Rule  Evidence for service S
 (b)   Implied by a *kept* identifier plus intent: a DID with a read/verify/report intent
       -> 0x22, with a write intent (or the ``write``/``range``/``length`` intents) ->
       0x2E; a routine -> 0x31; a DTC with a clearing verb -> 0x14, otherwise -> 0x19.
-(c)   Retrieval support: the BM25 search over the ``standard`` collection returns S's
+(c)   Retrieval support: the Chroma search over the ``standard`` collection returns S's
       section (``svc-0x..``) among the top :data:`SERVICE_RETRIEVAL_K` AND at least one
       *weak* word of S (``SERVICE_WEAK``) is in the text. Never retrieval alone.
 ====  ==================================================================================

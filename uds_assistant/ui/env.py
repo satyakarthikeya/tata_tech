@@ -1,4 +1,4 @@
-"""Environment probes and paths for the UI (no streamlit import, so they are unit-testable)."""
+"""Environment probes and paths for the UI (no streamlit import)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from uds_assistant.llm.client import ollama_base_url, ollama_reachable
+from uds_assistant.llm.factory import START_OLLAMA_HINT
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROBE_TIMEOUT_S = 0.8
@@ -16,16 +17,7 @@ def ollama_status() -> tuple[bool, str]:
     base = ollama_base_url()
     if ollama_reachable(base, timeout_s=PROBE_TIMEOUT_S):
         return True, f"Ollama reachable at {base}"
-    return False, f"Ollama not reachable at {base}"
-
-
-def chroma_status(embedder: str = "fastembed") -> tuple[bool, str]:
-    """``(available, text)``; Chroma needs ``chromadb`` plus the chosen embedder package."""
-    from uds_assistant.rag.chroma import chroma_available
-
-    if chroma_available(embedder):
-        return True, f"chromadb and the {embedder} embedder are installed"
-    return False, f"chromadb or the {embedder} embedder is not installed"
+    return False, f"Ollama not reachable at {base}. {START_OLLAMA_HINT}."
 
 
 def audit_db_path() -> Path:

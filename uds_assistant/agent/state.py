@@ -133,7 +133,7 @@ class PipelineResult(BaseModel):
     llm_stats: dict[str, float] = Field(default_factory=dict)
     """LLM call counters for this run (calls, http_requests, json_failures, retries, ...)."""
     fallback_events: list[str] = Field(default_factory=list)
-    """Fallback-to-mock events: get_llm fallback warning (verbatim) and per-call LLM failures."""
+    """Per-call LLM failures (a node continued without the reply)."""
     grounding_drops: list[str] = Field(default_factory=list)
     target_provenance: dict[str, list[TargetEvidence]] = Field(default_factory=dict)
     """Per kept test id: its service/DID/routine targets with ``written`` true/false.

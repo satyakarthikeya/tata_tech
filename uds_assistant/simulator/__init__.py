@@ -4,7 +4,7 @@ Public API:
 
 - :class:`SimulatedEcu` — stateful ECU, ``handle(request, now_ms) -> list[bytes]``.
 - :func:`load_bug_catalog` / :data:`IMPLEMENTED_BUG_IDS` — injectable faults;
-  :data:`HELDOUT_BUG_IDS` / :data:`HELDOUT_BUG_CATALOG_PATH` — the held-out set.
+  :data:`HELDOUT_V3_BUG_IDS` / :data:`HELDOUT_V3_BUG_CATALOG_PATH` — the blind v3 set.
 - :class:`InProcessTransport`, :class:`EcuCanServer`, :class:`IsoTpClientTransport`
   — ways to talk to the ECU.
 """
@@ -14,10 +14,6 @@ from __future__ import annotations
 from uds_assistant.simulator.bugs import (
     ALL_BUG_IDS,
     DEFAULT_BUG_CATALOG_PATH,
-    HELDOUT_BUG_CATALOG_PATH,
-    HELDOUT_BUG_IDS,
-    HELDOUT_V2_BUG_CATALOG_PATH,
-    HELDOUT_V2_BUG_IDS,
     HELDOUT_V3_BUG_CATALOG_PATH,
     HELDOUT_V3_BUG_IDS,
     IMPLEMENTED_BUG_IDS,
@@ -35,10 +31,6 @@ from uds_assistant.simulator.transport import (
 __all__ = [
     "ALL_BUG_IDS",
     "DEFAULT_BUG_CATALOG_PATH",
-    "HELDOUT_BUG_CATALOG_PATH",
-    "HELDOUT_BUG_IDS",
-    "HELDOUT_V2_BUG_CATALOG_PATH",
-    "HELDOUT_V2_BUG_IDS",
     "HELDOUT_V3_BUG_CATALOG_PATH",
     "HELDOUT_V3_BUG_IDS",
     "IMPLEMENTED_BUG_IDS",

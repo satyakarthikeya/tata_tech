@@ -7,7 +7,6 @@ __pycache__
 .venv
 venv
 outputs/chroma
-outputs/timing
 outputs/*.db
 *.sqlite
 .pytest_cache

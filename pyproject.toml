@@ -9,7 +9,9 @@ dependencies = [
     "udsoncan",
     "can-isotp",
     "python-can",
-    "rank-bm25",
+    "chromadb",
+    "fastembed",
+    "uvicorn",
     "fastapi",
     "httpx",
     "langgraph",
@@ -21,12 +23,6 @@ ui = ["streamlit"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = [
-    "needs_model: test requires a real local LLM/embedding model (skipped unless RUN_MODEL_TESTS=1)",
-]
 
 [build-system]
 requires = ["setuptools>=61"]

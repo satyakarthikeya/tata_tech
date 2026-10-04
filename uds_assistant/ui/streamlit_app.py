@@ -1,32 +1,31 @@
-"""Streamlit demo UI for the UDS diagnostics assistant: five tabs.
+"""Streamlit demo UI for the UDS diagnostics assistant: four tabs.
 
 Run with::
 
     streamlit run uds_assistant/ui/streamlit_app.py
 
 Tabs: Ask (cited Q&A) -> Generate & Review (requirement to cited tests, human review in the audit
-DB) -> Run on Simulator (clean or with one injected bug) -> Export (pytest, CAPL) -> Results
-(headline cards from ``outputs/eval_report.json``).
+DB) -> Run & Export (clean simulator or one injected bug, then pytest / CAPL download) ->
+Results (the eight evaluation sections from ``outputs/eval_report.json``).
 
-This script only wires the tabs. The testable logic lives in the sibling modules: ``decode``
-(step decoding), ``state`` (review actions), ``bugs`` (bug choices), ``examples``,
-``results_cards`` / ``results_detail`` (Results tab) and ``env`` (probes and paths). It calls the
-pipeline, Q&A, runner and store directly (no network hop to the FastAPI service). Nothing else in
-``uds_assistant`` imports this module, so the package stays importable without streamlit.
+Ollama is required: when it is not reachable the sidebar turns red and the tabs that need the
+model say "Start Ollama and pull <model>". The testable logic lives in the sibling modules:
+``decode`` (step decoding), ``state`` (review actions), ``bugs`` (bug choices), ``examples``
+and ``env`` (probes and paths). The script calls the pipeline, Q&A, runner and store directly
+(no network hop to the FastAPI service). Nothing else in ``uds_assistant`` imports this module,
+so the package stays importable without streamlit.
 """
 
 from __future__ import annotations
 
 import json
-import warnings
 from pathlib import Path
 
 import streamlit as st
 
 from uds_assistant.agent import run_pipeline
-from uds_assistant.config import Config, get_config
 from uds_assistant.export import CAPL_BANNER, render_capl, render_pytest
-from uds_assistant.llm.factory import get_llm
+from uds_assistant.llm.factory import START_OLLAMA_HINT, get_llm
 from uds_assistant.qa import answer_question
 from uds_assistant.qa.lookup import FactLookup
 from uds_assistant.rag.factory import get_retriever
@@ -38,17 +37,14 @@ from uds_assistant.ui import env, state
 from uds_assistant.ui.bugs import NO_BUG, bug_options
 from uds_assistant.ui.decode import decode_responses, decode_step, spaced_hex
 from uds_assistant.ui.examples import ASK_EXAMPLES, requirement_examples
-from uds_assistant.ui.results_cards import build_cards
-from uds_assistant.ui.results_detail import render_details
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GOVERNANCE_BANNER = (
-    "Synthetic ECU spec. Human review required before any real-hardware execution."
-)
+GOVERNANCE_BANNER = "Synthetic ECU spec — human review required before real-hardware use."
 NOT_FOUND_TEXT = "Not found in the approved sources."
 CONF_COLOR = {"high": "green", "medium": "orange", "low": "red"}
 PICK = "(pick an example)"
-SCOPES = ("selected test", "approved tests", "all tests")
+SCOPES = ("all tests", "approved tests", "selected test")
+OLLAMA_MISSING = f"{START_OLLAMA_HINT}."
 
 
 # ---------------------------------------------------------------------------------- cached backend
@@ -66,33 +62,22 @@ def _store(path: str) -> AuditStore:
     return AuditStore(path)
 
 
-@st.cache_resource
-def _retriever(name: str) -> tuple[object, list[str]]:
-    """The retriever plus any fallback warnings (e.g. Chroma could not start)."""
-    cfg = get_config()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        r = get_retriever(
-            Config(llm_mode="mock", retriever=name, embedder=cfg.embedder),  # type: ignore[arg-type]
-            chunks=_static()["corpus"],  # type: ignore[arg-type]
-        )
-    return r, [str(w.message) for w in caught]
+@st.cache_resource(show_spinner="Loading the ChromaDB index (BGE embeddings)...")
+def _retriever():
+    return get_retriever(
+        chunks=_static()["corpus"],  # type: ignore[arg-type]
+        persist_dir=REPO_ROOT / "outputs" / "chroma",
+    )
 
 
 @st.cache_resource
-def _llm(mode: str, reachable: bool):
-    cfg = get_config()
-    return get_llm(Config(llm_mode=mode, retriever=cfg.retriever, embedder=cfg.embedder))  # type: ignore[arg-type]
+def _llm():
+    return get_llm()
 
 
 @st.cache_data(ttl=15, show_spinner=False)
 def _ollama_status() -> tuple[bool, str]:
     return env.ollama_status()
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _chroma_status(embedder: str) -> tuple[bool, str]:
-    return env.chroma_status(embedder)
 
 
 @st.cache_data(show_spinner=False)
@@ -109,52 +94,30 @@ def _read_report(path: str, mtime: float) -> tuple[dict | None, str]:
 
 
 def _sidebar() -> dict[str, object]:
-    """Mode and retriever selectors. An unavailable option is removed and the widget disabled.
-
-    ``st.radio`` cannot disable a single option, so when a backend is unavailable the radio keeps
-    only the working option, is itself disabled, and a warning gives the reason.
-    """
-    cfg = get_config()
+    """Ollama status (green / red), the governance banner, and the shared backend objects."""
     sb = st.sidebar
-    sb.header("Settings")
+    sb.header("Status")
     ollama_ok, ollama_text = _ollama_status()
-    modes = ["mock", "ollama"] if ollama_ok else ["mock"]
-    mode = sb.radio(
-        "LLM mode",
-        modes,
-        index=modes.index(cfg.llm_mode) if cfg.llm_mode in modes else 0,
-        key="llm_mode",
-        disabled=not ollama_ok,
-        help="mock = deterministic keyword stand-in; ollama = local Qwen2.5-3B.",
-    )
     if ollama_ok:
         sb.success(ollama_text)
     else:
-        sb.warning(f"Ollama option disabled: {ollama_text}. Start Ollama to enable it.")
-    chroma_ok, chroma_text = _chroma_status(cfg.embedder)
-    rets = ["bm25", "chroma"] if chroma_ok else ["bm25"]
-    retr = sb.radio(
-        "Retriever",
-        rets,
-        index=rets.index(cfg.retriever) if cfg.retriever in rets else 0,
-        key="retriever",
-        disabled=not chroma_ok,
-    )
-    if not chroma_ok:
-        sb.warning(f"Chroma option disabled: {chroma_text}.")
+        sb.error(ollama_text)
     sb.warning(GOVERNANCE_BANNER)
     db_path = env.audit_db_path()
     sb.caption(f"Audit trail: {db_path.name}")
-    retriever, notes = _retriever(retr)
-    for n in notes:
-        sb.warning(n)
     return {
-        "mode": mode,
-        "llm": _llm(mode, ollama_ok),
-        "retriever": retriever,
+        "ollama_ok": ollama_ok,
         "store": _store(str(db_path)),
         **_static(),
     }
+
+
+def _need_ollama(ctx: dict[str, object]) -> bool:
+    """Show the start-Ollama hint and return True when the model is unavailable."""
+    if ctx["ollama_ok"]:
+        return False
+    st.error(OLLAMA_MISSING)
+    return True
 
 
 # ------------------------------------------------------------------------------------------- Ask
@@ -179,14 +142,16 @@ def _ask_tab(ctx: dict[str, object]) -> None:
         "Example questions", [PICK, *ASK_EXAMPLES], key="ask_example", on_change=_use_ask_example
     )
     question = st.text_input("Question", key="ask_q", placeholder="e.g. What is the length of DID 0xF190?")
+    if _need_ollama(ctx):
+        return
     if st.button("Ask", type="primary") and question.strip():
         with st.spinner("Searching the approved sources..."):
             st.session_state.ask_resp = answer_question(
                 question,
                 spec=ctx["spec"],
                 chunks=ctx["corpus"],
-                retriever=ctx["retriever"],
-                llm=ctx["llm"],
+                retriever=_retriever(),
+                llm=_llm(),
                 lookup=ctx["lookup"],
             )
     resp = st.session_state.get("ask_resp")
@@ -197,7 +162,6 @@ def _ask_tab(ctx: dict[str, object]) -> None:
     else:
         st.markdown(resp.answer)
     _confidence_badge(resp.confidence, resp.confidence_reason)
-    st.caption(f"Answer phrased by: {resp.llm_mode}")
     for ev in resp.fallback_events:
         st.caption(f"LLM phrasing discarded: {ev}")
     if resp.citations:
@@ -281,14 +245,14 @@ def _generate_tab(ctx: dict[str, object]) -> None:
     )
     st.session_state.setdefault("req_id", "REQ-UI-001")
     rid = st.text_input("Requirement id", key="req_id")
+    if _need_ollama(ctx):
+        return
     if st.button("Generate tests", type="primary"):
         if not text.strip():
             st.error("Requirement text must not be empty.")
         else:
-            with st.spinner(f"Running parse, retrieve, plan, instantiate, validate, explain ({ctx['mode']})..."):
-                result = run_pipeline(
-                    text, rid, ctx["spec"], ctx["llm"], ctx["retriever"], ctx["store"]
-                )
+            with st.spinner("Running parse, retrieve, plan, instantiate, validate, explain..."):
+                result = run_pipeline(text, rid, ctx["spec"], _llm(), _retriever(), ctx["store"])
             st.session_state.result = result
             st.session_state.tests = result.tests
             st.session_state.run_id = result.run_id
@@ -301,9 +265,8 @@ def _generate_tab(ctx: dict[str, object]) -> None:
     st.success(
         f"Generated {len(result.tests)} test(s), dropped {len(result.dropped)}. run_id={result.run_id}"
     )
-    st.caption(f"LLM backend used: {result.llm}; engine: {result.engine}.")
     for event in result.fallback_events:
-        st.warning(f"Fallback: {event}")
+        st.warning(f"LLM call failed: {event}")
     for note in result.notes:
         st.info(note)
     tests = st.session_state.tests
@@ -380,10 +343,10 @@ def _failure_panel(test, result, did_names: dict[int, str]) -> None:
 
 
 def _run_tab(ctx: dict[str, object]) -> None:
-    st.subheader("Run tests on the ECU simulator")
+    st.subheader("Run on the ECU simulator")
     tests = st.session_state.get("tests") or []
     if not tests:
-        st.info("Generate tests first (Generate & Review tab).")
+        st.info("Generate tests first on the Generate & Review tab.")
         return
     options = bug_options()
     labels = {o.label: o for o in options}
@@ -462,7 +425,7 @@ def _export_tab() -> None:
     st.subheader("Export")
     tests = st.session_state.get("tests") or []
     if not tests:
-        st.info("Generate tests first (Generate & Review tab).")
+        st.info("Generate tests first on the Generate & Review tab.")
         return
     approved_only = st.checkbox("Approved tests only", key="export_approved")
     chosen = state.approved_tests(tests) if approved_only else tests
@@ -489,6 +452,17 @@ def _export_tab() -> None:
 # -------------------------------------------------------------------------------- Results tab
 
 
+def _pct(x: float | None) -> str:
+    return "n/a" if x is None else f"{x:.0%}"
+
+
+def _card(col, title: str, value: str, caption: str) -> None:
+    with col.container(border=True):
+        st.caption(title)
+        st.markdown(f"### {value}")
+        st.caption(caption)
+
+
 def _results_tab() -> None:
     st.subheader("Evaluation results")
     path = env.report_path()
@@ -499,23 +473,38 @@ def _results_tab() -> None:
     if report is None:
         st.info(f"The report at {path} could not be read ({why}).")
         return
-    cards = build_cards(report)
-    for row in (cards[:3], cards[3:]):
-        cols = st.columns(3)
-        for col, card in zip(cols, row, strict=False):
-            with col.container(border=True):
-                st.markdown(f"**{card.title}**")
-                if not card.available:
-                    st.info(card.caption)
-                    continue
-                for label, value in card.lines:
-                    st.markdown(f"{label}: **{value}**")
-                st.caption(card.caption)
-                st.caption(f"run {card.run_date} · git {card.git_short}")
-    try:
-        render_details(report)
-    except Exception as exc:  # noqa: BLE001 - a malformed section must not blank the tab
-        st.info(f"Some detail sections could not be rendered ({type(exc).__name__}: {exc}).")
+    st.caption(f"Run {report['timestamp']} · git {report['git']} · model {report['llm']['model']}")
+    g, cov, ru, dd = (
+        report["generation_accuracy"], report["coverage"], report["reuse"],
+        report["defect_detection"],
+    )
+    un, qa, td, c = report["understanding"], report["qa"], report["test_design_time"], report["correctness"]
+    totals = cov["category_totals"]
+    cols = st.columns(4)
+    _card(cols[0], "Generation accuracy", _pct(g["valid_request_rate"]),
+          f"valid requests; {_pct(g['clean_pass_rate'])} of {g['tests']} tests pass on the clean simulator")
+    _card(cols[1], "Coverage", f"{cov['requirements_with_tests']}/{cov['requirements']} requirements",
+          ", ".join(f"{k} {v}" for k, v in totals.items()))
+    _card(cols[2], "Reuse rate", _pct(ru["rate"]),
+          f"{ru['from_templates']}/{ru['tests']} tests built from approved templates")
+    _card(cols[3], "Defect detection", f"{dd['caught']}/{dd['bugs']} bugs",
+          "blind v3 set, generated tests + conformance sweep")
+    cols = st.columns(4)
+    _card(cols[0], "Requirement understanding", _pct(un["target_f1"]),
+          f"target F1; category recall {_pct(un['category_recall'])}, "
+          f"precondition recall {_pct(un['precondition_recall'])}")
+    _card(cols[1], "Q&A accuracy", _pct(qa["answer_accuracy"]),
+          f"citations correct {_pct(qa['citation_correctness'])}; "
+          f"correct not-found {qa['correct_not_found_n']}/{qa['n_unanswerable']}")
+    _card(cols[2], "Tool time per requirement", f"{td['tool_seconds_per_requirement_mean']} s",
+          f"mean over {td['requirements_timed']} requirements; manual time: owner to fill")
+    ag = c["simulator_rules_agreement"]
+    _card(cols[3], "Correctness checks",
+          f"{c['gold_clean']['passed']}/{c['gold_clean']['total']} gold pass",
+          f"simulator = rules engine on {ag.get('agreed')}/{ag.get('requests')} requests; "
+          f"udsoncan virtual CAN: {c['udsoncan_virtual_can']['status']}")
+    if dd["missed"]:
+        st.caption("Missed blind-set bugs: " + ", ".join(x["bug_id"] for x in dd["missed"]))
 
 
 # ------------------------------------------------------------------------------------------ main
@@ -525,16 +514,16 @@ def main() -> None:
     st.set_page_config(page_title="UDS Diagnostics Assistant", layout="wide")
     st.title("UDS Diagnostics & Automated Test Generation Assistant")
     ctx = _sidebar()
-    tabs = st.tabs(["Ask", "Generate & Review", "Run on Simulator", "Export", "Results"])
+    tabs = st.tabs(["Ask", "Generate & Review", "Run & Export", "Results"])
     with tabs[0]:
         _ask_tab(ctx)
     with tabs[1]:
         _generate_tab(ctx)
     with tabs[2]:
         _run_tab(ctx)
-    with tabs[3]:
+        st.divider()
         _export_tab()
-    with tabs[4]:
+    with tabs[3]:
         _results_tab()
 
 

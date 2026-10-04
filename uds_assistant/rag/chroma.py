@@ -1,9 +1,4 @@
-"""ChromaDB retrieval backend with a pluggable embedder (model-dependent).
-
-``chromadb`` and the embedding package (``fastembed`` by default, or
-``sentence-transformers``) are optional and never imported at module load
-time (AGENT.md: lazy imports inside functions). Tests that instantiate
-:class:`ChromaRetriever` are marked ``needs_model``.
+"""ChromaDB retrieval with BGE embeddings (fastembed): the only retriever.
 
 The persistent store (``outputs/chroma``, gitignored) keeps one Chroma
 collection per embedder+model for the core layers (standard / ecu / project) and
@@ -17,20 +12,11 @@ import hashlib
 import re
 from pathlib import Path
 
-from uds_assistant.rag.embedders import Embedder, embedder_available, get_embedder
+from uds_assistant.rag.embedders import Embedder, FastEmbedEmbedder
 from uds_assistant.rag.model import CORE_LAYERS, Chunk, Hit, normalize_layer
 
 DEFAULT_PERSIST_DIR = "outputs/chroma"
 DEFAULT_COLLECTION_NAME = "uds_assistant"
-
-
-def chroma_available(embedder: str = "fastembed") -> bool:
-    """Check that ``chromadb`` and the chosen embedder's package are importable."""
-    try:
-        import chromadb  # noqa: F401
-    except ImportError:
-        return False
-    return embedder_available(embedder)
 
 
 def _text_hash(text: str) -> str:
@@ -53,14 +39,12 @@ class ChromaRetriever:
         chunks: list[Chunk],
         *,
         persist_dir: str | Path = DEFAULT_PERSIST_DIR,
-        embedder: Embedder | str = "fastembed",
+        embedder: Embedder | None = None,
         collection_name: str = DEFAULT_COLLECTION_NAME,
     ) -> None:
         import chromadb
 
-        self._embedder: Embedder = (
-            get_embedder(embedder) if isinstance(embedder, str) else embedder
-        )
+        self._embedder: Embedder = embedder or FastEmbedEmbedder()
         self._chunks_by_id = {c.id: c for c in chunks}
         self._client = chromadb.PersistentClient(path=str(persist_dir))
         self._collection_name = collection_name

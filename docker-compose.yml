@@ -6,8 +6,6 @@ services:
       - "8000:8000"   # FastAPI (http://localhost:8000/docs)
       - "8501:8501"   # Streamlit UI (http://localhost:8501)
     environment:
-      LLM_MODE: ${LLM_MODE:-mock}        # mock | ollama
-      RETRIEVER: ${RETRIEVER:-bm25}      # bm25 | chroma
       OLLAMA_HOST: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}
     depends_on:
@@ -27,6 +25,7 @@ services:
     # 1. Install the NVIDIA driver and the NVIDIA Container Toolkit on the host.
     # 2. Uncomment the block below (keep the indentation under "ollama:").
     # 3. Run: docker compose up -d --build
+    # 4. Pull the model once: docker compose exec ollama ollama pull qwen2.5:3b-instruct-q4_K_M
     # deploy:
     #   resources:
     #     reservations:

@@ -16,11 +16,10 @@ WORKDIR /app
 
 # Editable install: the code locates data/ and outputs/ relative to the source tree
 # (REPO_ROOT = parents[2] of uds_assistant/api/app.py), so the repo must stay at /app.
-# uvicorn is not in pyproject.toml but the API needs it; chromadb + fastembed enable
-# RETRIEVER=chroma (model weights download on first use, needs network then).
+# The BGE embedding weights download on first use (needs network then).
 COPY pyproject.toml README.md ./
 COPY uds_assistant ./uds_assistant
-RUN pip install -e ".[ui]" uvicorn chromadb fastembed
+RUN pip install -e ".[ui]"
 
 COPY data ./data
 COPY docs ./docs

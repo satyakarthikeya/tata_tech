@@ -1,12 +1,10 @@
 """Requirement understanding: score pipeline output on the labelled natural requirements.
 
-Input labels: ``data/requirements_natural.csv`` (splits ``test`` / ``dev``) and
-``data/requirements_natural_v2.csv`` (split ``test2``) and ``data/requirements_natural_v3.csv``
-(split ``test3``), all with the same schema; see ``data/requirements_natural.md`` for the label
-semantics.
-For each requirement the agent pipeline produced a :class:`ParsedRequirement` and
-a list of generated tests; this module turns both into comparable sets and scores
-them. Every function here is pure; definitions are in :data:`UNDERSTANDING_DEFINITIONS`.
+Input labels: ``data/requirements_natural_v3.csv`` (blind set; label semantics in
+``data/requirements_natural_v3.md``). For each requirement the agent pipeline produced a
+:class:`ParsedRequirement` and a list of generated tests; this module turns both into
+comparable sets and scores them (target precision/recall/F1, category recall, precondition
+recall). Every function here is pure.
 """
 
 from __future__ import annotations
@@ -18,7 +16,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from uds_assistant.eval.breakdown import by_kind
 from uds_assistant.eval.trace import request_did_ids, request_routine_id, trace_test
 from uds_assistant.llm.base import ParsedRequirement
 from uds_assistant.spec.schema import EcuSpec
@@ -27,7 +24,6 @@ from uds_assistant.testgen.model import TestCase
 Ident = tuple[str, int]
 """A typed identifier: ``("service", 0x22)``, ``("did", 0xF190)`` or ``("routine", 0x0201)``."""
 
-SPLITS = ("test", "dev", "test2", "test3", "all")
 PRECONDITIONS = (
     "default_session", "extended_session", "programming_session", "security_level_1",
     "security_level_3", "vehicle_stationary", "vehicle_moving", "nvm_fault", "dtc_status_set",
@@ -58,39 +54,8 @@ PRECONDITION_MAPPING: dict[str, str] = {
     "(requiredTimeDelayNotExpired) response",
 }
 
-UNDERSTANDING_DEFINITIONS: dict[str, str] = {
-    "target_identification": (
-        "Label set = target_services U target_dids U target_routines (typed, so service 0x22 "
-        "and DID 0x0022 differ). Two predicted sets: (a) 'parsed' = services U dids U routines "
-        "of the ParsedRequirement returned by the pipeline; (b) 'exercised' = every SID of "
-        "every send step in the requirement's generated tests, every DID named by a 0x22 "
-        "(all complete pairs) or 0x2E (first pair) request, and every routine id of a 0x31 "
-        "request. Exact match = predicted set equals label set; for a requirement with an "
-        "empty label set (NAT-020, unsupported) exact match additionally requires zero "
-        "generated tests. Micro precision / recall / F1 sum TP / FP / FN over requirements."
-    ),
-    "category_recall": (
-        "|required_categories n categories of the requirement's generated tests| / "
-        "|required_categories|. Micro = summed numerators / summed denominators; macro = mean "
-        "over requirements with >= 1 required category (NAT-020 has none and is excluded)."
-    ),
-    "precondition_recall": (
-        "|required_preconditions n preconditions established by >= 1 generated test| / "
-        "|required_preconditions|, `none` skipped (requirements whose label is `none` are "
-        "excluded). 'Established' is derived statically from each test's concrete steps and "
-        "oracle-expected responses (mapping below). Micro and macro as for categories."
-    ),
-    "fallback": (
-        "A requirement counts as fallback / produced-nothing if the pipeline status is not "
-        "'completed', or the parsed requirement has no services, DIDs or routines, or it kept "
-        "zero tests. Reported with the list of ids (for NAT-020 producing nothing is the "
-        "correct outcome)."
-    ),
-}
-
-
 class NaturalRequirement(BaseModel):
-    """One labelled row of ``requirements_natural.csv``."""
+    """One labelled row of ``requirements_natural_v3.csv``."""
 
     id: str
     text: str
@@ -306,7 +271,7 @@ def score_requirement(
     }
 
 
-def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
     out: dict[str, Any] = {"requirements": len(rows)}
     for kind in ("parsed", "exercised"):
         exact = sum(1 for r in rows if r[kind]["exact"])
@@ -331,7 +296,6 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "macro_recall": round(sum(s["recall"] for s in scored) / len(scored), 4)
             if scored else None,
         }
-    out["by_kind"] = by_kind(rows)
     fallback = [r["id"] for r in rows if r["fallback"]]
     unexpected = [r["id"] for r in rows if r["fallback"] and r["label_targets"]]
     out["fallback"] = {
@@ -342,21 +306,4 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "note": "unexpected = excluding requirements with an empty label set (e.g. NAT-020), "
         "for which producing nothing is correct",
     }
-    return out
-
-
-def aggregate_by_split(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregates for every split present among ``rows`` (plus ``all``).
-
-    The v1 file gives ``test`` and ``dev``; the v2 file gives ``test2``; the v3 file gives
-    ``test3``. A split with no rows is omitted, except that ``test`` and ``dev`` are always
-    present when ``rows`` has no ``test2`` / ``test3`` rows (the v1 layout), so v1 reports
-    keep their shape.
-    """
-    present = {r["split"] for r in rows}
-    names = [s for s in ("test", "dev", "test2", "test3") if s in present]
-    if not present & {"test2", "test3"}:
-        names = ["test", "dev"]
-    out = {name: _aggregate([r for r in rows if r["split"] == name]) for name in names}
-    out["all"] = _aggregate(rows)
     return out

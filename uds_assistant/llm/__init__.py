@@ -1,4 +1,4 @@
-"""Pluggable LLM layer: deterministic mock and local Ollama backends.
+"""Pluggable LLM layer: local Ollama backend (required).
 
 The LLM only produces structured choices (identifiers, intents, template ids,
 option indices) and prose — never bytes. See :mod:`.base`.
@@ -16,14 +16,13 @@ from uds_assistant.llm.base import (
     extract_context,
 )
 from uds_assistant.llm.client import OllamaClient, ollama_reachable
-from uds_assistant.llm.factory import get_llm
-from uds_assistant.llm.mock import MockLLM
+from uds_assistant.llm.factory import OllamaUnavailableError, get_llm
 
 __all__ = [
     "LLMClient",
     "LLMError",
-    "MockLLM",
     "OllamaClient",
+    "OllamaUnavailableError",
     "ParsedRequirement",
     "PlannedTest",
     "TestPlan",

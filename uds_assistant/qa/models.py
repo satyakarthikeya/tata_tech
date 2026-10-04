@@ -23,8 +23,6 @@ class AskRequest(BaseModel):
     """Body of ``POST /ask``."""
 
     question: str = Field(min_length=1)
-    mode: Literal["mock", "ollama"] | None = None
-    """Optional per-request LLM mode (same values as ``/eval``); default: the server's mode."""
 
 
 class AskResponse(BaseModel):
@@ -37,8 +35,8 @@ class AskResponse(BaseModel):
     status: QAStatus
     fallback_events: list[str] = Field(default_factory=list)
     """Why the LLM phrasing was discarded for the template answer (empty if it was not)."""
-    llm_mode: str = "mock"
-    """``mock`` (template answer) or the LLM backend name that phrased the answer."""
+    llm: str = "ollama"
+    """The LLM backend that phrased the answer."""
 
 
 class Fact(BaseModel):

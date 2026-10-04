@@ -1,6 +1,6 @@
 """LLM interface and the structured schemas the agent asks an LLM to fill.
 
-Design rule (AGENT.md, PROJECT.md §3): **the LLM never produces bytes that
+Design rule (PROJECT.md §3): **the LLM never produces bytes that
 reach a final test.** The schemas below therefore contain *no* byte, hex
 payload, request or response fields. An LLM can only:
 
@@ -52,7 +52,7 @@ _DTC_RE = re.compile(r"^[A-Z0-9]{6}$")
 CONTEXT_MARKER = "CONTEXT_JSON:"
 """Prompts end with this marker followed by a JSON object holding the structured
 context (the requirement, the enumerated options, ...). A real LLM reads it as
-part of the prompt; :class:`~uds_assistant.llm.mock.MockLLM` parses it."""
+part of the prompt."""
 
 
 class LLMError(RuntimeError):
@@ -255,10 +255,10 @@ def stats_delta(after: dict[str, float], before: dict[str, float]) -> dict[str, 
 
 @runtime_checkable
 class LLMClient(Protocol):
-    """Interface every LLM backend implements (mock, Ollama, ...)."""
+    """Interface every LLM backend implements (Ollama)."""
 
     name: str
-    """Short backend label recorded in the audit trail, e.g. ``"mock"``."""
+    """Short backend label recorded in the audit trail, e.g. ``"ollama"``."""
 
     def complete_json(
         self, system: str, prompt: str, schema: type[T], json_schema: dict[str, object] | None = None
@@ -287,7 +287,7 @@ def estimate_tokens(*texts: str) -> int:
 
 
 def context_budget(llm: object) -> int | None:
-    """The backend's context window in tokens, or None if it has no limit (mock).
+    """The backend's context window in tokens, or None if it has no limit.
 
     Optional capability: a backend may expose ``context_tokens: int | None``. It is not
     part of the :class:`LLMClient` protocol so existing backends need no change.

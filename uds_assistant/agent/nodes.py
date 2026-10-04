@@ -179,46 +179,39 @@ def parse(state: PipelineState, deps: PipelineDeps) -> PipelineState:
                 note = f"Dropped unknown {field_name[:-1]} identifier {v} (not in spec)."
                 s.notes.append(note)
                 s.log("parse", note)
-    if getattr(deps.llm, "applies_grounding", True):
-        # Grounding is for models that hallucinate identifiers. The mock sets
-        # applies_grounding = False: it only emits ids written in the text or matched by a
-        # name phrase, so the check is a no-op there and is skipped to keep its output
-        # identical by construction.
-        text = s.requirement_text
-        drops = []
-        kept, quote_drops, valid_quotes = apply_quote_check(kept, parsed.evidence, text)
-        drops += quote_drops
-        kept, id_drops = ground_identifiers(kept, text, index, deps.retriever)
-        drops += id_drops
-        kept["sessions"], session_drops = ground_sessions(kept["sessions"], text, index)
-        kept["security_levels"], level_drops = ground_security_levels(
-            kept["security_levels"], text
-        )
-        drops += session_drops + level_drops
-        kept["services"], service_drops, reasons = ground_services(
-            kept["services"], text, kept, list(parsed.intents), deps.retriever
-        )
-        drops += service_drops
-        for drop in drops:
-            note = f"Dropped ungrounded {drop.field[:-1]} identifier {drop.identifier}: {drop.reason}."
-            s.notes.append(note)
-            s.grounding_drops.append(note)
-            s.log("parse", note)
-        for sid, why in reasons.items():
-            s.log("parse", f"service {sid} kept: {why}.")
-        if parsed.services and not kept["services"]:
-            note = "No parsed service had evidence in the requirement; continuing with none."
-            s.notes.append(note)
-            s.log("parse", note)
-        kept_items = {
-            f"{field[:-1] if field != 'security_levels' else 'security_level'}:{v}"
-            for field, values in kept.items()
-            for v in values
-        }
-        evidence = {k: q for k, q in valid_quotes.items() if k in kept_items}
-        kept_all: dict[str, object] = {**kept, "evidence": evidence}
-    else:
-        kept_all = dict(kept)
+    text = s.requirement_text
+    drops = []
+    kept, quote_drops, valid_quotes = apply_quote_check(kept, parsed.evidence, text)
+    drops += quote_drops
+    kept, id_drops = ground_identifiers(kept, text, index, deps.retriever)
+    drops += id_drops
+    kept["sessions"], session_drops = ground_sessions(kept["sessions"], text, index)
+    kept["security_levels"], level_drops = ground_security_levels(
+        kept["security_levels"], text
+    )
+    drops += session_drops + level_drops
+    kept["services"], service_drops, reasons = ground_services(
+        kept["services"], text, kept, list(parsed.intents), deps.retriever
+    )
+    drops += service_drops
+    for drop in drops:
+        note = f"Dropped ungrounded {drop.field[:-1]} identifier {drop.identifier}: {drop.reason}."
+        s.notes.append(note)
+        s.grounding_drops.append(note)
+        s.log("parse", note)
+    for sid, why in reasons.items():
+        s.log("parse", f"service {sid} kept: {why}.")
+    if parsed.services and not kept["services"]:
+        note = "No parsed service had evidence in the requirement; continuing with none."
+        s.notes.append(note)
+        s.log("parse", note)
+    kept_items = {
+        f"{field[:-1] if field != 'security_levels' else 'security_level'}:{v}"
+        for field, values in kept.items()
+        for v in values
+    }
+    evidence = {k: q for k, q in valid_quotes.items() if k in kept_items}
+    kept_all: dict[str, object] = {**kept, "evidence": evidence}
     s.parsed = parsed.model_copy(update=kept_all)
     p = s.parsed
     s.log(
@@ -353,44 +346,26 @@ def plan(state: PipelineState, deps: PipelineDeps) -> PipelineState:
     constrained = False
     skip_llm = False
     plan_schema: dict[str, object] = {}
-    if budget is None:
-        # Unlimited backend (mock): the full catalog as JSON context, unchanged.
-        prompt = build_prompt(
-            PLAN_INSTRUCTION,
-            {
-                "task": "plan",
-                "requirement_id": s.requirement_id,
-                "requirement_text": s.requirement_text,
-                "requirement": (s.parsed or ParsedRequirement()).model_dump(),
-                "templates": [t.model_dump() for t in catalog],
-                "rejected": [r.model_dump() for r in s.rejected],
-                "already_kept": [
-                    {"template_id": k[0], "option_index": k[1]} for k in sorted(kept_keys)
-                ],
-                "feedback": s.feedback,
-            },
+    exclude = kept_keys | rejected_keys
+    constrained = bool(getattr(deps.llm, "supports_json_schema", False))
+    prompt, entries = compact_plan_prompt(
+        s, deps, catalog, exclude, budget, constrained=constrained
+    )
+    if constrained and not entries:  # nothing to enumerate: an empty enum is not a schema
+        constrained = False
+        prompt, entries = compact_plan_prompt(s, deps, catalog, exclude, budget)
+    shortlist = {(e.template_id, e.option_index) for e in entries}
+    skip_llm = not entries
+    if constrained:
+        plan_schema = constrained_plan_schema(
+            [(e.template_id, e.option_index) for e in entries]
         )
-    else:
-        exclude = kept_keys | rejected_keys
-        constrained = bool(getattr(deps.llm, "supports_json_schema", False))
-        prompt, entries = compact_plan_prompt(
-            s, deps, catalog, exclude, budget, constrained=constrained
-        )
-        if constrained and not entries:  # nothing to enumerate: an empty enum is not a schema
-            constrained = False
-            prompt, entries = compact_plan_prompt(s, deps, catalog, exclude, budget)
-        shortlist = {(e.template_id, e.option_index) for e in entries}
-        skip_llm = not entries
-        if constrained:
-            plan_schema = constrained_plan_schema(
-                [(e.template_id, e.option_index) for e in entries]
-            )
-        s.log(
-            "plan",
-            f"compact prompt: {len(entries)} shortlisted options, ~"
-            f"{estimate_tokens(SYSTEM_PROMPT, prompt)} of {budget} context tokens"
-            + (", constrained decoding (enum of offered choices)" if constrained else ""),
-        )
+    s.log(
+        "plan",
+        f"compact prompt: {len(entries)} shortlisted options, ~"
+        f"{estimate_tokens(SYSTEM_PROMPT, prompt)} of {budget} context tokens"
+        + (", constrained decoding (enum of offered choices)" if constrained else ""),
+    )
     mark = truncation_mark(deps.llm)
     try:
         if skip_llm:
@@ -739,7 +714,7 @@ def explain_batches(
 ) -> list[list[dict[str, object]]]:
     """Split ``summaries`` into as few batches as fit the context window.
 
-    No limit (mock) -> one batch. Otherwise tests are added greedily while
+    No context limit -> one batch. Otherwise tests are added greedily while
     ``estimate_tokens(system, prompt) + EXPLAIN_TOKENS_PER_TEST * tests <= budget``; a batch
     always holds at least one test.
     """

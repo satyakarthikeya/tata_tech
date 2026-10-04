@@ -3,7 +3,7 @@
 Status: pending owner measurement
 
 Goal: compare the time to write UDS tests by hand with the time to generate them with the
-tool and review them. The tool-side compute time is measured by a script; only the human
+tool and review them. The tool-side compute time is measured by the evaluation; only the human
 part needs a stopwatch.
 
 ## The five requirements (data/requirements_seed.csv)
@@ -20,10 +20,9 @@ part needs a stopwatch.
 
 1. Use the repo at a known commit (record `git rev-parse --short HEAD` with the results).
 2. Have `data/bcm_spec.yaml` and the requirement text open. Do not look at `data/gold/` or
-   `outputs/generated_tests.yaml` during the manual runs.
+   `outputs/exports/` during the manual runs.
 3. Do the manual and the tool session for the same requirement on different days, or in a
-   shuffled order, so one does not prime the other. Use the mock LLM unless you are
-   deliberately measuring ollama.
+   shuffled order, so one does not prime the other. Ollama must be running.
 4. Close chat and email; one requirement per stopwatch run.
 
 ## What counts as "done"
@@ -63,23 +62,8 @@ Status: pending owner measurement
 
 ## Tool-side timings (measured)
 
-Run: `python scripts/time_generation.py --modes mock,ollama --repeats 3`, git `8357ec0`, 2026-10-04T11:51:04Z,
-laptop GPU, Ollama `qwen2.5:3b-instruct-q4_K_M`, BM25 retriever. Raw data: `outputs/timing/tool_timing.json`.
-Wall time per requirement for the whole pipeline (parse, retrieve, plan, instantiate, validate, explain).
-Caveat: another agent was editing `uds_assistant/rag/` (E3.3) in the working tree during this run.
-
-| requirement | mode | mean s | min s | max s | tests generated |
-|---|---|---|---|---|---|
-| REQ-001 | mock | 0.776 | 0.055 | 2.214 | 18 |
-| REQ-005 | mock | 0.099 | 0.077 | 0.116 | 18 |
-| REQ-009 | mock | 0.085 | 0.079 | 0.093 | 22 |
-| REQ-011 | mock | 0.077 | 0.055 | 0.120 | 12 |
-| REQ-015 | mock | 0.046 | 0.046 | 0.047 | 13 |
-| REQ-001 | ollama | 17.505 | 17.439 | 17.570 | 5 |
-| REQ-005 | ollama | 17.806 | 17.625 | 18.048 | 4 |
-| REQ-009 | ollama | 28.754 | 28.616 | 29.003 | 8 |
-| REQ-011 | ollama | 16.250 | 14.248 | 19.986 | 4 |
-| REQ-015 | ollama | 16.486 | 16.297 | 16.760 | 4 |
-
-REQ-001 mock max includes one-off warm-up (first call). These are tool-side times only; the
-manual-vs-tool comparison above is **pending owner measurement**.
+`python -m uds_assistant.eval.run_eval` times the whole pipeline (parse, retrieve, plan, instantiate, validate, explain) for
+every seed requirement with the real Ollama model and reports the mean, median and maximum in section 8 of
+[RESULTS.md](RESULTS.md); the manual-time row there says "owner to fill". These are tool-side times only: they do not
+include reading and reviewing the generated tests, which the stopwatch protocol above measures. The first request of a
+session includes loading the model.

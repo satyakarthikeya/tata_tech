@@ -23,7 +23,7 @@ rejections / retries        the requirement had >= 1 planner/instantiate/validat
                             rejection or planner retry
 grounding drops             parse grounding dropped >= 1 ungrounded item                -1
 fallback events             an LLM-fallback event applies (explain fallback for this    -1
-                            test, or a requirement-wide parse/plan/mock fallback)
+                            test, or a requirement-wide parse/plan failure)
 ==========================  =========================================================  ====
 
 Q&A answers: ``not_found`` -> ``low``; deterministic spec/NRC lookup -> ``high``;
@@ -41,10 +41,8 @@ Confidence = Literal["high", "medium", "low"]
 
 ORDER: tuple[Confidence, ...] = ("low", "medium", "high")
 
-WEAK_SCORE = 15.0
-"""Raw BM25 score below which the best cited hit counts as weak support. Fixed from the score
-scale (a single matching rare term scores ~5-10, a full-sentence match 20+); the 15 seed
-requirements all have a best cited hit >= 23, so it never fires on them."""
+WEAK_SCORE = 0.5
+"""Cosine similarity (Chroma + BGE) below which the best cited hit counts as weak support."""
 
 GOOD_COVERAGE = 0.8
 """Retrieval-only Q&A answers need the best sentence to cover this share of the question terms."""
@@ -81,7 +79,7 @@ def generated_test_confidence(
             "inferred target " + ", ".join(inferred) + " (not in text)"
         )
     if top_score is None or top_score < WEAK_SCORE:
-        shown = "no matching hit" if top_score is None else f"best cited hit {top_score:.1f}"
+        shown = "no matching hit" if top_score is None else f"best cited hit {top_score:.2f}"
         reasons.append(f"weak retrieval ({shown} < {WEAK_SCORE:g})")
     if rejections or retries:
         parts = []

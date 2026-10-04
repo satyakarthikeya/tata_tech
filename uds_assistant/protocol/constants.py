@@ -1,7 +1,7 @@
 """UDS protocol constants: service IDs and negative response codes.
 
-Values are cross-checked against ``udsoncan`` in
-``tests/protocol/test_udsoncan_crosscheck.py``; they are not copied from the
+Values were cross-checked against ``udsoncan`` (see git tag ``v1-full-archive``);
+they are not copied from the
 ISO 14229 text, only the numeric identifiers (which are public protocol
 wire values, not prose) and short own-words descriptions are given.
 """

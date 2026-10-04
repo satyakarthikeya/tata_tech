@@ -14,3 +14,4 @@ outputs/**/__pycache__/
 # AUTOSAR SWS: not redistributable; the owner downloads the PDF locally
 data/sources/*.pdf
 data/sources/.cache/
+*.egg-info/

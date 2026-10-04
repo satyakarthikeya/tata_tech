@@ -1,38 +1,24 @@
-"""Builds the configured LLM backend, falling back to :class:`MockLLM` safely.
-
-``LLM_MODE=mock`` (default) always works offline. ``LLM_MODE=ollama`` probes
-``GET /api/tags`` with a short timeout; if the server is unreachable the
-factory warns and returns :class:`MockLLM` (AGENT.md runtime switches).
-"""
+"""Builds the Ollama LLM client; Ollama is required (no offline stand-in)."""
 
 from __future__ import annotations
 
-import warnings
-
 import httpx
 
-from uds_assistant.config import Config, get_config
-from uds_assistant.llm.base import LLMClient
-from uds_assistant.llm.client import OllamaClient, ollama_base_url, ollama_reachable
-from uds_assistant.llm.mock import MockLLM
+from uds_assistant.llm.base import LLMError
+from uds_assistant.llm.client import OllamaClient, ollama_base_url, ollama_model, ollama_reachable
+
+START_OLLAMA_HINT = f"Start Ollama and pull {ollama_model()}"
+
+
+class OllamaUnavailableError(LLMError):
+    """Ollama is not reachable; the API maps this to HTTP 503."""
 
 
 def get_llm(
-    config: Config | None = None,
-    *,
-    probe_timeout_s: float = 2.0,
-    transport: httpx.BaseTransport | None = None,
-) -> LLMClient:
-    """Return the LLM backend selected by ``config.llm_mode`` (default: mock)."""
-    cfg = config or get_config()
-    if cfg.llm_mode == "ollama":
-        base_url = ollama_base_url()
-        if ollama_reachable(base_url, timeout_s=probe_timeout_s, transport=transport):
-            return OllamaClient(base_url=base_url, transport=transport)
-        message = (
-            f"LLM_MODE=ollama requested but Ollama is not reachable at {base_url}; "
-            "falling back to the deterministic mock LLM."
-        )
-        warnings.warn(message, stacklevel=2)
-        return MockLLM(fallback_events=[message])
-    return MockLLM()
+    *, probe_timeout_s: float = 2.0, transport: httpx.BaseTransport | None = None
+) -> OllamaClient:
+    """Return an :class:`OllamaClient`, or raise :class:`OllamaUnavailableError` if it is down."""
+    base_url = ollama_base_url()
+    if not ollama_reachable(base_url, timeout_s=probe_timeout_s, transport=transport):
+        raise OllamaUnavailableError(f"Ollama is not reachable at {base_url}. {START_OLLAMA_HINT}")
+    return OllamaClient(base_url=base_url, transport=transport)

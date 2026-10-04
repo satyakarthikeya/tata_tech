@@ -1,4 +1,4 @@
-"""Ollama-backed :class:`~uds_assistant.llm.base.LLMClient` (``LLM_MODE=ollama``).
+"""Ollama-backed :class:`~uds_assistant.llm.base.LLMClient`.
 
 Talks to a local Ollama server over HTTP (``/api/chat``) with ``stream=false``,
 temperature 0 for every call (parse, plan *and* explain: greedy decoding keeps
@@ -11,8 +11,7 @@ still validated with pydantic, and an invalid reply is re-prompted with the
 validation error. Transport errors (connection refused, timeouts) and 5xx
 responses are retried with bounded exponential backoff.
 
-No model is downloaded or contacted by the test suite: tests drive this class
-through ``httpx.MockTransport``.
+The ``transport`` argument lets callers inject a custom ``httpx`` transport.
 """
 
 from __future__ import annotations

@@ -5,9 +5,10 @@ the rules package) that names an NRC. Every check carries a ``Source:`` comment.
 Every check cites "design decision — see DECISIONS.md [tag]" (``[tag]`` is the
 bracketed label of the matching DECISIONS.md line) and/or "udsoncan behaviour".
 Where the AUTOSAR CP R24-11 Dcm SWS states the same behaviour, the requirement
-ID is cited too, with a one-line paraphrase (never SWS text); IDs are checked
-against the locally extracted SWS by tests/rules/test_sws_citations.py. Places
-where the SWS differs are listed in docs/SWS_DISAGREEMENTS.md, not cited here.
+ID is cited too, with a one-line paraphrase (never SWS text); IDs were checked
+against a local copy of the SWS. Places where this project deliberately differs
+from the SWS are marked "SWS_DISAGREEMENTS Dn" below (list in git tag
+``v1-full-archive``: docs/SWS_DISAGREEMENTS.md).
 Generic order = PROJECT.md §5.
 
 The function assumes the engine has already applied clock effects (S3 timeout,

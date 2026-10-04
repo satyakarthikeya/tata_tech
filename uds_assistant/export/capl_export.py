@@ -6,7 +6,7 @@ request bytes into a ``diagRequest``, sends it, waits with
 steps become ``testWaitForTimeout``; simulator-only set-up steps (vehicle speed,
 NVM fault, DTC status injection) become ``TODO`` comments for the bench
 engineer. CANoe is not available in this project, so the output is labelled a
-template (SCOPE.md).
+template.
 """
 
 from __future__ import annotations
