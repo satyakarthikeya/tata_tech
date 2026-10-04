@@ -1,0 +1,26 @@
+id,question,answerable,gold_answer,gold_facts,gold_source_ids,notes
+QA-001,Can the VIN be written in any diagnostic session?,true,"No. The VIN (DID 0xF190, 17 bytes) is read-only; it has no write sessions.",access=read;length=17,spec:did:0xF190,read-only DID
+QA-002,In which session and at what security level can DID 0x0100 (interior lighting brightness) be written?,true,"Only in the extended session, and security level 0x01 must be unlocked.",session=extended;security_level=1,spec:did:0x0100,"write_sessions [0x03], write_security_level 0x01"
+QA-003,"What security level is needed to write the coding variant id, and from which session?",true,"Security level 0x03, in the programming session. The DID is 2 bytes long.",security_level=3;session=programming;length=2,spec:did:0x0160,DID 0x0160
+QA-004,From which session(s) can the factory reset flag (0x0150) be read?,true,Only in the extended session.,session=extended,spec:did:0x0150,read_sessions [0x03]
+QA-005,"How many bytes is DID 0xF187, the manufacturer part number?",true,10 bytes (ASCII).,length=10,spec:did:0xF187,
+QA-006,What is the DID for the tire pressure reading on this BCM?,false,,,,DID not in spec
+QA-007,Is the driver door lock status DID writable?,true,"No, it is read-only (DID 0x0110, 1 byte).",access=read;length=1,spec:did:0x0110,name phrasing: driver_door_lock_state
+QA-008,What do I need to do before writing the wiper sensitivity level (0x0130)?,true,Be in the extended session and unlock security level 0x01.,session=extended;security_level=1,spec:did:0x0130,
+QA-009,Which session and security level does routine 0x0203 (NVM factory restore) require?,true,The programming session with security level 0x03.,session=programming;security_level=3,spec:routine:0x0203,
+QA-010,What session and security level are needed to start the lighting self test routine?,true,"Extended session, security level 0x01 (RID 0x0201).",session=extended;security_level=1,spec:routine:0x0201,name phrasing
+QA-011,What does NRC 0x33 mean?,true,securityAccessDenied: the operation needs a security level that is not currently unlocked.,nrc=0x33;nrc_name=securityAccessDenied,notes:nrcs-in-scope,spec has no NRC section; notes only
+QA-012,What CAN bit rate does the BCM use?,false,,,,bit rate not stated in either file
+QA-013,Which NRC is returned when WriteDataByIdentifier data has the wrong length?,true,NRC 0x13 incorrectMessageLengthOrInvalidFormat.,nrc=0x13;nrc_name=incorrectMessageLengthOrInvalidFormat,notes:0x2e-writedatabyidentifier;notes:nrcs-in-scope,
+QA-014,What does NRC 0x37 indicate?,true,requiredTimeDelayNotExpired: a SecurityAccess request arrived while the lockout delay is still active.,nrc=0x37;nrc_name=requiredTimeDelayNotExpired,notes:nrcs-in-scope,
+QA-015,What is the P2* timeout on this ECU?,true,5000 ms.,value=5000ms,spec:timing,timing in sessions list
+QA-016,How long is the S3 session timeout in the extended session?,true,5000 ms.,value=5000ms;session=extended,spec:timing;spec:session,
+QA-017,How many wrong keys are allowed for security level 0x01 and how long is the lockout delay?,true,"3 attempts, then a 10000 ms lockout delay.",value=3attempts;value=10000ms;security_level=1,spec:security,
+QA-018,What is the key algorithm used to compute the key for security level 0x01?,false,,,,algorithm not defined; notes only say a synthetic algorithm exists
+QA-019,Which sessions allow SecurityAccess (0x27)?,true,Programming and extended; not default.,session=programming;session=extended,spec:session;notes:0x27-securityaccess,allowed_services
+QA-020,In which sessions can vehicle speed (DID 0x0140) be read?,true,"Default, programming and extended.",session=default;session=programming;session=extended;access=read,spec:did:0x0140,
+QA-021,Which NRC does ReadDataByIdentifier return for an unknown DID?,true,NRC 0x31 requestOutOfRange (the whole request fails).,nrc=0x31;nrc_name=requestOutOfRange,notes:0x22-readdatabyidentifier;notes:nrcs-in-scope,
+QA-022,What happens when the S3 timer expires?,true,"The ECU falls back to the default session, locks any unlocked security level and clears pending seeds and routine status.",term=default session;term=locks security;term=S3,notes:timing-p2-p2-s3,conceptual
+QA-023,What is the suppress-positive-response bit?,true,Bit 7 of the sub-function byte; if set and the result is positive the ECU does the work but sends no response. Negative responses are never suppressed.,term=bit 7;term=no response;term=negative responses are never suppressed,notes:nrc-evaluation-order,"conceptual; defined in preamble of notes, closest heading used"
+QA-024,What is the maximum block length returned by RequestDownload (0x34) for flashing?,false,,,,0x34 not in the spec or notes
+QA-025,What is the format of a UDS negative response?,true,"Three bytes: 7F, the requested SID, then the NRC.",term=7F;term=requested SID;term=NRC,notes:nrc-evaluation-order,"conceptual; defined in preamble, closest heading used"

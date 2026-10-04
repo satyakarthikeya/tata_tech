@@ -930,3 +930,20 @@ The validation output, the count of requirements containing hex IDs, which are a
 - **What:** four retrieval layers `standard` / `oem` / `ecu` / `project` (`ecu_spec` renamed `ecu`, alias kept for filters). New synthetic `data/oem_diagnostic_guidelines.md` ingested into the `oem` layer with its own BM25 index and own Chroma collection. `Chunk.layer`, `LayeredCitation`, and `uds_assistant/rag/layers.py` (`search_layer`, `search_layers`, `cite_hits`, `layer_counts`).
 - **Generator effect:** none. The generator searches only the three core layers, and the core BM25 index is unchanged (scores bit-identical, tested), so mock tests and bytes are unchanged; tests/testgen, tests/agent, tests/eval all pass. `retrieval_compare` uses core layers only.
 - **Tests:** new `tests/rag/test_layers.py` (17 tests); `test_ingest.py` layer enumeration updated. Ruff clean; full pytest 1350 passed, 14 skipped.
+
+## E3.1 — done (2026-10-04)
+
+- **What:** `uds_assistant/qa/` (models, text helpers, `FactLookup` spec/NRC lookups, `answer_question`, `qa_confidence`), `POST /ask`, blind scorer `uds_assistant/eval/qa_eval.py`, outputs in `outputs/qa/qa_eval.{json,md}`. Answers come only from retrieved chunks and spec lookups; unknown entities and weak retrieval give `not_found`; every citation quote is a substring of its chunk; ollama phrasing is verified and falls back to the template.
+- **Blind eval (`data/qa_eval.csv`, 21 answerable + 4 unanswerable), run git hash `3a8c4e36c4244b45fa0b300aa683d7cf2519eec4` (+ uncommitted E3.1 files), third run (see DECISIONS E31-RERUNS for runs 1-2; two plain-bug fixes, one in the LLM-claim verifier, one in the scorer):**
+
+| metric | mock | ollama (qwen2.5:3b q4_K_M) |
+|---|---|---|
+| answer accuracy | 90.5% (19/21) | 90.5% (19/21) |
+| citation correctness | 95.2% (20/21) | 90.5% (19/21) |
+| citation precision | 80.6% (25/31) | 79.3% (23/29) |
+| correct not-found | 75% (3/4) | 75% (3/4) |
+| false not-found | 0 | 0 |
+| LLM fallback events | 0 | 12 |
+
+- **Misses:** QA-018 (key algorithm) answered instead of refused (retrieval overlap rule passes); QA-022 (S3 expiry) retrieved a project requirement sentence instead of the standard timing text; QA-023 (suppress bit) lacks the second sentence "negative responses are never suppressed" in mock, and ollama picked `project:subfunction-byte`. No re-run, no tuning.
+- **Tests:** tests/qa (+ `needs_model` test) and tests/eval/test_qa_eval.py; ruff clean; full pytest 1402 passed, 15 skipped (suite started before the last two small fixes; tests/qa and tests/eval/test_qa_eval.py re-run after them: pass); `RUN_MODEL_TESTS=1 pytest -m needs_model tests/qa`: 1 passed.

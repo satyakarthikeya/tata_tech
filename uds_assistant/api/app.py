@@ -23,9 +23,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from uds_assistant.agent import run_pipeline
-from uds_assistant.config import get_config
+from uds_assistant.config import Config, get_config
 from uds_assistant.export import render_capl, render_pytest
 from uds_assistant.llm.factory import get_llm
+from uds_assistant.qa import AskRequest, AskResponse, answer_question
+from uds_assistant.qa.lookup import FactLookup
 from uds_assistant.rag.factory import get_retriever
 from uds_assistant.rag.ingest import build_corpus
 from uds_assistant.runner import run_suite
@@ -172,6 +174,7 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
     app.state.retriever = get_retriever(cfg, chunks=app.state.corpus)
     app.state.llm = get_llm(cfg)
     app.state.bug_catalog = load_bug_catalog()
+    app.state.qa_lookup = FactLookup(app.state.spec, app.state.corpus)
 
     # ------------------------------------------------------------------------------- health
 
@@ -211,6 +214,23 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
             tests=result.tests,
             notes=result.notes,
             dropped_count=len(result.dropped),
+        )
+
+    # ------------------------------------------------------------------------------- ask
+
+    @app.post("/ask", response_model=AskResponse)
+    def ask(req: AskRequest) -> AskResponse:
+        """Cited diagnostic Q&A: answers only from the approved sources, or ``not_found``."""
+        llm = app.state.llm
+        if req.mode is not None:
+            llm = get_llm(Config(llm_mode=req.mode, retriever=cfg.retriever, embedder=cfg.embedder))
+        return answer_question(
+            req.question,
+            spec=app.state.spec,
+            chunks=app.state.corpus,
+            retriever=app.state.retriever,
+            llm=llm,
+            lookup=app.state.qa_lookup,
         )
 
     # ---------------------------------------------------------------------------------- run
