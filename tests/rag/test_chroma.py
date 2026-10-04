@@ -101,8 +101,8 @@ def test_chroma_retriever_round_trips(tmp_path):
             identifiers=["0xF190", "0x22"],
         ),
         Chunk(
-            id="ecu_spec:did:wiper",
-            collection="ecu_spec",
+            id="ecu:did:wiper",
+            collection="ecu",
             source_path="data/bcm_spec.yaml",
             ref="did:wiper_sensitivity_level",
             text="DID 0x0130 wiper sensitivity level, writable in extended session.",
@@ -155,9 +155,9 @@ def test_fastembed_cache_is_persistent_non_temp():
 
 
 @pytest.mark.needs_model
-def test_chroma_read_vin_surfaces_ecu_spec_did(real_retriever):
+def test_chroma_read_vin_surfaces_ecu_did(real_retriever):
     hits = real_retriever.search("read VIN", k=3)
-    assert any(h.chunk.collection == "ecu_spec" and h.chunk.ref == "did:VIN" for h in hits)
+    assert any(h.chunk.collection == "ecu" and h.chunk.ref == "did:VIN" for h in hits)
 
 
 @pytest.mark.needs_model
@@ -174,9 +174,9 @@ def test_chroma_wiper_sensitivity_surfaces_did_0x0130(real_retriever):
 
 @pytest.mark.needs_model
 def test_chroma_collection_filter(real_retriever):
-    hits = real_retriever.search("wiper sensitivity security session", k=10, collections=["ecu_spec"])
+    hits = real_retriever.search("wiper sensitivity security session", k=10, collections=["ecu"])
     assert hits
-    assert all(h.chunk.collection == "ecu_spec" for h in hits)
+    assert all(h.chunk.collection == "ecu" for h in hits)
 
 
 @pytest.mark.needs_model

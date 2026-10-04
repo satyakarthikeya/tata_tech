@@ -13,7 +13,7 @@ import re
 from collections import Counter
 
 from uds_assistant.rag.ingest import normalize_identifier
-from uds_assistant.rag.model import Chunk, Hit
+from uds_assistant.rag.model import CORE_LAYERS, Chunk, Hit, normalize_layer
 
 try:
     from rank_bm25 import BM25Okapi as _RankBm25Okapi
@@ -101,13 +101,30 @@ class HandBM25:
         return _bm25_scores_handwritten(query_tokens, self._docs)
 
 
+def _index_group(collection: str) -> str:
+    """Which BM25 index a chunk lives in: the shared core index, or its own."""
+    return "core" if collection in CORE_LAYERS else collection
+
+
 class Bm25Retriever:
-    """Layered BM25 retriever over a list of :class:`Chunk`, filterable by collection."""
+    """Layered BM25 retriever over a list of :class:`Chunk`, filterable by collection.
+
+    Each non-core layer (``oem``) has its own BM25 index, so its text does not
+    change the IDF statistics of the other layers. The original three layers
+    (``standard``, ``ecu``, ``project``) share one index exactly as before, so
+    their scores and rankings are unchanged by the OEM layer.
+    """
 
     def __init__(self, chunks: list[Chunk]) -> None:
         self._chunks = list(chunks)
+        self._group_idx: dict[str, list[int]] = {}
+        for idx, chunk in enumerate(self._chunks):
+            self._group_idx.setdefault(_index_group(chunk.collection), []).append(idx)
         self._tokenized = [tokenize(c.text) for c in self._chunks]
-        self._backend = self._build_backend(self._tokenized)
+        self._backends = {
+            g: self._build_backend([self._tokenized[i] for i in ids])
+            for g, ids in self._group_idx.items()
+        }
 
     @staticmethod
     def _build_backend(tokenized: list[list[str]]) -> object:
@@ -120,18 +137,29 @@ class Bm25Retriever:
         """True if the real ``rank_bm25`` package backs this instance."""
         return _HAVE_RANK_BM25 and bool(self._tokenized)
 
+    @property
+    def index_groups(self) -> dict[str, int]:
+        """Number of chunks in each separate BM25 index (``core``, ``oem``, ...)."""
+        return {g: len(ids) for g, ids in self._group_idx.items()}
+
     def search(
         self, query: str, k: int = 5, collections: list[str] | None = None
     ) -> list[Hit]:
         """Return the top ``k`` chunks for ``query``, optionally filtered by collection."""
         if not self._chunks:
             return []
+        wanted = None if collections is None else {normalize_layer(c) for c in collections}
         query_tokens = tokenize(query)
-        scores = self._backend.get_scores(query_tokens)
+        scores: dict[int, float] = {}
+        for group, ids in self._group_idx.items():
+            if wanted is not None and not any(self._chunks[i].collection in wanted for i in ids):
+                continue
+            group_scores = self._backends[group].get_scores(query_tokens)
+            scores.update(zip(ids, group_scores, strict=True))
         candidates = [
             (score, idx)
-            for idx, score in enumerate(scores)
-            if collections is None or self._chunks[idx].collection in collections
+            for idx, score in sorted(scores.items())
+            if wanted is None or self._chunks[idx].collection in wanted
         ]
         candidates.sort(key=lambda pair: pair[0], reverse=True)
         return [

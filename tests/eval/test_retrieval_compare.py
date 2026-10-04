@@ -41,9 +41,9 @@ def test_score_ranks_empty():
 
 def _chunks() -> list[Chunk]:
     return [
-        Chunk(id="ecu_spec:did:VIN", collection="ecu_spec", source_path="s", ref="did:VIN",
+        Chunk(id="ecu:did:VIN", collection="ecu", source_path="s", ref="did:VIN",
               text="t", identifiers=["0x22", "0xF190"]),
-        Chunk(id="ecu_spec:did:W", collection="ecu_spec", source_path="s", ref="did:W",
+        Chunk(id="ecu:did:W", collection="ecu", source_path="s", ref="did:W",
               text="t", identifiers=["0x22", "0x0130"]),
         Chunk(id="standard:svc-0x27", collection="standard", source_path="s", ref="svc-0x27",
               text="t", identifiers=["0x27"]),
@@ -54,7 +54,7 @@ def test_relevance_prefers_did_targets_then_services_then_excludes():
     corpus = _chunks()
     assert relevant_chunk_ids(
         {"target_services": "0x22", "target_dids": "0xf190", "target_routines": ""}, corpus
-    ) == {"ecu_spec:did:VIN"}
+    ) == {"ecu:did:VIN"}
     assert relevant_chunk_ids(
         {"target_services": "0x27", "target_dids": "", "target_routines": ""}, corpus
     ) == {"standard:svc-0x27"}

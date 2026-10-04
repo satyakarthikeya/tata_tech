@@ -68,7 +68,8 @@ from uds_assistant.rag.model import Chunk, Hit
 from uds_assistant.testgen.model import Citation, TestCase
 from uds_assistant.testgen.templates import TEMPLATES, applicable_params, validate_test
 
-COLLECTIONS = ("standard", "ecu_spec", "project")
+COLLECTIONS = ("standard", "ecu", "project")
+"""Layers the generator retrieves from. The ``oem`` layer is deliberately not searched here."""
 MAX_CITATIONS = 6
 PLAN_PROMPT_BUDGET = 0.6
 """Fraction of a limited context window the plan prompt (system + user) may use; the
@@ -238,15 +239,15 @@ def _retrieval_queries(state: PipelineState, deps: PipelineDeps) -> list[tuple[s
     p = state.parsed or ParsedRequirement()
     index = spec_index(deps.spec)
     for did in p.dids:
-        queries.append((f"DID {did} {index['dids'][did]}", ["ecu_spec"], 1))
+        queries.append((f"DID {did} {index['dids'][did]}", ["ecu"], 1))
     for rid in p.routines:
-        queries.append((f"Routine {rid} {index['routines'][rid]}", ["ecu_spec"], 1))
+        queries.append((f"Routine {rid} {index['routines'][rid]}", ["ecu"], 1))
     for lvl in p.security_levels:
-        queries.append((f"Security level {lvl} {index['security_levels'][lvl]}", ["ecu_spec"], 1))
+        queries.append((f"Security level {lvl} {index['security_levels'][lvl]}", ["ecu"], 1))
     for sess in p.sessions:
-        queries.append((f"Session {sess} {index['sessions'][sess]}", ["ecu_spec"], 1))
+        queries.append((f"Session {sess} {index['sessions'][sess]}", ["ecu"], 1))
     for code in p.dtcs:
-        queries.append((f"DTC {code} {index['dtcs'][code]}", ["ecu_spec"], 1))
+        queries.append((f"DTC {code} {index['dtcs'][code]}", ["ecu"], 1))
     for sid in p.services:
         queries.append((f"{sid} {index['services'][sid]}", ["standard", "project"], 2))
     return queries
@@ -482,7 +483,7 @@ def _best_quote(chunk: Chunk, ids: list[str]) -> str | None:
 
 
 _ENTITY_GROUPS: tuple[tuple[str, str, str, int], ...] = (
-    # (OptionRefs field, ecu_spec ref prefix, query label, max entries cited)
+    # (OptionRefs field, ecu ref prefix, query label, max entries cited)
     ("dids", "did:", "DID", 3),
     ("routines", "routine:", "Routine", 2),
     ("dtcs", "dtc:", "DTC", 1),
@@ -506,7 +507,7 @@ def evidence_targets(
             name = index[group].get(ident)
             if name is None:
                 continue
-            targets.append(("ecu_spec", f"{prefix}{name}", ident, [f"{label} {ident} {name}"]))
+            targets.append(("ecu", f"{prefix}{name}", ident, [f"{label} {ident} {name}"]))
     svc_name = index["services"].get(primary_sid, "")
     for collection in ("standard", "project"):
         targets.append((collection, "", primary_sid, [f"{primary_sid} {svc_name}"]))

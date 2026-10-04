@@ -346,7 +346,7 @@ services=['0x27', '0x2E']  dids=['0x0100']  security_levels=['0x01']
 intents=['positive', 'negative', 'session', 'security', 'write']
 ```
 
-**Step 2. Retrieve.** `14 evidence chunks kept: {'standard': 5, 'ecu_spec': 4, 'project': 5}`.
+**Step 2. Retrieve.** `14 evidence chunks kept: {'standard': 5, 'ecu': 4, 'project': 5}`.
 
 **Step 3. Plan.** `attempt 1: 18 choices proposed, 18 accepted` (templates such as `write_did_secured_positive`, `write_did_out_of_range`, `write_did_value_retained`, `seed_request_while_unlocked`, ...).
 

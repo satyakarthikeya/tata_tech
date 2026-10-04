@@ -1,9 +1,10 @@
 """Builds the retrieval corpus: markdown, YAML spec, and CSV requirements chunks.
 
-Three layered collections are produced:
+Four layered collections are produced:
 
 - ``standard``: ``data/sources/uds_reference_notes.md`` (own-words protocol notes).
-- ``ecu_spec``: one chunk per session / security level / DID / routine / DTC / timing
+- ``oem``: ``data/oem_diagnostic_guidelines.md`` (synthetic OEM-style diagnostic policy).
+- ``ecu``: one chunk per session / security level / DID / routine / DTC / timing
   entry in ``data/bcm_spec.yaml``.
 - ``project``: sections of ``docs/behaviour_contract.md`` and rows of
   ``data/requirements_seed.csv``.
@@ -17,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from uds_assistant.rag.model import Chunk
+from uds_assistant.rag.model import LAYERS, Chunk, normalize_layer
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 _ANCHOR_RE = re.compile(r"\{#([^}]+)\}")
@@ -91,7 +92,7 @@ def _fmt_hex(value: int, width: int = 2) -> str:
 
 
 def chunk_ecu_spec(path: Path, *, source_path: str) -> list[Chunk]:
-    """Build one human-readable ``ecu_spec`` chunk per session/security level/
+    """Build one human-readable ``ecu`` chunk per session/security level/
     DID/routine/DTC/timing entry in the BCM spec YAML."""
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     chunks: list[Chunk] = []
@@ -108,8 +109,8 @@ def chunk_ecu_spec(path: Path, *, source_path: str) -> list[Chunk]:
         ref = f"session:{sess['name']}"
         chunks.append(
             Chunk(
-                id=f"ecu_spec:{ref}",
-                collection="ecu_spec",
+                id=f"ecu:{ref}",
+                collection="ecu",
                 source_path=source_path,
                 ref=ref,
                 text=text,
@@ -129,8 +130,8 @@ def chunk_ecu_spec(path: Path, *, source_path: str) -> list[Chunk]:
         ref = f"security_level:{level['name']}"
         chunks.append(
             Chunk(
-                id=f"ecu_spec:{ref}",
-                collection="ecu_spec",
+                id=f"ecu:{ref}",
+                collection="ecu",
                 source_path=source_path,
                 ref=ref,
                 text=text,
@@ -157,8 +158,8 @@ def chunk_ecu_spec(path: Path, *, source_path: str) -> list[Chunk]:
         ref = f"did:{did['name']}"
         chunks.append(
             Chunk(
-                id=f"ecu_spec:{ref}",
-                collection="ecu_spec",
+                id=f"ecu:{ref}",
+                collection="ecu",
                 source_path=source_path,
                 ref=ref,
                 text=text,
@@ -180,8 +181,8 @@ def chunk_ecu_spec(path: Path, *, source_path: str) -> list[Chunk]:
         ref = f"routine:{routine['name']}"
         chunks.append(
             Chunk(
-                id=f"ecu_spec:{ref}",
-                collection="ecu_spec",
+                id=f"ecu:{ref}",
+                collection="ecu",
                 source_path=source_path,
                 ref=ref,
                 text=text,
@@ -197,8 +198,8 @@ def chunk_ecu_spec(path: Path, *, source_path: str) -> list[Chunk]:
         ref = f"dtc:{dtc['code']}"
         chunks.append(
             Chunk(
-                id=f"ecu_spec:{ref}",
-                collection="ecu_spec",
+                id=f"ecu:{ref}",
+                collection="ecu",
                 source_path=source_path,
                 ref=ref,
                 text=text,
@@ -228,17 +229,21 @@ def chunk_requirements_csv(path: Path, *, source_path: str) -> list[Chunk]:
     return chunks
 
 
-def build_corpus(repo_root: Path) -> list[Chunk]:
-    """Build the full layered corpus from the repo's data/docs files.
+def build_corpus(repo_root: Path, layers: tuple[str, ...] | list[str] | None = None) -> list[Chunk]:
+    """Build the layered corpus from the repo's data/docs files.
 
-    Returns chunks from the ``standard``, ``ecu_spec``, and ``project``
-    collections. Missing optional source files are skipped silently.
+    Returns chunks from the ``standard``, ``oem``, ``ecu`` and ``project``
+    collections (restricted to ``layers`` if given). Chunk order is stable:
+    standard, ecu, project, then oem, so the original three layers keep the
+    positions they had before the OEM layer existed. Missing optional source
+    files are skipped silently.
     """
     repo_root = Path(repo_root)
+    wanted = set(LAYERS if layers is None else (normalize_layer(x) for x in layers))
     chunks: list[Chunk] = []
 
     standard_path = repo_root / "data" / "sources" / "uds_reference_notes.md"
-    if standard_path.exists():
+    if "standard" in wanted and standard_path.exists():
         chunks.extend(
             chunk_markdown(
                 standard_path,
@@ -248,11 +253,11 @@ def build_corpus(repo_root: Path) -> list[Chunk]:
         )
 
     spec_path = repo_root / "data" / "bcm_spec.yaml"
-    if spec_path.exists():
+    if "ecu" in wanted and spec_path.exists():
         chunks.extend(chunk_ecu_spec(spec_path, source_path="data/bcm_spec.yaml"))
 
     contract_path = repo_root / "docs" / "behaviour_contract.md"
-    if contract_path.exists():
+    if "project" in wanted and contract_path.exists():
         chunks.extend(
             chunk_markdown(
                 contract_path,
@@ -262,7 +267,17 @@ def build_corpus(repo_root: Path) -> list[Chunk]:
         )
 
     req_path = repo_root / "data" / "requirements_seed.csv"
-    if req_path.exists():
+    if "project" in wanted and req_path.exists():
         chunks.extend(chunk_requirements_csv(req_path, source_path="data/requirements_seed.csv"))
+
+    oem_path = repo_root / "data" / "oem_diagnostic_guidelines.md"
+    if "oem" in wanted and oem_path.exists():
+        chunks.extend(
+            chunk_markdown(
+                oem_path,
+                source_path="data/oem_diagnostic_guidelines.md",
+                collection="oem",
+            )
+        )
 
     return chunks

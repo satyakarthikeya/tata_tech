@@ -64,9 +64,9 @@ def test_retriever_uses_rank_bm25_when_available(retriever):
 # ---------------------------------------------------------------------------
 
 
-def test_read_vin_surfaces_ecu_spec_did(retriever):
+def test_read_vin_surfaces_ecu_did(retriever):
     hits = retriever.search("read VIN", k=3)
-    assert any(h.chunk.collection == "ecu_spec" and h.chunk.ref == "did:VIN" for h in hits)
+    assert any(h.chunk.collection == "ecu" and h.chunk.ref == "did:VIN" for h in hits)
 
 
 def test_security_access_invalid_key_surfaces_standard_0x27(retriever):
@@ -90,9 +90,9 @@ def test_wiper_sensitivity_surfaces_did_0x0130(retriever):
 
 
 def test_collection_filter_restricts_results(retriever):
-    hits = retriever.search("wiper sensitivity security session DID", k=10, collections=["ecu_spec"])
+    hits = retriever.search("wiper sensitivity security session DID", k=10, collections=["ecu"])
     assert hits
-    assert all(h.chunk.collection == "ecu_spec" for h in hits)
+    assert all(h.chunk.collection == "ecu" for h in hits)
 
 
 def test_no_filter_can_return_multiple_collections(retriever):

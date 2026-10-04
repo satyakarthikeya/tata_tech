@@ -9,7 +9,7 @@ Identifiers (DIDs, routines, DTCs) survive only if they are
 
 (a) *written in the requirement text* (hex form, any case, with or without ``0x``; a DTC
     code as written), or
-(b) *linked to a retrieved ecu_spec chunk* (a BM25/Chroma search with the requirement
+(b) *linked to a retrieved ecu chunk* (a BM25/Chroma search with the requirement
     text, run here because ``parse`` runs before ``retrieve``) whose name matches words of
     the requirement text. The spec has no alias field, so the name is the only label; its
     underscore-separated words are compared with the requirement's words (light stemming,
@@ -72,10 +72,10 @@ GROUNDED_FIELDS: tuple[tuple[str, str], ...] = (
     ("routines", "routine:"),
     ("dtcs", "dtc:"),
 )
-"""(ParsedRequirement field, ecu_spec chunk-ref prefix) for each checked identifier kind."""
+"""(ParsedRequirement field, ecu chunk-ref prefix) for each checked identifier kind."""
 
 EVIDENCE_K = 6
-"""Chunks fetched from ``ecu_spec`` for the requirement text."""
+"""Chunks fetched from ``ecu`` for the requirement text."""
 
 SERVICE_RETRIEVAL_K = 3
 """Top-k of the ``standard`` search a service section must appear in for rule (c)."""
@@ -151,7 +151,7 @@ def ground_identifiers(
             if chunks is None:
                 chunks = [
                     h.chunk
-                    for h in retriever.search(text, k=EVIDENCE_K, collections=["ecu_spec"])
+                    for h in retriever.search(text, k=EVIDENCE_K, collections=["ecu"])
                     if h.score > 0
                 ]
             name = index[field].get(ident, "")

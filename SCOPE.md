@@ -9,7 +9,7 @@
 - A gold test set of 40–60 hand-authored tests
 - Test generation pipeline: parse → retrieve → plan → instantiate → validate → explain
 - Test categories: positive, negative, session, security, timing
-- Retrieval with citations over layered collections (standard / ecu_spec / project)
+- Retrieval with citations over layered collections (standard / oem / ecu / project)
 - Evaluation report covering request validity, response accuracy, coverage, template reuse, citation validity, and bug detection rate
 - Exports to Python (udsoncan + pytest) and CAPL templates
 - SQLite audit trail, FastAPI service, Streamlit UI

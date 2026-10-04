@@ -57,7 +57,7 @@ def test_citation_with_unknown_ref_in_known_source_is_invalid(corpus):
 
 def test_citation_quote_identifier_mismatch_is_invalid():
     chunk = Chunk(
-        id="x", collection="ecu_spec", source_path="s", ref="r", text="DID 0xF190", identifiers=["0xF190"]
+        id="x", collection="ecu", source_path="s", ref="r", text="DID 0xF190", identifiers=["0xF190"]
     )
     # Quote references an identifier the chunk does not carry.
     citation = Citation(source="s", ref="r", quote="DID 0xF190")

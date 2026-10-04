@@ -1,1 +1,1 @@
-"""Layered retrieval over standard/ecu_spec/project knowledge, with citations."""
+"""Layered retrieval over standard/oem/ecu/project knowledge, with citations."""

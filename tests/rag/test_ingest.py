@@ -20,13 +20,13 @@ def test_corpus_nonempty(corpus):
     assert len(corpus) > 20
 
 
-def test_all_three_collections_present(corpus):
+def test_all_four_collections_present(corpus):
     collections = {c.collection for c in corpus}
-    assert collections == {"standard", "ecu_spec", "project"}
+    assert collections == {"standard", "oem", "ecu", "project"}
 
 
-def test_ecu_spec_has_one_chunk_per_did_routine_dtc(corpus):
-    ecu_chunks = [c for c in corpus if c.collection == "ecu_spec"]
+def test_ecu_has_one_chunk_per_did_routine_dtc(corpus):
+    ecu_chunks = [c for c in corpus if c.collection == "ecu"]
     refs = {c.ref for c in ecu_chunks}
     # From data/bcm_spec.yaml: 14 DIDs, 3 routines, 3 DTCs, 3 sessions, 2 security levels.
     did_refs = [r for r in refs if r.startswith("did:")]
@@ -42,7 +42,7 @@ def test_ecu_spec_has_one_chunk_per_did_routine_dtc(corpus):
 
 
 def test_vin_chunk_mentions_hex_did(corpus):
-    vin_chunks = [c for c in corpus if c.collection == "ecu_spec" and c.ref == "did:VIN"]
+    vin_chunks = [c for c in corpus if c.collection == "ecu" and c.ref == "did:VIN"]
     assert len(vin_chunks) == 1
     assert "0xF190" in vin_chunks[0].text
     assert "0xF190" in vin_chunks[0].identifiers
@@ -63,7 +63,7 @@ def test_project_collection_has_requirements(corpus):
 def test_chunk_fields_well_formed(corpus):
     for chunk in corpus:
         assert chunk.id
-        assert chunk.collection in {"standard", "ecu_spec", "project"}
+        assert chunk.collection in {"standard", "oem", "ecu", "project"}
         assert chunk.source_path
         assert chunk.ref
         assert chunk.text.strip()

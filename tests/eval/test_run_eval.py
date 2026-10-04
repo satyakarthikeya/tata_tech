@@ -236,7 +236,7 @@ def test_template_reuse_detects_tampered_bytes(spec: EcuSpec) -> None:
 
 def test_citation_validity_counts(spec: EcuSpec) -> None:
     corpus = build_corpus(REPO_ROOT)
-    chunk = next(c for c in corpus if c.collection == "ecu_spec")
+    chunk = next(c for c in corpus if c.collection == "ecu")
     good = Citation(source=chunk.source_path, ref=chunk.ref)
     bad = Citation(source=chunk.source_path, ref="no-such-ref")
     test = _manual_test("cit", "22f190", []).model_copy(update={"citations": [good, bad]})

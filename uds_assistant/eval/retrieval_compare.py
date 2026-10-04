@@ -3,7 +3,7 @@
 Every row of ``data/requirements_natural.csv`` is a query (its ``text``).
 Relevant chunks are derived from the row's own labels, not from either backend:
 
-* row has target DIDs/routines: the ``ecu_spec`` chunks whose ``identifiers``
+* row has target DIDs/routines: the ``ecu`` chunks whose ``identifiers``
   contain any of them;
 * otherwise, if it has target services: the ``standard`` chunks whose ref is
   ``svc-<sid>`` for those services;
@@ -28,7 +28,7 @@ from typing import Any
 from uds_assistant.config import get_config
 from uds_assistant.rag.citations import citation_is_valid
 from uds_assistant.rag.ingest import build_corpus, normalize_identifier
-from uds_assistant.rag.model import Chunk, Retriever
+from uds_assistant.rag.model import CORE_LAYERS, Chunk, Retriever
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOP_N = 10
@@ -73,7 +73,7 @@ def relevant_chunk_ids(row: dict[str, str], corpus: list[Chunk]) -> set[str]:
     if targets:
         return {
             c.id for c in corpus
-            if c.collection == "ecu_spec" and targets & set(c.identifiers)
+            if c.collection == "ecu" and targets & set(c.identifiers)
         }
     services = {normalize_identifier(s) for s in _split_list(row.get("target_services", ""))}
     refs = {f"svc-{s.lower()}" for s in services}
@@ -122,7 +122,7 @@ def run_retrieval_comparison(
     from uds_assistant.rag.bm25 import Bm25Retriever
 
     root = Path(repo_root) if repo_root is not None else REPO_ROOT
-    corpus = build_corpus(root)
+    corpus = build_corpus(root, layers=CORE_LAYERS)  # OEM layer excluded: keeps Part B numbers comparable
     with (root / "data" / "requirements_natural.csv").open(encoding="utf-8", newline="") as fh:
         rows = list(csv.DictReader(fh))
     relevance = {r["id"]: relevant_chunk_ids(r, corpus) for r in rows}
@@ -177,7 +177,7 @@ def render_section(cmp: dict[str, Any]) -> list[str]:
         (f"Queries are the `text` of each row of `data/requirements_natural.csv`; "
          f"{cmp['queries_scored']} of {cmp['queries_total']} scored "
          f"({', '.join(cmp['excluded']) or 'none'} excluded: no target service/DID/routine). "
-         "Relevant chunks: ecu_spec chunks carrying a target DID/routine identifier; for rows "
+         "Relevant chunks: ecu chunks carrying a target DID/routine identifier; for rows "
          "with no DID/routine, the standard-collection `svc-<sid>` chunk of each target service. "
          f"Search spans all collections; MRR uses the first relevant rank in the top "
          f"{cmp['top_n']} (0 if none); citation validity is over the top "
