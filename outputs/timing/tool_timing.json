@@ -1,0 +1,355 @@
+{
+  "git_hash": "8357ec0",
+  "timestamp": "2026-10-04T11:51:04+00:00",
+  "repeats": 3,
+  "requirements": [
+    "REQ-001",
+    "REQ-005",
+    "REQ-009",
+    "REQ-011",
+    "REQ-015"
+  ],
+  "skipped_modes": {},
+  "results": [
+    {
+      "requirement": "REQ-001",
+      "mode": "mock",
+      "llm_used": "mock",
+      "repeats": 3,
+      "tests_generated": 18,
+      "total_s": {
+        "mean": 0.776,
+        "min": 0.055,
+        "max": 2.214
+      },
+      "stages_s": {
+        "generate": {
+          "mean": 0.031,
+          "min": 0.027,
+          "max": 0.037
+        },
+        "validate": {
+          "mean": 0.014,
+          "min": 0.013,
+          "max": 0.015
+        },
+        "explain": {
+          "mean": 0.005,
+          "min": 0.004,
+          "max": 0.008
+        }
+      },
+      "runs_total_s": [
+        2.214,
+        0.058,
+        0.055
+      ]
+    },
+    {
+      "requirement": "REQ-005",
+      "mode": "mock",
+      "llm_used": "mock",
+      "repeats": 3,
+      "tests_generated": 18,
+      "total_s": {
+        "mean": 0.099,
+        "min": 0.077,
+        "max": 0.116
+      },
+      "stages_s": {
+        "generate": {
+          "mean": 0.044,
+          "min": 0.036,
+          "max": 0.06
+        },
+        "validate": {
+          "mean": 0.036,
+          "min": 0.024,
+          "max": 0.047
+        },
+        "explain": {
+          "mean": 0.006,
+          "min": 0.004,
+          "max": 0.008
+        }
+      },
+      "runs_total_s": [
+        0.077,
+        0.103,
+        0.116
+      ]
+    },
+    {
+      "requirement": "REQ-009",
+      "mode": "mock",
+      "llm_used": "mock",
+      "repeats": 3,
+      "tests_generated": 22,
+      "total_s": {
+        "mean": 0.085,
+        "min": 0.079,
+        "max": 0.093
+      },
+      "stages_s": {
+        "generate": {
+          "mean": 0.041,
+          "min": 0.037,
+          "max": 0.047
+        },
+        "validate": {
+          "mean": 0.028,
+          "min": 0.026,
+          "max": 0.03
+        },
+        "explain": {
+          "mean": 0.005,
+          "min": 0.005,
+          "max": 0.005
+        }
+      },
+      "runs_total_s": [
+        0.093,
+        0.084,
+        0.079
+      ]
+    },
+    {
+      "requirement": "REQ-011",
+      "mode": "mock",
+      "llm_used": "mock",
+      "repeats": 3,
+      "tests_generated": 12,
+      "total_s": {
+        "mean": 0.077,
+        "min": 0.055,
+        "max": 0.12
+      },
+      "stages_s": {
+        "generate": {
+          "mean": 0.049,
+          "min": 0.027,
+          "max": 0.09
+        },
+        "validate": {
+          "mean": 0.015,
+          "min": 0.015,
+          "max": 0.015
+        },
+        "explain": {
+          "mean": 0.003,
+          "min": 0.003,
+          "max": 0.004
+        }
+      },
+      "runs_total_s": [
+        0.056,
+        0.12,
+        0.055
+      ]
+    },
+    {
+      "requirement": "REQ-015",
+      "mode": "mock",
+      "llm_used": "mock",
+      "repeats": 3,
+      "tests_generated": 13,
+      "total_s": {
+        "mean": 0.046,
+        "min": 0.046,
+        "max": 0.047
+      },
+      "stages_s": {
+        "generate": {
+          "mean": 0.023,
+          "min": 0.023,
+          "max": 0.023
+        },
+        "validate": {
+          "mean": 0.011,
+          "min": 0.01,
+          "max": 0.011
+        },
+        "explain": {
+          "mean": 0.003,
+          "min": 0.003,
+          "max": 0.003
+        }
+      },
+      "runs_total_s": [
+        0.046,
+        0.047,
+        0.047
+      ]
+    },
+    {
+      "requirement": "REQ-001",
+      "mode": "ollama",
+      "llm_used": "ollama",
+      "repeats": 3,
+      "tests_generated": 5,
+      "total_s": {
+        "mean": 17.505,
+        "min": 17.439,
+        "max": 17.57
+      },
+      "stages_s": {
+        "generate": {
+          "mean": 10.229,
+          "min": 10.187,
+          "max": 10.296
+        },
+        "validate": {
+          "mean": 0.006,
+          "min": 0.005,
+          "max": 0.006
+        },
+        "explain": {
+          "mean": 7.258,
+          "min": 7.236,
+          "max": 7.284
+        }
+      },
+      "runs_total_s": [
+        17.57,
+        17.504,
+        17.439
+      ]
+    },
+    {
+      "requirement": "REQ-005",
+      "mode": "ollama",
+      "llm_used": "ollama",
+      "repeats": 3,
+      "tests_generated": 4,
+      "total_s": {
+        "mean": 17.806,
+        "min": 17.625,
+        "max": 18.048
+      },
+      "stages_s": {
+        "generate": {
+          "mean": 9.436,
+          "min": 9.299,
+          "max": 9.632
+        },
+        "validate": {
+          "mean": 0.005,
+          "min": 0.005,
+          "max": 0.005
+        },
+        "explain": {
+          "mean": 8.353,
+          "min": 8.311,
+          "max": 8.4
+        }
+      },
+      "runs_total_s": [
+        18.048,
+        17.625,
+        17.743
+      ]
+    },
+    {
+      "requirement": "REQ-009",
+      "mode": "ollama",
+      "llm_used": "ollama",
+      "repeats": 3,
+      "tests_generated": 8,
+      "total_s": {
+        "mean": 28.754,
+        "min": 28.616,
+        "max": 29.003
+      },
+      "stages_s": {
+        "generate": {
+          "mean": 12.934,
+          "min": 12.822,
+          "max": 13.048
+        },
+        "validate": {
+          "mean": 0.008,
+          "min": 0.007,
+          "max": 0.01
+        },
+        "explain": {
+          "mean": 15.801,
+          "min": 15.691,
+          "max": 15.937
+        }
+      },
+      "runs_total_s": [
+        28.644,
+        28.616,
+        29.003
+      ]
+    },
+    {
+      "requirement": "REQ-011",
+      "mode": "ollama",
+      "llm_used": "ollama",
+      "repeats": 3,
+      "tests_generated": 4,
+      "total_s": {
+        "mean": 16.25,
+        "min": 14.248,
+        "max": 19.986
+      },
+      "stages_s": {
+        "generate": {
+          "mean": 10.788,
+          "min": 9.314,
+          "max": 13.276
+        },
+        "validate": {
+          "mean": 0.003,
+          "min": 0.002,
+          "max": 0.004
+        },
+        "explain": {
+          "mean": 5.448,
+          "min": 4.727,
+          "max": 6.697
+        }
+      },
+      "runs_total_s": [
+        19.986,
+        14.515,
+        14.248
+      ]
+    },
+    {
+      "requirement": "REQ-015",
+      "mode": "ollama",
+      "llm_used": "ollama",
+      "repeats": 3,
+      "tests_generated": 4,
+      "total_s": {
+        "mean": 16.486,
+        "min": 16.297,
+        "max": 16.76
+      },
+      "stages_s": {
+        "generate": {
+          "mean": 9.797,
+          "min": 9.626,
+          "max": 9.996
+        },
+        "validate": {
+          "mean": 0.004,
+          "min": 0.003,
+          "max": 0.004
+        },
+        "explain": {
+          "mean": 6.675,
+          "min": 6.617,
+          "max": 6.75
+        }
+      },
+      "runs_total_s": [
+        16.76,
+        16.401,
+        16.297
+      ]
+    }
+  ]
+}
