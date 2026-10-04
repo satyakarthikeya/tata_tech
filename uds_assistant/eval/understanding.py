@@ -1,8 +1,9 @@
 """Requirement understanding: score pipeline output on the labelled natural requirements.
 
 Input labels: ``data/requirements_natural.csv`` (splits ``test`` / ``dev``) and
-``data/requirements_natural_v2.csv`` (split ``test2``, same schema; see
-``data/requirements_natural.md`` for the label semantics).
+``data/requirements_natural_v2.csv`` (split ``test2``) and ``data/requirements_natural_v3.csv``
+(split ``test3``), all with the same schema; see ``data/requirements_natural.md`` for the label
+semantics.
 For each requirement the agent pipeline produced a :class:`ParsedRequirement` and
 a list of generated tests; this module turns both into comparable sets and scores
 them. Every function here is pure; definitions are in :data:`UNDERSTANDING_DEFINITIONS`.
@@ -17,6 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from uds_assistant.eval.breakdown import by_kind
 from uds_assistant.eval.trace import request_did_ids, request_routine_id, trace_test
 from uds_assistant.llm.base import ParsedRequirement
 from uds_assistant.spec.schema import EcuSpec
@@ -25,7 +27,7 @@ from uds_assistant.testgen.model import TestCase
 Ident = tuple[str, int]
 """A typed identifier: ``("service", 0x22)``, ``("did", 0xF190)`` or ``("routine", 0x0201)``."""
 
-SPLITS = ("test", "dev", "test2", "all")
+SPLITS = ("test", "dev", "test2", "test3", "all")
 PRECONDITIONS = (
     "default_session", "extended_session", "programming_session", "security_level_1",
     "security_level_3", "vehicle_stationary", "vehicle_moving", "nvm_fault", "dtc_status_set",
@@ -115,7 +117,7 @@ def _split_tokens(raw: str | None) -> list[str]:
 
 
 def load_natural_requirements(path: Path) -> list[NaturalRequirement]:
-    """Read a labelled natural requirements CSV (v1 or v2: same schema, any ``split`` value)."""
+    """Read a labelled natural requirements CSV (v1, v2 or v3: same schema, any ``split``)."""
     with path.open(encoding="utf-8", newline="") as fh:
         rows = [r for r in csv.DictReader(fh) if r.get("id")]
     return [
@@ -329,6 +331,7 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "macro_recall": round(sum(s["recall"] for s in scored) / len(scored), 4)
             if scored else None,
         }
+    out["by_kind"] = by_kind(rows)
     fallback = [r["id"] for r in rows if r["fallback"]]
     unexpected = [r["id"] for r in rows if r["fallback"] and r["label_targets"]]
     out["fallback"] = {
@@ -345,13 +348,14 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def aggregate_by_split(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregates for every split present among ``rows`` (plus ``all``).
 
-    The v1 file gives ``test`` and ``dev``; the v2 file gives ``test2``. A split with no rows
-    is omitted, except that ``test`` and ``dev`` are always present when ``rows`` has no
-    ``test2`` rows (the v1 layout), so v1 reports keep their shape.
+    The v1 file gives ``test`` and ``dev``; the v2 file gives ``test2``; the v3 file gives
+    ``test3``. A split with no rows is omitted, except that ``test`` and ``dev`` are always
+    present when ``rows`` has no ``test2`` / ``test3`` rows (the v1 layout), so v1 reports
+    keep their shape.
     """
     present = {r["split"] for r in rows}
-    names = [s for s in ("test", "dev", "test2") if s in present]
-    if not present & {"test2"}:
+    names = [s for s in ("test", "dev", "test2", "test3") if s in present]
+    if not present & {"test2", "test3"}:
         names = ["test", "dev"]
     out = {name: _aggregate([r for r in rows if r["split"] == name]) for name in names}
     out["all"] = _aggregate(rows)

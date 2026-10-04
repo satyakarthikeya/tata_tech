@@ -68,6 +68,13 @@ RATE_PATHS = [
     ("requirement_understanding_v2", "splits", "test2", "targets_exercised", "f1"),
     ("requirement_understanding_v2", "splits", "test2", "categories", "micro_recall"),
     ("requirement_understanding_v2", "splits", "test2", "preconditions", "micro_recall"),
+    ("requirement_understanding_v3", "splits", "test3", "targets_parsed", "exact_rate"),
+    ("requirement_understanding_v3", "splits", "test3", "targets_parsed", "f1"),
+    ("requirement_understanding_v3", "splits", "test3", "targets_exercised", "f1"),
+    ("requirement_understanding_v3", "splits", "test3", "categories", "micro_recall"),
+    ("requirement_understanding_v3", "splits", "test3", "preconditions", "micro_recall"),
+    ("heldout_v3_bug_detection", "requirement_driven", "rate"),
+    ("heldout_v3_bug_detection", "gold", "rate"),
 ]
 
 
@@ -132,17 +139,29 @@ def test_markdown_states_synthetic_spec_and_mode(full_report: tuple[Path, dict[s
     assert "UNVERIFIED TEMPLATES" in text
     headline = text.split("## Headline metrics", 1)[1].split("\n## ", 1)[0]
     assert "accuracy vs oracle" not in headline
-    order = ["1. NEW HEADLINE", "2. NEW HEADLINE", "3. Simulator", "4. Gold tests", "5. udsoncan",
-             "6. Coverage", "7. Citation", "8. Held-out v1", "9. Requirement understanding, natural v1 test",
-             "10. Requirement understanding, natural v1 dev", "11. In-sample"]
+    order = ["1. FRESH HEADLINE", "2. FRESH HEADLINE", "3. Simulator", "4. Gold tests",
+             "5. udsoncan", "6. Coverage", "7. Citation", "8. Conformance sweep",
+             "9. Held-out v2", "10. Requirement understanding, natural v2",
+             "11. Held-out v1", "12. Requirement understanding, natural v1 test",
+             "13. Requirement understanding, natural v1 dev", "14. In-sample"]
     positions = [headline.index(label) for label in order]
     assert positions == sorted(positions)
-    assert "Held-out v2 bug detection" in headline and "natural v2" in headline
-    assert "**seen (templates designed against these misses)**" in headline
+    for needle in ("Held-out v3 bugs", "FULL OUTPUT", "1a. (a) requirement-driven",
+                   "1b. (b) conformance sweep alone", "1c. gold", "natural v3",
+                   "2a. natural v3: parsed false positives / false negatives by kind",
+                   "2b. natural v3: rejected planner choices by reason", "2c. natural v3"):
+        assert needle in headline, needle
+    assert "**SEEN (Part C headline; its results were known before Part D)**" in headline
+    assert "**SEEN (templates designed against these misses)**" in headline
     assert "**dev (tuned on)**" in headline
     assert "**in-sample (templates tuned on these)**" in headline
-    for heading in ("## Noise check", "### Missed held-out v2 bugs — generated suite",
-                    "## Freeze verification", "recorded (Part "):
+    assert "Conformance sweep (size, time, runtime; no LLM)" in headline
+    assert "FRESH" not in headline.split("9. Held-out v2", 1)[1].split("Rows 1-2", 1)[0]
+    for heading in ("## Noise check — natural v3 (FRESH)", "### Missed held-out v2 bugs — generated suite",
+                    "## Freeze verification (Part D freeze", "recorded (Part D freeze)",
+                    "## Held-out v3 bug detection (15 FRESH bugs)",
+                    "### Parsed false positives and false negatives by kind",
+                    "### Rejected planner choices by reason", "### Trigger coverage"):
         assert heading in text, heading
 
 
@@ -266,24 +285,45 @@ def test_headline_keys_and_values(full_report: tuple[Path, dict[str, Any]]) -> N
     assert prov["seed"]["checked"] == block["generated_tests"]["count"]
     assert prov["natural_v2"]["checked"] == block["pipeline_natural_v2"]["tests_kept"] > 0
     assert prov["checked"] == (prov["seed"]["checked"] + prov["natural"]["checked"]
-                               + prov["natural_v2"]["checked"])
+                               + prov["natural_v2"]["checked"] + prov["natural_v3"]["checked"])
+    assert prov["natural_v3"]["checked"] == block["pipeline_natural_v3"]["tests_kept"] > 0
     progress = (REPO_ROOT / "PROGRESS.md").read_text(encoding="utf-8")
-    recorded = run_eval.parse_freeze_table(progress)
-    assert recorded["commit"] and len(recorded["paths"]) >= 5
+    recorded = run_eval.parse_freeze_table(progress, "Part D freeze")
+    assert recorded["commit"] and len(recorded["paths"]) >= 7
     assert set(report["freeze"]["paths"]) == set(recorded["paths"])
     assert report["freeze"]["all_ok"] == (
         all(v["matches"] and v["worktree_clean"] for v in report["freeze"]["paths"].values())
         and report["freeze"]["commit"]["recorded_is_ancestor_of_head"] is True)
-    assert report["report_version"] == 4
+    assert report["report_version"] == run_eval.REPORT_VERSION == 5
     order = head["order"]
-    assert order[:2] == ["heldout_v2_bug_detection", "requirement_understanding_v2"]
-    assert order[-4:] == ["heldout_bug_detection", "requirement_understanding",
+    assert order[:2] == ["heldout_v3_bug_detection", "requirement_understanding_v3"]
+    assert order[2:7] == ["simulator_rules_agreement", "gold_clean_pass", "udsoncan_virtual_can",
+                          "coverage", "citation_validity"]
+    assert order[-6:] == ["heldout_v2_bug_detection", "requirement_understanding_v2",
+                          "heldout_bug_detection", "requirement_understanding",
                           "requirement_understanding_dev", "in_sample_bug_detection"]
+    assert report["freeze"]["section"] == "Part D freeze"
     h2 = head["heldout_v2_bug_detection"]
     assert h2["bugs"] == 15
     assert h2["generated"]["detected"] == block["heldout_v2_bug_detection"]["generated"]["detected"]
     assert h2["by_mode"]["mock"]["union"]["detected"] >= h2["by_mode"]["mock"]["generated"]["detected"]
     assert set(h2["supplementary_by_mode"]["mock"]) == {"all_generated", "natural_v2_generated"}
+    assert h2["label"] == run_eval.HELDOUT_V2_LABEL and "SEEN" in h2["label"]
+    assert h2["full_output_by_mode"]["mock"]["bugs"] == 15
+    h3 = head["heldout_v3_bug_detection"]
+    assert h3["bugs"] == 15 and h3["label"] == run_eval.HELDOUT_V3_LABEL
+    m3 = block["heldout_v3_bug_detection"]
+    assert h3["full_output"]["detected"] == m3["full_output"]["detected"]
+    assert h3["requirement_driven"]["detected"] == m3["requirement_driven"]["detected"]
+    assert h3["conformance"]["detected"] == m3["conformance"]["detected"]
+    assert h3["gold"]["detected"] == m3["gold"]["detected"]
+    assert h3["by_mode"]["ollama"].startswith("not run")
+    assert head["conformance_sweep"]["status"] == "completed"
+    assert head["conformance_sweep"]["tests"] == report["conformance"]["tests"]
+    ru3 = head["requirement_understanding_v3"]
+    assert ru3["mock"]["split"] == "test3" and ru3["mock"]["requirements"] == 16
+    assert set(ru3["mock"]["fp_by_kind"]) >= {"service", "did", "routine"}
+    assert sum(ru3["mock"]["rejected_by_reason"].values()) == ru3["mock"]["rejected"]
     ru2 = head["requirement_understanding_v2"]
     assert ru2["mock"]["split"] == "test2" and ru2["mock"]["requirements"] == 16
     assert ru2["ollama"].startswith("not run: not requested")
@@ -513,7 +553,8 @@ def test_mock_noise_check_is_one_run_plus_determinism_check(
     assert nc["determinism_check"]["second_run_identical"] is True
     for key, sp in nc["summary"].items():
         assert sp["min"] == sp["max"] == sp["mean"], key
-    ru = full_report[1]["modes"]["mock"]["requirement_understanding_v2"]["splits"]["test2"]
+    assert nc["set"] == "v3"
+    ru = full_report[1]["modes"]["mock"]["requirement_understanding_v3"]["splits"]["test3"]
     assert nc["runs"][0]["parsed_f1"] == ru["targets_parsed"]["f1"]
 
 
@@ -629,9 +670,12 @@ def test_noise_runs_report_every_run_and_mean_range(
     assert [r["run"] for r in nc["runs"]] == [1, 2, 3]
     assert [r["used_for_main_tables"] for r in nc["runs"]] == [True, False, False]
     # run 1 is exactly the run behind the main tables
-    ru = report["modes"]["ollama"]["requirement_understanding_v2"]["splits"]["test2"]
+    assert nc["set"] == "v3"
+    ru = report["modes"]["ollama"]["requirement_understanding_v3"]["splits"]["test3"]
     assert nc["runs"][0]["parsed_f1"] == ru["targets_parsed"]["f1"]
-    assert nc["runs"][0]["tests_kept"] == report["modes"]["ollama"]["pipeline_natural_v2"]["tests_kept"]
+    assert nc["runs"][0]["tests_kept"] == report["modes"]["ollama"]["pipeline_natural_v3"]["tests_kept"]
+    # natural v2 is SEEN and keeps a single run
+    assert len(report["modes"]["ollama"]["requirement_understanding_v2"]["per_requirement"]) == 16
     # the fake varies, so the runs differ and the range is non-trivial
     f1s = [r["parsed_f1"] for r in nc["runs"]]
     assert len(set(f1s)) > 1
@@ -650,7 +694,7 @@ def test_noise_runs_report_every_run_and_mean_range(
     assert all(e["provenance"]["checked"] > 0 and e["provenance"]["ok"]
                for e in prov["noise_extra_runs"])
     assert prov["checked"] > prov["seed"]["checked"] + prov["natural"]["checked"] \
-        + prov["natural_v2"]["checked"]
+        + prov["natural_v2"]["checked"] + prov["natural_v3"]["checked"]
     assert report["provenance_ok"] is True
     md = (tmp_path / "eval_report.md").read_text(encoding="utf-8")
     assert "mean (min–max) over all runs" in md
@@ -688,7 +732,7 @@ def test_provenance_failure_in_a_noise_run_exits_nonzero(
 
     def tamper_second_nat2_check(spec: Any, tests: Any) -> dict[str, Any]:
         tests = list(tests)
-        if tests and any(r.startswith("NAT2") for r in tests[0].requirement_ids):
+        if tests and any(r.startswith("NAT3") for r in tests[0].requirement_ids):
             nat2_calls["n"] += 1
             if nat2_calls["n"] == 2:  # run 1 (in the noise check) is call 1, extra run 2 is call 2
                 tests[0] = tests[0].model_copy(update={"template_id": "not_a_template"})
@@ -717,7 +761,8 @@ def test_rerender_with_before_after_flag(
     shutil.copy(full_report[0] / "eval_report.json", tmp_path / "eval_report.json")
     code = run_eval.main(["--rerender", "--out", str(tmp_path), "--before-after"])
     assert code == 0
-    assert (tmp_path / "partC" / "before_after.md").exists()
+    assert (tmp_path / "partD" / "before_after.md").exists()
+    assert not (tmp_path / "partC").exists()
 
 
 def test_before_after_from_the_full_mock_report(
@@ -727,16 +772,42 @@ def test_before_after_from_the_full_mock_report(
 
     shutil.copy(full_report[0] / "eval_report.json", tmp_path / "eval_report.json")
     target = run_eval.write_before_after(tmp_path)
+    assert target == tmp_path / "partD" / "before_after.md"
     md = target.read_text(encoding="utf-8")
-    held2 = full_report[1]["modes"]["mock"]["heldout_v2_bug_detection"]
-    assert f"{held2['generated']['detected']}/15" in md
-    row = next(ln for ln in md.splitlines() if ln.startswith("| **Held-out v2, FRESH"))
-    assert row.rstrip().endswith("| not run |")  # ollama did not run in this report
+    block = full_report[1]["modes"]["mock"]
+    v3 = block["heldout_v3_bug_detection"]
+    rows = {ln.split("|")[1].strip(): [c.strip() for c in ln.split("|")[2:-1]]
+            for ln in md.splitlines() if ln.startswith("| ") and "---" not in ln}
+    full = rows["**Held-out v3 bugs (15): FULL OUTPUT = requirement-driven + sweep (headline)**"]
+    assert full == [f"**{v3['full_output']['detected']}/15**", "not run"]
+    assert rows["(a) requirement-driven only (comparable with Part C)"][0] == (
+        f"{v3['requirement_driven']['detected']}/15")
+    assert rows["(b) conformance sweep alone (LLM-independent)"][0] == (
+        f"{v3['conformance']['detected']}/15")
+    assert rows["(d) gold (LLM-independent)"][0] == f"{v3['gold']['detected']}/15"
+    v2req = rows["Held-out v2 bugs (15, SEEN): requirement-driven (generated)"]
+    assert v2req[1] == f"{block['heldout_v2_bug_detection']['generated']['detected']}/15"
+    assert v2req[3] == "not run" and v2req[0] == "2/15" and v2req[2] == "2/15"
     from uds_assistant.eval import before_after as ba
 
     n_open = ba.sws_open_count(
         (REPO_ROOT / "docs" / "SWS_DISAGREEMENTS.md").read_text(encoding="utf-8"))["open"]
-    assert f"| SWS disagreements open | 9 | {n_open} | 9 | {n_open} |" in md
+    assert rows["SWS disagreements open"] == ["5", str(n_open)]
+    assert n_open == 5
+    for needle in ("(i) FRESH v3 rows", "(ii) SEEN v2 rows", "(iii) Rejected planner choices",
+                   "(iv) Parsed false positives by kind", "(v) Latency and explain calls",
+                   "(vi) SWS disagreements", "(vii) Test counts", "**Comparability.**",
+                   "no completed ollama mode"):
+        assert needle in md, needle
+
+
+def test_summary_lines_lead_with_fresh_v3(full_report: tuple[Path, dict[str, Any]]) -> None:
+    lines = run_eval.summary_lines(full_report[1])
+    assert lines[0].startswith("mode=mock FRESH held-out v3 bugs (15): FULL OUTPUT (headline)")
+    assert "(b) conformance sweep alone" in lines[0] and "gold " in lines[0]
+    assert lines[1].startswith("mode=mock FRESH natural v3 (test3) understanding: parsed exact")
+    assert "parsed FP by kind [" in lines[1] and "FN by kind [" in lines[1]
+    assert any(ln.startswith("mode=mock SEEN:") for ln in lines)
 
 
 # ----------------------------------------------------------------------------- Part D (D2)
@@ -818,3 +889,134 @@ def test_freeze_info_prefers_the_part_d_table(tmp_path: Path) -> None:
     (tmp_path / "PROGRESS.md").write_text("nothing here\n", encoding="utf-8")
     missing = run_eval.freeze_info(tmp_path)
     assert missing["all_ok"] is False and "no hash table" in missing["error"]
+
+
+# ----------------------------------------------------------------------------- Part D (D5a)
+
+
+def test_heldout_v3_block_structure(full_report: tuple[Path, dict[str, Any]]) -> None:
+    from uds_assistant.simulator import (
+        HELDOUT_BUG_IDS,
+        HELDOUT_V2_BUG_IDS,
+        HELDOUT_V3_BUG_IDS,
+        IMPLEMENTED_BUG_IDS,
+    )
+
+    report = full_report[1]
+    block = report["modes"]["mock"]
+    held = block["heldout_v3_bug_detection"]
+    assert report["heldout_v3_catalog_size"] == held["bugs"] == 15
+    ids = [b["bug_id"] for b in held["per_bug"]]
+    assert set(ids) == set(HELDOUT_V3_BUG_IDS) and len(ids) == 15
+    assert not set(ids) & (set(IMPLEMENTED_BUG_IDS) | set(HELDOUT_BUG_IDS) | set(HELDOUT_V2_BUG_IDS))
+    assert held["scope"] == run_eval.HELDOUT_V3_LABEL and "FRESH" in held["scope"]
+    a, b, c = held["requirement_driven"], held["conformance"], held["full_output"]
+    assert max(a["detected"], b["detected"]) <= c["detected"] <= a["detected"] + b["detected"]
+    assert held["headline_suite"] == "full_output"
+    # per-bug flags agree with the totals
+    assert sum(1 for x in held["per_bug"] if x["requirement_driven"]) == a["detected"]
+    assert sum(1 for x in held["per_bug"] if x["conformance"]) == b["detected"]
+    assert sum(1 for x in held["per_bug"] if x["full_output"]) == c["detected"]
+    assert sum(1 for x in held["per_bug"] if x["gold"]) == held["gold"]["detected"]
+    for x in held["per_bug"]:
+        assert x["full_output"] == (x["requirement_driven"] or x["conformance"])
+        assert set(x["detected_by"]) <= {"requirement_driven", "conformance", "gold"}
+        assert set(x["trigger_counts"]) >= {"requirement_driven", "conformance", "full_output",
+                                            "gold", "all_generated", "natural_v3_generated"}
+        assert min(x["trigger_counts"].values()) >= 0
+        assert (x["reason_if_missed"] is None) == bool(x["full_output"])
+    # every miss has a one-line reason from the v3 trigger table
+    missed = {x["bug_id"] for x in held["missed_by_headline"]}
+    assert missed == set(c["undetected"])
+    assert all(x["reason"] and "no trigger analysis" not in x["reason"]
+               for x in held["missed_by_headline"])
+    # (a) is exactly the Part D requirement-driven row, (b) the sweep's own detection
+    pdd = block["part_d_detection"]["heldout_v3"]
+    assert pdd["requirement_driven"]["detected"] == a["detected"]
+    assert pdd["conformance"]["detected"] == b["detected"]
+    assert pdd["gold"]["detected"] == held["gold"]["detected"]
+    assert report["conformance"]["detection"]["heldout_v3"]["detected"] == b["detected"]
+    assert held["suite_sizes"]["full_output"] == (
+        block["generated_tests"]["count"] + report["conformance"]["tests"])
+    assert block["suite_sizes"] == {**block["suite_sizes"], "requirement_driven":
+                                    block["generated_tests"]["count"]}
+    # supplementary rows use their own suites
+    supp = held["supplementary"]
+    nat3 = block["pipeline_natural_v3"]["tests_kept"]
+    assert supp["natural_v3_generated"]["tests"] == nat3
+    assert supp["all_generated"]["tests"] == (
+        block["generated_tests"]["count"] + block["pipeline_natural"]["tests_kept"]
+        + block["pipeline_natural_v2"]["tests_kept"] + nat3)
+    tsum = held["trigger_summary"]["full_output"]
+    assert tsum["bugs"] == 15 and 0 <= tsum["bugs_with_stimulus"] <= 15
+
+
+def test_natural_v3_understanding_and_breakdowns(
+    full_report: tuple[Path, dict[str, Any]],
+) -> None:
+    report = full_report[1]
+    block = report["modes"]["mock"]
+    ru = block["requirement_understanding_v3"]
+    rows = ru["per_requirement"]
+    assert len(rows) == 16 and {r["split"] for r in rows} == {"test3"}
+    assert ru["source"] == "data/requirements_natural_v3.csv" and ru["seen"] is False
+    assert set(ru["splits"]) == {"test3", "all"}
+    assert block["requirement_understanding_v2"]["seen"] is True
+    # FP / FN by kind add up to the totals
+    split = ru["splits"]["test3"]
+    kinds = split["by_kind"]["parsed"]
+    assert {"service", "did", "routine", "dtc"} <= set(kinds)
+    assert sum(v["fp"] for v in kinds.values()) == split["targets_parsed"]["fp"]
+    assert sum(v["fn"] for v in kinds.values()) == split["targets_parsed"]["fn"]
+    assert sum(v["tp"] for v in kinds.values()) == split["targets_parsed"]["tp"]
+    # rejections by reason add up in every set
+    for key in ("pipeline", "pipeline_natural", "pipeline_natural_v2", "pipeline_natural_v3"):
+        pipe = block[key]
+        assert set(pipe["rejected_by_reason"]) == {
+            "unknown_template_id", "option_index_out_of_range", "option_not_in_shortlist",
+            "duplicate_or_other"}
+        assert sum(pipe["rejected_by_reason"].values()) == pipe["rejected"]
+    assert report["natural_requirements_v3"] == 16
+    assert "natural_v3_understanding" in report["metric_definitions"]
+    assert {"by_kind", "rejected_by_reason", "seen_sets"} <= set(report["metric_definitions"])
+    pipe3 = block["pipeline_natural_v3"]
+    assert {r["split"] for r in pipe3["per_requirement"]} == {"test3"}
+    latency = block["latency"]["per_requirement_wall_s"]
+    assert latency["natural_v3"]["n"] == 16 and latency["all_with_v3"]["n"] == 67
+
+
+def test_v3_quick_run_without_sweep_and_natural(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--skip-conformance style: the v3 block reports (a) and gold; (b) / (c) are 'not run'."""
+    monkeypatch.setattr(llm_factory, "ollama_reachable", lambda *a, **k: False)
+    report = run_eval.run_evaluation(
+        "mock", tmp_path, "plain", requirement_ids=["REQ-001"], write_exports=False,
+        run_can=False, run_retrieval_compare=False, agreement_requests=20, natural=False,
+        conformance=False)
+    held = report["modes"]["mock"]["heldout_v3_bug_detection"]
+    assert isinstance(held["requirement_driven"], dict) and isinstance(held["gold"], dict)
+    assert held["conformance"].startswith("not run") and held["full_output"].startswith("not run")
+    assert held["headline_suite"] == "requirement_driven"
+    assert all(b["full_output"] is None and b["conformance"] is None for b in held["per_bug"])
+    assert held["supplementary"]["natural_v3_generated"].startswith("not run")
+    assert report["modes"]["mock"]["requirement_understanding_v3"] == {"status": "not run"}
+    assert report["modes"]["mock"]["part_d_detection"]["status"].startswith("not run")
+    head = report["headline"]
+    assert head["requirement_understanding_v3"]["mock"] == {"status": "not run"}
+    assert head["conformance_sweep"]["status"] == "not run"
+    md = (tmp_path / "eval_report.md").read_text(encoding="utf-8")
+    assert "not run (conformance sweep skipped)" in md
+    # the Part D before/after also renders on this stripped report
+    assert run_eval.write_before_after(tmp_path).exists()
+
+
+def test_new_cli_defaults_and_help() -> None:
+    parser = run_eval.build_parser()
+    text = parser.format_help()
+    assert "natural v3" in text and "partD/before_after.md" in text
+    args = parser.parse_args(["--mode", "ollama", "--noise-runs", "3", "--before-after"])
+    assert args.noise_runs == 3 and args.before_after is True and args.mode == "ollama"
+    assert [ns.key for ns in run_eval.NATURAL_SETS] == ["v1", "v2", "v3"]
+    assert run_eval.NOISE_SET == "v3"
+    assert [ns.seen for ns in run_eval.NATURAL_SETS] == [True, True, False]

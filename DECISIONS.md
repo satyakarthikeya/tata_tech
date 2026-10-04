@@ -498,3 +498,19 @@ Both agents were launched after the Part D freeze. Their exact prompts are recor
   - The agent wrote them in everyday engineering wording rather than the spec's field names.
 - **[PD4-LABELS]** The labelling is not fully consistent about setup services. The agent reports that `target_services` lists every service a test must exercise, including setup steps such as 0x10 and 0x27 for a write requirement, but that some rows list only the main service. This adds some noise to service precision and recall on v3, and the interpretation will say so.
 - **[PD4-CHECK]** After the agents finished I confirmed that the testgen, llm and agent trees, the prompts file and `data/gold` are unchanged, and that the test that scans the generator source and instantiated tests for bug ids passes with the new ids.
+
+### D5a (evaluation extended for the v3 sets, built without the GPU)
+
+- **[PD5-V3-HEADLINE]** The v3 bug headline is the system's full output: the requirement-driven tests for the 15 seed requirements plus the conformance sweep, as a per-bug union. This was pre-registered in PROGRESS.md before any v3 result. The requirement-driven only, sweep alone and gold numbers sit next to it in every table.
+- **[PD5-TRIGGERS-V3]** The 15 trigger predicates (`uds_assistant/eval/heldout_v3.py`) were written from the bug descriptions and the behaviour contract before any v3 bug matrix was run, and none has been edited since.
+- **[PD5-NOISE]** `--noise-runs N` now applies to natural v3 in ollama mode. Natural v1 and v2 keep a single run and are labelled SEEN. Mock runs once, plus a second run that must be identical.
+- **[PD5-SEEN]** The v1 and v2 bug sets, the v1 and v2 natural sets, and the in-sample bugs are labelled SEEN or tuned-on everywhere in the report.
+- **[PD5-BREAKDOWN]** False positives and false negatives by kind (service, DID, routine, DTC), and rejected planner choices by reason, come from one shared function over the per-requirement rows, so Part C and Part D numbers are comparable.
+- **[PD5-BASELINE]** `outputs/partD/baseline_before_partD.json` is extracted from the Part C final report at commit 942f438. A test re-extracts it from git and checks equality.
+- **[PD5-BEFOREAFTER]** `--before-after` now writes `outputs/partD/before_after.md` (the Part C mode is kept as `--part c`).
+- **[PD5-LEAK]** Honest note on the blind v3 requirements: while checking the file format, the D5a agent ran a `head` command on `data/requirements_natural_v3.csv` and saw the text of NAT3-001 to NAT3-005. It had already written the predicates, changed nothing in response, and the code it could edit (eval only) cannot influence generation or parsing. The frozen code was not touched. I treat this as a minor deviation and it is stated in the final report.
+- **[PD5-DRYRUN]** Mock-only dry run on the fresh v3 sets, reported before any model run (nothing may change in response):
+  - v3 bugs: full output 10/15; requirement-driven 4/15; sweep alone 9/15; gold 3/15. The sweep has 1200 tests and the full output 1406.
+  - Natural v3: parsed exact 1/16; parsed P/R/F1 0.857 / 0.267 / 0.407; exercised F1 0.342; category recall 0.42; precondition recall 0.483; 7 requirements produced nothing.
+  - Five v3 bugs have no test that applies their stimulus: `session_switch_keeps_pending_seed`, `lockout_expiry_resets_attempt_count`, `nrc_order_subfunction_before_length`, `read_did_speed_not_clamped`, `dtc_read_reports_masked_status`.
+- **[PD5-LABELS]** The UI and `scripts/demo.py` still label the v2 results as "fresh". That needs a label update in D6, because v2 is now seen.

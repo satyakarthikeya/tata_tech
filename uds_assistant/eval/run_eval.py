@@ -28,6 +28,7 @@ import subprocess
 import sys
 import time
 import warnings
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -35,12 +36,14 @@ from typing import Any
 from uds_assistant.agent import resolve_engine, run_pipeline
 from uds_assistant.agent.state import PipelineResult
 from uds_assistant.config import Config, get_config
+from uds_assistant.eval import breakdown as bd
 from uds_assistant.eval import metrics as m
 from uds_assistant.eval import understanding as u
 from uds_assistant.eval.agreement import DEFAULT_REQUESTS, simulator_rules_agreement
 from uds_assistant.eval.can_check import run_udsoncan_sequence
 from uds_assistant.eval.heldout import heldout_analysis
 from uds_assistant.eval.heldout_v2 import heldout_v2_analysis
+from uds_assistant.eval.heldout_v3 import heldout_v3_analysis
 from uds_assistant.eval.provenance import check_provenance
 from uds_assistant.eval.report_md import provenance_failures, render_markdown
 from uds_assistant.eval.retrieval_compare import run_retrieval_comparison
@@ -53,6 +56,8 @@ from uds_assistant.runner import run_bug_matrix, run_suite
 from uds_assistant.simulator import (
     HELDOUT_BUG_CATALOG_PATH,
     HELDOUT_V2_BUG_CATALOG_PATH,
+    HELDOUT_V3_BUG_CATALOG_PATH,
+    HELDOUT_V3_BUG_IDS,
     load_bug_catalog,
 )
 from uds_assistant.spec.schema import load_spec
@@ -76,35 +81,47 @@ HELDOUT_LABEL = (
     "were then designed against the misses, so these 12 are no longer independent"
 )
 HELDOUT_V2_LABEL = (
-    "held-out v2 (FRESH): 15 bugs written blind by a subagent after the Part C freeze, "
-    "which could not see templates, gold tests, eval, LLM or agent code; nothing was changed "
-    "after seeing these results"
+    "held-out v2, now SEEN: 15 bugs written blind by a subagent after the Part C freeze (fresh "
+    "in Part C); their Part C results were known before Part D, so they are no longer "
+    "independent evidence"
 )
 NATURAL_V2_LABEL = (
-    "natural v2 (FRESH, split test2): 16 requirements written blind after the Part C freeze "
-    "by a subagent that could not see the v1 natural set"
+    "natural v2 (SEEN, split test2): 16 requirements written blind after the Part C freeze "
+    "(fresh in Part C); their Part C results were known before Part D"
+)
+HELDOUT_V3_LABEL = (
+    "held-out v3 (FRESH): 15 bugs written blind by a subagent after the Part D freeze, which "
+    "could not see templates, the conformance sweep, prompts, eval code or any report; nothing "
+    "was changed after seeing these results"
+)
+NATURAL_V3_LABEL = (
+    "natural v3 (FRESH, split test3): 16 requirements written blind after the Part D freeze by "
+    "a subagent that could not see any natural set or any code; nothing was tuned on them"
 )
 NATURAL_V1_TEST_LABEL = "natural v1 test split (SEEN: templates were designed after its results)"
 NATURAL_V1_DEV_LABEL = "natural v1 dev split (tuned on: the prompts were tuned on these rows)"
 HEADLINE_ORDER = (
-    "heldout_v2_bug_detection",
-    "requirement_understanding_v2",
+    "heldout_v3_bug_detection",
+    "requirement_understanding_v3",
     "simulator_rules_agreement",
     "gold_clean_pass",
     "udsoncan_virtual_can",
     "coverage",
     "citation_validity",
+    "conformance_sweep",
+    "heldout_v2_bug_detection",
+    "requirement_understanding_v2",
     "heldout_bug_detection",
     "requirement_understanding",
     "requirement_understanding_dev",
     "in_sample_bug_detection",
 )
-REPORT_VERSION = 4
+REPORT_VERSION = 5
 V2_DEFINITIONS: dict[str, str] = {
     "heldout_v2_bug_detection_rate": (
         "Same procedure as bug_detection_rate on the 15 held-out v2 bugs in "
         "data/bugs/heldout_v2_catalog.yaml (heldout_v2: true), written blind after the Part C "
-        "freeze. HEADLINE = generated-suite detection, where the generated suite is the tests "
+        "freeze and SEEN since Part D. Generated-suite detection, where the generated suite is the tests "
         "generated from the 15 seed requirements (the same definition as the held-out v1 "
         "headline). Supplementary: detection by the union of all generated tests (seed + natural "
         "v1 + natural v2) and by the natural-v2 tests alone. Missed-bug reasons come from "
@@ -115,13 +132,8 @@ V2_DEFINITIONS: dict[str, str] = {
         "written blind after the freeze) with the same label schema and scoring as the v1 "
         "natural set; test2 is the headline split."
     ),
-    "noise_check": (
-        "ollama runs the pipeline over natural v2 --noise-runs times in total; run 1 feeds the "
-        "tables, every run is listed, and the summary is the mean and min-max range over all "
-        "runs. mock is deterministic: one run, plus an equality re-run as a check."
-    ),
 }
-"""Extra metric definitions added in report version 3."""
+"""Extra metric definitions added in report version 3 (v2 sets; SEEN since Part D)."""
 
 PART_D_CATALOGS: tuple[tuple[str, str, str | None], ...] = (
     ("heldout_v2", "held-out v2 (15 bugs, SEEN: their Part C results were known before Part D)",
@@ -154,6 +166,72 @@ PART_D_DEFINITIONS: dict[str, str] = {
     ),
 }
 """Metric definitions added in report version 4 (Part D)."""
+PART_D2_DEFINITIONS: dict[str, str] = {
+    "heldout_v3_bug_detection": (
+        "FRESH headline for bugs: the 15 held-out v3 bugs in data/bugs/heldout_v3_catalog.yaml "
+        "(heldout_v3: true), written blind after the Part D freeze. HEADLINE = detection by the "
+        "system's FULL OUTPUT = (c) the requirement-driven tests from the 15 seed requirements "
+        "UNION (per bug) the conformance sweep. Reported next to it and clearly labelled: (a) "
+        "requirement-driven only (comparable with Part C), (b) the sweep alone, (d) gold. "
+        "Supplementary: all generated tests (seed + natural v1 + v2 + v3) and the natural-v3 "
+        "tests alone. Missed-bug reasons come from eval/heldout_v3.py (static trigger predicates "
+        "written from the bug descriptions before any v3 result existed)."
+    ),
+    "natural_v3_understanding": (
+        "Requirement understanding on data/requirements_natural_v3.csv (16 rows, split test3, "
+        "written blind after the Part D freeze) with the same label schema and scoring as v1 / "
+        "v2. test3 is the requirement headline. Nothing was tuned on it."
+    ),
+    "noise_check": (
+        "ollama runs the pipeline over natural v3 --noise-runs times in total; run 1 feeds the "
+        "tables, every run is listed, and the summary is the mean and min-max range over ALL "
+        "runs (never only the best). mock is deterministic: one run, plus an equality re-run "
+        "as a check. natural v2 (SEEN) keeps its single run."
+    ),
+    "by_kind": (
+        "Parsed (and exercised) false positives and false negatives by identifier kind "
+        "(service / did / routine / dtc), per requirement set, from each requirement's missed "
+        "and extra identifiers. tp = label items of that kind minus the missed ones."
+    ),
+    "rejected_by_reason": (
+        "Rejected planner choices by reason: unknown template id; option index out of range; "
+        "option not in the offered shortlist; duplicate / other (a choice that previously "
+        "failed, or an instantiate / validate failure). Counted per requirement set."
+    ),
+    "seen_sets": (
+        "SEEN = their results were known when Part D was designed or tuned: held-out v1 and v2 "
+        "bugs, natural v1 (test and dev) and v2 requirements. The 26 in-sample bugs were tuned "
+        "on. Only the v3 rows are independent evidence."
+    ),
+}
+"""Metric definitions added in report version 5 (Part D evaluation)."""
+
+
+@dataclass(frozen=True)
+class NaturalSet:
+    """One labelled natural-requirement set and where its results go in the report."""
+
+    key: str
+    csv: str
+    ru_key: str
+    pipe_key: str
+    prov_key: str
+    label: str
+    headline_split: str
+    tag: str
+    seen: bool
+
+
+NATURAL_SETS: tuple[NaturalSet, ...] = (
+    NaturalSet("v1", "requirements_natural.csv", "requirement_understanding", "pipeline_natural",
+               "natural", NATURAL_V1_TEST_LABEL, "test", "", True),
+    NaturalSet("v2", "requirements_natural_v2.csv", "requirement_understanding_v2",
+               "pipeline_natural_v2", "natural_v2", NATURAL_V2_LABEL, "test2", " v2", True),
+    NaturalSet("v3", "requirements_natural_v3.csv", "requirement_understanding_v3",
+               "pipeline_natural_v3", "natural_v3", NATURAL_V3_LABEL, "test3", " v3", False),
+)
+NOISE_SET = "v3"
+"""The natural set that gets the ``--noise-runs`` repeats (the fresh one; v1 / v2 are SEEN)."""
 PROGRESS_FILE = "PROGRESS.md"
 FREEZE_SECTION = "Part C freeze"
 FREEZE_SECTIONS = ("Part D freeze", "Part C freeze")
@@ -366,6 +444,12 @@ def _pipeline_stats(
         "tests_kept": sum(x["tests"] for x in rows),
         "dropped": sum(x["dropped"] for x in rows),
         "rejected": sum(x["rejected"] for x in rows),
+        "rejected_by_reason": bd.rejected_by_reason(
+            reason for x in rows for reason in x["rejected_reasons"]),
+        "rejected_by_reason_by_split": {
+            split: bd.rejected_by_reason(
+                reason for x in rows if x["split"] == split for reason in x["rejected_reasons"])
+            for split in dict.fromkeys(x["split"] for x in rows)},
         "retries": sum(x["retries"] for x in rows),
         "plan_attempts": sum(x["plan_attempts"] for x in rows),
         "failed_runs": sum(1 for x in rows if x["status"] != "completed"),
@@ -463,11 +547,14 @@ def _baseline_comparison(out_dir: Path, current: dict[str, Any]) -> dict[str, An
     }
 
 
-def _ru_headline(ru: dict[str, Any], split: str = "test") -> dict[str, Any]:
+def _ru_headline(
+    ru: dict[str, Any], split: str = "test", pipe: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if "splits" not in ru or split not in ru["splits"]:
         return {"status": "not run"}
     tsplit = ru["splits"][split]
-    return {
+    kinds = tsplit.get("by_kind", {}).get("parsed", {})
+    out = {
         "split": split,
         "requirements": tsplit["requirements"],
         "target_exact_parsed": tsplit["targets_parsed"]["exact"],
@@ -489,7 +576,14 @@ def _ru_headline(ru: dict[str, Any], split: str = "test") -> dict[str, Any]:
         "precondition_recall_macro": tsplit["preconditions"]["macro_recall"],
         "fallback": tsplit["fallback"]["count"],
         "fallback_unexpected": tsplit["fallback"]["unexpected_count"],
+        "fp_by_kind": {k: v["fp"] for k, v in kinds.items()},
+        "fn_by_kind": {k: v["fn"] for k, v in kinds.items()},
     }
+    if pipe is not None and "rejected" in pipe:
+        reasons = pipe.get("rejected_by_reason_by_split", {}).get(split, {})
+        out["rejected"] = sum(reasons.values())
+        out["rejected_by_reason"] = reasons
+    return out
 
 
 def _not_run_status(report: dict[str, Any], name: str) -> str:
@@ -499,12 +593,13 @@ def _not_run_status(report: dict[str, Any], name: str) -> str:
 def build_headline(report: dict[str, Any]) -> dict[str, Any]:
     """Headline metrics (rows in :data:`HEADLINE_ORDER`) from the finished report.
 
-    The two NEW HEADLINE rows come first (fresh held-out v2 bugs, fresh natural v2
-    requirements), then the LLM-independent rows, coverage and citations, then the rows
-    whose data has been seen (held-out v1, natural v1 test / dev) and the in-sample bugs.
-    LLM-dependent rows carry a ``by_mode`` entry for every mode (a value dict for a
-    completed mode, a "not run: ..." string otherwise); their top-level values are for
-    ``report["actual_mode"]``.
+    The FRESH v3 rows come first (bug detection by the system's full output, with the
+    requirement-driven / sweep-alone / gold figures next to it; natural v3 understanding),
+    then the LLM-independent rows (agreement, gold, CAN, coverage, citations, conformance
+    sweep), then the SEEN rows (held-out v2 bugs, natural v2, held-out v1, natural v1 test /
+    dev), then the in-sample bugs. LLM-dependent rows carry a ``by_mode`` entry for every
+    mode (a value dict for a completed mode, a "not run: ..." string otherwise); their
+    top-level values are for ``report["actual_mode"]``.
     """
     mode = report["actual_mode"]
     blk = report["modes"][mode]
@@ -520,11 +615,35 @@ def build_headline(report: dict[str, Any]) -> dict[str, Any]:
                     for k in ("generated", "gold", "union")}
         return fn
 
-    def supp_vals(b: dict[str, Any]) -> dict[str, Any]:
-        supp = b["heldout_v2_bug_detection"].get("supplementary") or {}
+    def supp_cells(supp: dict[str, Any]) -> dict[str, Any]:
         return {k: ({"detected": v["detected"], "bugs": v["bugs"], "rate": v["rate"],
                      "tests": v["tests"]} if isinstance(v, dict) and "detected" in v else v)
                 for k, v in supp.items()}
+
+    def supp_vals(b: dict[str, Any]) -> dict[str, Any]:
+        return supp_cells(b["heldout_v2_bug_detection"].get("supplementary") or {})
+
+    def v3_vals(b: dict[str, Any]) -> dict[str, Any]:
+        v3 = b["heldout_v3_bug_detection"]
+        if v3.get("status"):
+            return {"status": v3["status"]}
+
+        def cell(x: Any) -> Any:
+            if isinstance(x, dict) and "detected" in x:
+                return {"detected": x["detected"], "bugs": v3["bugs"], "rate": x["rate"]}
+            return x
+        return {
+            "bugs": v3["bugs"],
+            "full_output": cell(v3["full_output"]),
+            "requirement_driven": cell(v3["requirement_driven"]),
+            "conformance": cell(v3["conformance"]),
+            "gold": cell(v3["gold"]),
+            "suite_sizes": v3["suite_sizes"],
+            "missed_by_headline": v3.get("missed_by_headline"),
+        }
+
+    def v3_supp(b: dict[str, Any]) -> dict[str, Any]:
+        return supp_cells(b["heldout_v3_bug_detection"].get("supplementary") or {})
 
     def cov_vals(b: dict[str, Any]) -> dict[str, Any]:
         cov = b["coverage"]
@@ -540,22 +659,41 @@ def build_headline(report: dict[str, Any]) -> dict[str, Any]:
         return {n: fn(report["modes"][n]) if n in completed else _not_run_status(report, n)
                 for n in LLM_MODES}
 
+    def full_by_mode(key: str) -> dict[str, Any]:
+        return by_mode(lambda b: _part_d_cell(b, key))
+
+    by_key = {ns.ru_key: ns for ns in NATURAL_SETS}
+
     def ru_row(key: str, split: str) -> dict[str, Any]:
+        ns = by_key[key]
         return {"llm_dependent": True,
-                **{n: _ru_headline(report["modes"][n].get(key, {}), split) if n in completed
-                   else _not_run_status(report, n) for n in LLM_MODES}}
+                **{n: _ru_headline(report["modes"][n].get(key, {}), split,
+                                   report["modes"][n].get(ns.pipe_key))
+                   if n in completed else _not_run_status(report, n) for n in LLM_MODES}}
 
     gold_total = report["gold_tests"]
+    conf = report.get("conformance", {})
+    conf_row: dict[str, Any] = {"llm_dependent": False, "status": conf.get("status", "not run"),
+                                "reason": conf.get("reason")}
+    if conf.get("status") == "completed":
+        conf_row.update({
+            "tests": conf["tests"], "steps": conf["steps"],
+            "generation_s": conf["generation_s"], "clean_run_s": conf["clean_run_s"],
+            "bug_matrix_runtime_s": conf["bug_matrix_runtime_s"],
+            "clean_simulator_passed": conf["clean_simulator_passed"],
+            "provenance_ok": conf["provenance"]["ok"],
+        })
     rows: dict[str, Any] = {
-        "heldout_v2_bug_detection": {
-            "llm_dependent": True, "label": HELDOUT_V2_LABEL,
-            "bugs": blk["heldout_v2_bug_detection"]["generated"]["bugs"],
-            **held_vals("heldout_v2_bug_detection")(blk),
-            "by_mode": by_mode(held_vals("heldout_v2_bug_detection")),
-            "supplementary_by_mode": by_mode(supp_vals),
+        "heldout_v3_bug_detection": {
+            "llm_dependent": True, "label": HELDOUT_V3_LABEL,
+            "definition": ("headline = full output (c) = requirement-driven tests UNION the "
+                           "conformance sweep, per bug; (a) requirement-driven only, (b) sweep "
+                           "alone and gold are in the same row"),
+            **v3_vals(blk), "by_mode": by_mode(v3_vals),
+            "supplementary_by_mode": by_mode(v3_supp),
         },
-        "requirement_understanding_v2": {**ru_row("requirement_understanding_v2", "test2"),
-                                         "label": NATURAL_V2_LABEL},
+        "requirement_understanding_v3": {**ru_row("requirement_understanding_v3", "test3"),
+                                         "label": NATURAL_V3_LABEL},
         "simulator_rules_agreement": {
             "llm_dependent": False, "agreed": agr["agreed"], "total": agr["requests"],
             "rate": agr["rate"], "seed": agr["seed"],
@@ -571,11 +709,23 @@ def build_headline(report: dict[str, Any]) -> dict[str, Any]:
         "coverage": {"llm_dependent": True, **cov_vals(blk), "by_mode": by_mode(cov_vals)},
         "citation_validity": {"llm_dependent": True, **cit_vals(blk),
                               "by_mode": by_mode(cit_vals)},
+        "conformance_sweep": conf_row,
+        "heldout_v2_bug_detection": {
+            "llm_dependent": True, "label": HELDOUT_V2_LABEL,
+            "bugs": blk["heldout_v2_bug_detection"]["generated"]["bugs"],
+            **held_vals("heldout_v2_bug_detection")(blk),
+            "by_mode": by_mode(held_vals("heldout_v2_bug_detection")),
+            "supplementary_by_mode": by_mode(supp_vals),
+            "full_output_by_mode": full_by_mode("heldout_v2"),
+        },
+        "requirement_understanding_v2": {**ru_row("requirement_understanding_v2", "test2"),
+                                         "label": NATURAL_V2_LABEL},
         "heldout_bug_detection": {
             "llm_dependent": True, "label": HELDOUT_V1_SEEN_LABEL,
             "bugs": blk["heldout_bug_detection"]["generated"]["bugs"],
             **held_vals("heldout_bug_detection")(blk),
             "by_mode": by_mode(held_vals("heldout_bug_detection")),
+            "full_output_by_mode": full_by_mode("heldout_v1"),
         },
         "requirement_understanding": {**ru_row("requirement_understanding", "test"),
                                       "label": NATURAL_V1_TEST_LABEL},
@@ -585,11 +735,22 @@ def build_headline(report: dict[str, Any]) -> dict[str, Any]:
             "llm_dependent": True, "label": IN_SAMPLE_LABEL,
             "bugs": blk["bug_detection"]["generated"]["bugs"],
             **held_vals("bug_detection")(blk), "by_mode": by_mode(held_vals("bug_detection")),
+            "full_output_by_mode": full_by_mode("in_sample"),
         },
     }
     return {"mode": mode, "other_mode": other, "other_mode_status": other_status,
             "modes_completed": completed,
             "order": list(HEADLINE_ORDER), **{k: rows[k] for k in HEADLINE_ORDER}}
+
+
+def _part_d_cell(blk: dict[str, Any], key: str) -> Any:
+    """Full-output detection of one catalog for the headline (or why it is not there)."""
+    row = blk.get("part_d_detection", {}).get(key)
+    if not isinstance(row, dict):
+        return "not run (conformance sweep skipped)"
+    full = row["full_output"]
+    return {"detected": full["detected"], "bugs": full["bugs"],
+            "rate": round(full["detected"] / full["bugs"], 4) if full["bugs"] else None}
 
 
 def _spread(values: list[float | None]) -> dict[str, Any]:
@@ -715,36 +876,161 @@ def _heldout_v2_block(
     }
 
 
+def _supplementary_detection(
+    spec: Any, catalog: Any, tests: list[TestCase], definition: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(report entry, bug_detection dict) of an extra test group against ``catalog``."""
+    det = m.bug_detection(run_bug_matrix(tests, spec, catalog.ids, catalog=catalog))
+    return {
+        "tests": len(tests), "bugs": det["bugs"], "detected": det["detected"],
+        "rate": det["rate"], "undetected": det["undetected"], "per_bug": det["per_bug"],
+        "invalid_tests": len(det["invalid_tests"]), "definition": definition,
+    }, det
+
+
+def _heldout_v3_block(
+    spec: Any, catalog: Any, *, gold: list[TestCase], gold_det: dict[str, Any],
+    generated: list[TestCase], conformance_tests: list[TestCase] | None,
+    conformance_det: dict[str, Any] | None, natural_tests: dict[str, list[TestCase]] | None,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Held-out v3 detection: (a) requirement-driven, (b) sweep alone, (c) full output, gold.
+
+    Returns the report block and the raw (a) ``bug_detection`` dict (None if not run).
+
+    ``natural_tests`` maps the natural-set key to its tests (None when natural was skipped).
+    """
+    ids = list(catalog.ids)
+    if set(ids) != set(HELDOUT_V3_BUG_IDS):
+        return {"status": "not run: catalog ids differ from HELDOUT_V3_BUG_IDS"}, None
+    req_det = m.bug_detection(run_bug_matrix(generated, spec, ids, catalog=catalog))
+    suites: dict[str, list[TestCase]] = {"requirement_driven": generated, "gold": gold}
+    dets: dict[str, Any] = {"requirement_driven": req_det, "gold": gold_det}
+    conformance: Any = "not run (conformance sweep skipped)"
+    full: Any = "not run (conformance sweep skipped)"
+    conf_tests = conformance_tests or []
+    if conformance_tests is not None and conformance_det is not None:
+        conformance = _det_summary(conformance_det)
+        full = union_from_detections(req_det, conformance_det)
+        suites["conformance"], dets["conformance"] = conformance_tests, conformance_det
+        suites["full_output"] = generated + conformance_tests
+        dets["full_output"] = {"per_bug": [
+            {"bug_id": b["bug_id"], "detected": b["bug_id"] not in full["undetected"]}
+            for b in req_det["per_bug"]]}
+    supplementary: dict[str, Any] = {}
+    if natural_tests is not None:
+        all_nat = [t for key in sorted(natural_tests) for t in natural_tests[key]]
+        extra = {
+            "all_generated": (
+                generated + all_nat,
+                "union of ALL generated tests (seed + natural v1 + natural v2 + natural v3)"),
+            "natural_v3_generated": (
+                natural_tests.get("v3", []),
+                "tests generated from the 16 natural-v3 requirements alone"),
+        }
+        for name, (tests, definition) in extra.items():
+            supplementary[name], dets[name] = _supplementary_detection(
+                spec, catalog, tests, definition)
+            suites[name] = tests
+    else:
+        supplementary = {"all_generated": "not run (natural requirements skipped)",
+                         "natural_v3_generated": "not run (natural requirements skipped)"}
+    analysis = heldout_v3_analysis(spec, suites, dets)
+    headline_suite = "full_output" if "full_output" in suites else "requirement_driven"
+    reasons = {x["bug_id"]: x["reason"] for x in analysis[headline_suite]["missed"]}
+
+    def flag(det: dict[str, Any] | None, bug_id: str) -> bool | None:
+        if det is None:
+            return None
+        row = next((b for b in det["per_bug"] if b["bug_id"] == bug_id), None)
+        return None if row is None else bool(row["detected"])
+
+    def n_detecting(det: dict[str, Any] | None, bug_id: str) -> int | None:
+        if det is None:
+            return None
+        row = next((b for b in det["per_bug"] if b["bug_id"] == bug_id), None)
+        return None if row is None else len(row.get("detecting_tests", []))
+
+    per_bug = []
+    for b in req_det["per_bug"]:
+        bid = b["bug_id"]
+        entry: dict[str, Any] = {
+            "bug_id": bid, "title": b["title"], "category": b["category"],
+            "requirement_driven": flag(req_det, bid),
+            "requirement_driven_detecting_tests": n_detecting(req_det, bid),
+            "conformance": flag(conformance_det, bid),
+            "conformance_detecting_tests": n_detecting(conformance_det, bid),
+            "full_output": flag(dets.get("full_output"), bid),
+            "gold": flag(gold_det, bid),
+            "natural_v3": flag(dets.get("natural_v3_generated"), bid),
+            "all_generated": flag(dets.get("all_generated"), bid),
+            "trigger_counts": {name: analysis[name]["trigger_counts"][bid] for name in suites},
+            "reason_if_missed": reasons.get(bid),
+        }
+        entry["detected_by"] = [n for n in ("requirement_driven", "conformance", "gold")
+                                if entry[n]]
+        per_bug.append(entry)
+    block = {
+        "scope": HELDOUT_V3_LABEL,
+        "catalog": "data/bugs/heldout_v3_catalog.yaml",
+        "bugs": len(ids),
+        "headline_suite": headline_suite,
+        "requirement_driven": _det_summary(req_det),
+        "conformance": conformance,
+        "full_output": full,
+        "gold": _det_summary(gold_det),
+        "suite_sizes": {
+            "requirement_driven": len(generated),
+            "conformance": len(conf_tests) if conformance_tests is not None else None,
+            "full_output": (len(generated) + len(conf_tests)
+                            if conformance_tests is not None else None),
+            "gold": len(gold),
+        },
+        "per_bug": per_bug,
+        "missed_by_headline": [{"bug_id": k, "reason": v} for k, v in reasons.items()],
+        "analysis": analysis,
+        "trigger_summary": {
+            name: {"bugs_with_stimulus": sum(1 for c in analysis[name]["trigger_counts"].values()
+                                              if c > 0),
+                   "bugs": len(ids),
+                   "stimulus_applications": sum(max(c, 0) for c in
+                                                analysis[name]["trigger_counts"].values())}
+            for name in suites},
+        "supplementary": supplementary,
+    }
+    return block, req_det
+
+
 def _noise_check(
-    label: str, *, natural: bool, noise_runs: int, spec: Any, natural_v2_reqs: list[Any],
-    nat2_rows: list[dict[str, Any]], nat2_results: list[PipelineResult], nat2_wall: list[float],
-    nat2_stats: dict[str, Any] | None, run_kw: dict[str, Any], timings: dict[str, float],
+    label: str, *, natural: bool, noise_runs: int, spec: Any, ns: NaturalSet,
+    reqs: list[Any], rows: list[dict[str, Any]], results: list[PipelineResult],
+    wall: list[float], stats: dict[str, Any] | None, run_kw: dict[str, Any],
+    timings: dict[str, float],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Run-to-run noise on natural v2: ollama runs ``noise_runs`` times, mock is deterministic."""
-    if not natural or nat2_stats is None:
+    """Run-to-run noise on the fresh natural set: ollama runs ``noise_runs`` times, mock once."""
+    if not natural or stats is None:
         return {"status": "not run"}, []
-    splits = {n.id: n.split for n in natural_v2_reqs}
-    nat2_tests = [test for r in nat2_results for test in r.tests]
-    runs = [_noise_run_row(1, nat2_rows, nat2_stats, check_provenance(spec, nat2_tests),
-                           nat2_wall, True)]
+    splits = {n.id: n.split for n in reqs}
+    tests = [test for r in results for test in r.tests]
+    runs = [_noise_run_row(1, rows, stats, check_provenance(spec, tests), wall, True)]
     extra_provenance: list[dict[str, Any]] = []
-    common: dict[str, Any] = {"status": "completed", "mode": label, "requested_runs": noise_runs}
+    common: dict[str, Any] = {"status": "completed", "mode": label, "requested_runs": noise_runs,
+                              "set": ns.key, "set_label": ns.label}
     if label != "ollama":
-        _, res_b, _ = _run_natural(label, natural_v2_reqs, tag=" v2 determinism check", **run_kw)
-        identical = _result_signature(res_b) == _result_signature(nat2_results)
+        _, res_b, _ = _run_natural(label, reqs, tag=f"{ns.tag} determinism check", **run_kw)
+        identical = _result_signature(res_b) == _result_signature(results)
         return {
             **common, "deterministic": True, "runs": runs,
             "determinism_check": {
                 "second_run_identical": identical,
-                "compared": "parsed requirement, status and every kept test's template, "
-                            "parameters and steps, over all natural-v2 requirements",
+                "compared": f"parsed requirement, status and every kept test's template, "
+                            f"parameters and steps, over all natural-{ns.key} requirements",
             },
             "summary": {k: _spread([r[k] for r in runs]) for k in NOISE_METRICS},
             "note": ("mock is deterministic (keyword rules, no sampling), so it was run once "
                      "for the tables; a second run was compared for equality as a check."),
         }, extra_provenance
     for k in range(2, noise_runs + 1):
-        rows_k, res_k, wall_k = _run_natural(label, natural_v2_reqs, tag=f" v2 run{k}", **run_kw)
+        rows_k, res_k, wall_k = _run_natural(label, reqs, tag=f"{ns.tag} run{k}", **run_kw)
         prov_k = check_provenance(spec, [test for r in res_k for test in r.tests])
         extra_provenance.append({"run": k, "provenance": prov_k})
         runs.append(_noise_run_row(k, rows_k, _pipeline_stats(res_k, wall_k, splits), prov_k,
@@ -754,7 +1040,7 @@ def _noise_check(
         **common, "deterministic": False, "runs": runs,
         "summary": {k: _spread([r[k] for r in runs]) for k in NOISE_METRICS},
         "note": ("Run 1 is the run used for every main table. Every run is listed; the summary "
-                 "is the mean and the min-max range over all runs, never the best run."),
+                 "is the mean and the min-max range over ALL runs, never the best run."),
     }, extra_provenance
 
 
@@ -781,9 +1067,14 @@ def union_from_detections(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any
     }
 
 
-def _part_d_row(label: str, req: dict[str, Any], conf: dict[str, Any]) -> dict[str, Any]:
-    return {"label": label, "requirement_driven": _det_summary(req),
-            "conformance": _det_summary(conf), "full_output": union_from_detections(req, conf)}
+def _part_d_row(
+    label: str, req: dict[str, Any], conf: dict[str, Any], gold: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    row = {"label": label, "requirement_driven": _det_summary(req),
+           "conformance": _det_summary(conf), "full_output": union_from_detections(req, conf)}
+    if gold is not None:
+        row["gold"] = _det_summary(gold)
+    return row
 
 
 def resolve_part_d_catalogs(default_catalog: Any) -> dict[str, tuple[str, Any]]:
@@ -848,8 +1139,7 @@ def _run_mode(
     *,
     spec: Any,
     requirements: list[dict[str, str]],
-    natural_reqs: list[Any],
-    natural_v2_reqs: list[Any],
+    natural_sets: dict[str, list[Any]],
     retriever: Any,
     store: AuditStore,
     engine: str,
@@ -857,16 +1147,19 @@ def _run_mode(
     catalog: Any,
     heldout_catalog: Any,
     heldout_v2_catalog: Any,
+    heldout_v3_catalog: Any,
     gold: list[TestCase],
     gold_matrix: Any,
     gold_heldout: Any,
     gold_heldout_v2: Any,
+    gold_dets: dict[str, dict[str, Any]],
     natural: bool,
     noise_runs: int,
     timings: dict[str, float],
     label: str,
     part_d_catalogs: dict[str, tuple[str, Any]] | None = None,
     conformance_dets: dict[str, dict[str, Any]] | None = None,
+    conformance_tests: list[TestCase] | None = None,
 ) -> tuple[dict[str, Any], list[TestCase]]:
     """Generate tests with one LLM backend and compute every LLM-dependent metric."""
     # --- generation (seed requirements) ------------------------------------------------
@@ -883,15 +1176,16 @@ def _run_mode(
     generated = [test for r in results for test in r.tests]
     timings[f"{label}.generation"] = time.perf_counter() - t
 
-    # --- requirement understanding (natural v1, then natural v2) ------------------------
-    t = time.perf_counter()
+    # --- requirement understanding (natural v1, v2, v3; one run each) -----------------
     run_kw: dict[str, Any] = {"llm": llm, "spec": spec, "retriever": retriever, "store": store,
                               "engine": engine}
-    nat_rows, nat_results, nat_wall = _run_natural(label, natural_reqs, tag="", **run_kw)
-    timings[f"{label}.requirement_understanding"] = time.perf_counter() - t
-    t = time.perf_counter()
-    nat2_rows, nat2_results, nat2_wall = _run_natural(label, natural_v2_reqs, tag=" v2", **run_kw)
-    timings[f"{label}.requirement_understanding_v2"] = time.perf_counter() - t
+    nat_runs: dict[str, tuple[list[dict[str, Any]], list[PipelineResult], list[float]]] = {}
+    for ns in NATURAL_SETS:
+        t = time.perf_counter()
+        nat_runs[ns.key] = _run_natural(label, natural_sets[ns.key], tag=ns.tag, **run_kw)
+        timings[f"{label}.{ns.ru_key}"] = time.perf_counter() - t
+    nat_tests = {ns.key: [test for r in nat_runs[ns.key][1] for test in r.tests]
+                 for ns in NATURAL_SETS}
 
     # --- execution + bug matrices ------------------------------------------------------
     t = time.perf_counter()
@@ -901,11 +1195,15 @@ def _run_mode(
     gen_matrix = run_bug_matrix(generated, spec, catalog.ids, store, eval_run)
     store.finish_run(eval_run, "completed")
     gen_heldout = run_bug_matrix(generated, spec, heldout_catalog.ids, catalog=heldout_catalog)
-    nat_tests = [test for r in nat_results for test in r.tests]
-    nat2_tests = [test for r in nat2_results for test in r.tests]
     heldout_v2_block = _heldout_v2_block(
-        spec, heldout_v2_catalog, gold, gold_heldout_v2, generated, nat_tests,
-        nat2_tests if natural else None)
+        spec, heldout_v2_catalog, gold, gold_heldout_v2, generated, nat_tests["v1"],
+        nat_tests["v2"] if natural else None)
+    heldout_v3_block, v3_req_det = _heldout_v3_block(
+        spec, heldout_v3_catalog, gold=gold, gold_det=gold_dets["heldout_v3"],
+        generated=generated,
+        conformance_tests=conformance_tests if conformance_dets is not None else None,
+        conformance_det=(conformance_dets or {}).get("heldout_v3"),
+        natural_tests=nat_tests if natural else None)
     timings[f"{label}.execution_and_bug_matrices"] = time.perf_counter() - t
 
     # --- Part D: requirement-driven vs conformance sweep vs full output ------------------
@@ -917,28 +1215,36 @@ def _run_mode(
             "heldout_v1": m.bug_detection(gen_heldout),
             "heldout_v2": heldout_v2_block["generated"],
         }
+        if v3_req_det is not None:
+            req_dets["heldout_v3"] = v3_req_det
         for key, (_lbl, cat) in part_d_catalogs.items():
             if key not in req_dets:
                 req_dets[key] = m.bug_detection(
                     run_bug_matrix(generated, spec, cat.ids, catalog=cat))
-        part_d = {key: _part_d_row(lbl, req_dets[key], conformance_dets[key])
+        part_d = {key: _part_d_row(lbl, req_dets[key], conformance_dets[key], gold_dets.get(key))
                   for key, (lbl, _cat) in part_d_catalogs.items()}
     timings[f"{label}.part_d_detection"] = time.perf_counter() - t
 
-    # --- noise check (extra runs over natural v2; ollama only) ---------------------------
+    # --- per-set pipeline stats ---------------------------------------------------------
+    nat_stats: dict[str, dict[str, Any] | None] = {
+        ns.key: (_pipeline_stats(nat_runs[ns.key][1], nat_runs[ns.key][2],
+                                 {n.id: n.split for n in natural_sets[ns.key]})
+                 if natural else None) for ns in NATURAL_SETS}
+
+    # --- noise check (extra runs over the fresh natural set; ollama only) -----------------
     t = time.perf_counter()
-    nat2_stats = (_pipeline_stats(nat2_results, nat2_wall,
-                                  {n.id: n.split for n in natural_v2_reqs}) if natural else None)
+    noise_ns = next(ns for ns in NATURAL_SETS if ns.key == NOISE_SET)
+    n_rows, n_results, n_wall = nat_runs[noise_ns.key]
     noise_check, extra_provenance = _noise_check(
-        label, natural=natural, noise_runs=noise_runs, spec=spec,
-        natural_v2_reqs=natural_v2_reqs, nat2_rows=nat2_rows, nat2_results=nat2_results,
-        nat2_wall=nat2_wall, nat2_stats=nat2_stats, run_kw=run_kw, timings=timings)
+        label, natural=natural, noise_runs=noise_runs, spec=spec, ns=noise_ns,
+        reqs=natural_sets[noise_ns.key], rows=n_rows, results=n_results, wall=n_wall,
+        stats=nat_stats[noise_ns.key], run_kw=run_kw, timings=timings)
     timings[f"{label}.noise_check"] = time.perf_counter() - t
 
     # --- byte provenance ---------------------------------------------------------------
     t = time.perf_counter()
     provenance = _provenance_block(
-        spec, {"seed": generated, "natural": nat_tests, "natural_v2": nat2_tests})
+        spec, {"seed": generated, **{ns.prov_key: nat_tests[ns.key] for ns in NATURAL_SETS}})
     provenance["noise_extra_runs"] = extra_provenance
     for extra in extra_provenance:
         for key in ("checked", "passed", "failed"):
@@ -962,15 +1268,25 @@ def _run_mode(
     )
     req_ids = [r["id"] for r in requirements]
     seed_stats = _pipeline_stats(results, seed_wall)
-    nat_stats = (_pipeline_stats(nat_results, nat_wall, {n.id: n.split for n in natural_reqs})
-                 if natural else None)
-    latency = _latency_block(seed_stats, nat_stats)
-    if nat2_stats is not None:
-        v1_rows = seed_stats["per_requirement"] + (nat_stats["per_requirement"] if nat_stats else [])
-        wall_v2 = [r["wall_s"] for r in nat2_stats["per_requirement"]]
-        latency["per_requirement_wall_s"]["natural_v2"] = _latency_summary(wall_v2)
-        latency["per_requirement_wall_s"]["all_with_v2"] = _latency_summary(
-            [r["wall_s"] for r in v1_rows] + wall_v2)
+    latency = _latency_block(seed_stats, nat_stats["v1"])
+    v1_rows = seed_stats["per_requirement"] + (
+        nat_stats["v1"]["per_requirement"] if nat_stats["v1"] else [])
+    all_rows = list(v1_rows)
+    for ns in NATURAL_SETS[1:]:
+        st = nat_stats[ns.key]
+        if st is None:
+            continue
+        wall_k = [r["wall_s"] for r in st["per_requirement"]]
+        latency["per_requirement_wall_s"]["natural" + ns.tag.replace(" ", "_")] = (
+            _latency_summary(wall_k))
+        all_rows += st["per_requirement"]
+        if ns.key == "v2":
+            latency["per_requirement_wall_s"]["all_with_v2"] = _latency_summary(
+                [r["wall_s"] for r in all_rows])
+    if nat_stats["v3"] is not None:
+        latency["per_requirement_wall_s"]["all_with_v3"] = _latency_summary(
+            [r["wall_s"] for r in all_rows])
+    n_conf = len(conformance_tests) if conformance_tests is not None else None
     block: dict[str, Any] = {
         "status": "completed",
         "llm": llm.name,
@@ -980,6 +1296,13 @@ def _run_mode(
             "clean_simulator_passed": clean.passed_count,
             "clean_simulator_pass_rate": round(clean.pass_rate, 4) if generated else None,
             "p2_timing_warnings": clean.timing_warning_count,
+        },
+        "suite_sizes": {
+            "requirement_driven": len(generated),
+            "conformance": n_conf,
+            "full_output": None if n_conf is None else len(generated) + n_conf,
+            "definition": ("requirement-driven = tests generated from the seed requirements; "
+                           "full output = those plus the conformance sweep"),
         },
         "request_validity": m.request_validity(spec, generated),
         "expected_response_accuracy": m.expected_response_accuracy(
@@ -996,27 +1319,25 @@ def _run_mode(
         },
         "heldout_bug_detection": heldout_block,
         "heldout_v2_bug_detection": heldout_v2_block,
-        "requirement_understanding": {
-            "source": "data/requirements_natural.csv",
-            "label": NATURAL_V1_TEST_LABEL,
-            "per_requirement": nat_rows,
-            "splits": u.aggregate_by_split(nat_rows),
-        } if natural else {"status": "not run"},
-        "requirement_understanding_v2": {
-            "source": "data/requirements_natural_v2.csv",
-            "label": NATURAL_V2_LABEL,
-            "per_requirement": nat2_rows,
-            "splits": u.aggregate_by_split(nat2_rows),
-        } if natural else {"status": "not run"},
+        "heldout_v3_bug_detection": heldout_v3_block,
         "noise_check": noise_check,
         "pipeline": seed_stats,
-        "pipeline_natural": nat_stats if nat_stats is not None else {"status": "not run"},
-        "pipeline_natural_v2": nat2_stats if nat2_stats is not None else {"status": "not run"},
         "latency": latency,
-        "events": _events_block(seed_stats, nat_stats, nat2_stats),
+        "events": _events_block(seed_stats, *nat_stats.values()),
         "provenance": provenance,
         "part_d_detection": part_d,
     }
+    for ns in NATURAL_SETS:
+        rows_k = nat_runs[ns.key][0]
+        block[ns.ru_key] = {
+            "source": f"data/{ns.csv}",
+            "label": ns.label,
+            "seen": ns.seen,
+            "per_requirement": rows_k,
+            "splits": u.aggregate_by_split(rows_k),
+        } if natural else {"status": "not run"}
+        stats_k = nat_stats[ns.key]
+        block[ns.pipe_key] = stats_k if stats_k is not None else {"status": "not run"}
     timings[f"{label}.metrics"] = time.perf_counter() - t
     return block, generated
 
@@ -1071,7 +1392,7 @@ def run_evaluation(
     unless ``natural`` is False). ``run_can=False`` skips the udsoncan
     virtual-CAN check (reported as "skipped"); ``run_retrieval_compare=False``
     records the BM25-vs-Chroma retrieval comparison as "not run". ``noise_runs`` is the total
-    number of times the ollama pipeline runs over natural v2 (run 1 feeds the tables, the
+    number of times the ollama pipeline runs over natural v3 (run 1 feeds the tables, the
     rest only the noise check; mock is deterministic and runs once, plus an equality
     re-run). Every generated test
     of every mode is checked for byte provenance (:mod:`.provenance`);
@@ -1112,13 +1433,11 @@ def run_evaluation(
     catalog = load_bug_catalog()
     heldout_catalog = load_bug_catalog(HELDOUT_BUG_CATALOG_PATH)
     heldout_v2_catalog = load_bug_catalog(HELDOUT_V2_BUG_CATALOG_PATH)
-    natural_reqs = (
-        u.load_natural_requirements(root / "data" / "requirements_natural.csv") if natural else []
-    )
-    natural_v2_reqs = (
-        u.load_natural_requirements(root / "data" / "requirements_natural_v2.csv")
-        if natural else []
-    )
+    heldout_v3_catalog = load_bug_catalog(HELDOUT_V3_BUG_CATALOG_PATH)
+    natural_sets = {
+        ns.key: (u.load_natural_requirements(root / "data" / ns.csv) if natural else [])
+        for ns in NATURAL_SETS
+    }
     chosen_engine = resolve_engine(engine)
     freeze = freeze_info(root)
     timings["setup"] = time.perf_counter() - t
@@ -1130,14 +1449,23 @@ def run_evaluation(
     gold_heldout = run_bug_matrix(gold, spec, heldout_catalog.ids, catalog=heldout_catalog)
     gold_heldout_v2 = run_bug_matrix(gold, spec, heldout_v2_catalog.ids,
                                      catalog=heldout_v2_catalog)
+    gold_heldout_v3 = run_bug_matrix(gold, spec, heldout_v3_catalog.ids,
+                                     catalog=heldout_v3_catalog)
+    gold_dets = {
+        "in_sample": m.bug_detection(gold_matrix),
+        "heldout_v1": m.bug_detection(gold_heldout),
+        "heldout_v2": m.bug_detection(gold_heldout_v2),
+        "heldout_v3": m.bug_detection(gold_heldout_v3),
+    }
     timings["gold_suites"] = time.perf_counter() - t
 
     # --- LLM-independent: Part D conformance sweep --------------------------------------
     t = time.perf_counter()
     part_d_catalogs = resolve_part_d_catalogs(catalog)
     conformance_dets: dict[str, dict[str, Any]] | None = None
+    conformance_tests: list[TestCase] | None = None
     if conformance:
-        conformance_report, _conf_tests, conformance_dets = _conformance_block(
+        conformance_report, conformance_tests, conformance_dets = _conformance_block(
             spec, part_d_catalogs)
     else:
         conformance_report = {"status": "not run",
@@ -1151,15 +1479,15 @@ def run_evaluation(
         llms.append(("mock", get_llm(Config(llm_mode="mock", retriever=base_cfg.retriever))))
     llms.append((actual_mode, llm))
     common: dict[str, Any] = {
-        "spec": spec, "requirements": requirements, "natural_reqs": natural_reqs,
-        "natural_v2_reqs": natural_v2_reqs,
+        "spec": spec, "requirements": requirements, "natural_sets": natural_sets,
         "retriever": retriever, "store": store, "engine": chosen_engine, "corpus": corpus,
         "catalog": catalog, "heldout_catalog": heldout_catalog,
-        "heldout_v2_catalog": heldout_v2_catalog, "gold": gold,
+        "heldout_v2_catalog": heldout_v2_catalog,
+        "heldout_v3_catalog": heldout_v3_catalog, "gold": gold,
         "gold_matrix": gold_matrix, "gold_heldout": gold_heldout,
-        "gold_heldout_v2": gold_heldout_v2, "natural": natural, "noise_runs": noise_runs,
-        "timings": timings, "part_d_catalogs": part_d_catalogs,
-        "conformance_dets": conformance_dets,
+        "gold_heldout_v2": gold_heldout_v2, "gold_dets": gold_dets, "natural": natural,
+        "noise_runs": noise_runs, "timings": timings, "part_d_catalogs": part_d_catalogs,
+        "conformance_dets": conformance_dets, "conformance_tests": conformance_tests,
     }
     modes: dict[str, Any] = {}
     generated_by_mode: dict[str, list[TestCase]] = {}
@@ -1239,14 +1567,16 @@ def run_evaluation(
         "bug_catalog_size": len(catalog.ids),
         "heldout_catalog_size": len(heldout_catalog.ids),
         "heldout_v2_catalog_size": len(heldout_v2_catalog.ids),
-        "natural_requirements": len(natural_reqs),
-        "natural_requirements_v2": len(natural_v2_reqs),
+        "heldout_v3_catalog_size": len(heldout_v3_catalog.ids),
+        "natural_requirements": len(natural_sets["v1"]),
+        "natural_requirements_v2": len(natural_sets["v2"]),
+        "natural_requirements_v3": len(natural_sets["v3"]),
         "noise_runs_requested": noise_runs,
         "retrieval_comparison": retrieval_comparison,
         "simulator_rules_agreement": agreement,
         "udsoncan_virtual_can": can_result,
         "metric_definitions": {**m.METRIC_DEFINITIONS, **u.UNDERSTANDING_DEFINITIONS,
-                               **V2_DEFINITIONS, **PART_D_DEFINITIONS},
+                               **V2_DEFINITIONS, **PART_D_DEFINITIONS, **PART_D2_DEFINITIONS},
         "precondition_mapping": u.PRECONDITION_MAPPING,
         "modes": modes,
         "conformance": conformance_report,
@@ -1277,15 +1607,15 @@ def write_report(report: dict[str, Any], out: Path) -> None:
 
 
 def write_before_after(out: Path, baseline: Path | None = None) -> Path:
-    """Render ``<out>/partC/before_after.md`` from the frozen baseline and ``out``'s report."""
+    """Render ``<out>/partD/before_after.md``: the frozen Part C baseline vs ``out``'s report."""
     from uds_assistant.eval import before_after as ba
 
     report = json.loads((out / "eval_report.json").read_text(encoding="utf-8"))
-    base = json.loads((baseline or REPO_ROOT / ba.BASELINE_PATH).read_text(encoding="utf-8"))
-    target = out / "partC" / "before_after.md"
+    base = json.loads((baseline or REPO_ROOT / ba.BASELINE_D_PATH).read_text(encoding="utf-8"))
+    target = out / "partD" / "before_after.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     sws_text = (REPO_ROOT / "docs" / "SWS_DISAGREEMENTS.md").read_text(encoding="utf-8")
-    target.write_text(ba.render_before_after(base, report, ba.sws_open_count(sws_text)),
+    target.write_text(ba.render_before_after_d(base, report, ba.sws_open_count(sws_text)),
                       encoding="utf-8")
     return target
 
@@ -1324,17 +1654,87 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-mock-compare", action="store_true",
                         help="with --mode ollama, do not also evaluate the mock backend")
     parser.add_argument("--noise-runs", type=int, default=1, metavar="N",
-                        help="ollama only: run the pipeline over natural v2 N times in total "
-                        "(run 1 feeds the tables, all runs go into the noise check; default 1)")
+                        help="ollama only: run the pipeline over natural v3 (the fresh set) N times in "
+                        "total (run 1 feeds the tables, all runs go into the noise check; "
+                        "natural v2 / v1 are SEEN and keep a single run; default 1)")
     parser.add_argument("--skip-conformance", action="store_true",
                         help="skip the Part D conformance sweep (for fast test runs)")
     parser.add_argument("--before-after", action="store_true",
-                        help="also render <out>/partC/before_after.md from the frozen baseline")
+                        help="also render <out>/partD/before_after.md (Part C final report vs this run)")
     parser.add_argument("--rerender", action="store_true",
                         help="only re-render eval_report.md from the existing eval_report.json")
     parser.add_argument("--interpretation", default=None,
                         help="with --rerender: a text file stored as the interpretation section")
     return parser
+
+
+def _det_cell(x: Any) -> str:
+    if isinstance(x, dict) and "detected" in x:
+        return f"{x['detected']}/{x['bugs']}"
+    return str(x)
+
+
+def _ru_line(ru: dict[str, Any] | None) -> str:
+    if ru is None:
+        return "n/a"
+    tp, te = ru["targets_parsed"], ru["targets_exercised"]
+    kinds = ru.get("by_kind", {}).get("parsed", {})
+    return (f"parsed exact {tp['exact']}/{ru['requirements']}, P/R/F1 "
+            f"{tp['precision']}/{tp['recall']}/{tp['f1']}, exercised F1 {te['f1']}, category "
+            f"recall {ru['categories']['micro_recall']}, precondition recall "
+            f"{ru['preconditions']['micro_recall']}, fallback/nothing {ru['fallback']['count']}; "
+            f"parsed FP by kind [{bd.fp_fn_text(kinds, 'fp')}], FN by kind "
+            f"[{bd.fp_fn_text(kinds, 'fn')}]")
+
+
+def summary_lines(report: dict[str, Any]) -> list[str]:
+    """The console summary: FRESH v3 rows first, then the SEEN rows (labelled as such)."""
+    out: list[str] = []
+    for name in report["modes_run"]:
+        block = report["modes"][name]
+        v3 = block["heldout_v3_bug_detection"]
+        if "bugs" in v3:
+            out.append(
+                f"mode={name} FRESH held-out v3 bugs ({v3['bugs']}): FULL OUTPUT (headline) "
+                f"{_det_cell(v3['full_output'])}; (a) requirement-driven {_det_cell(v3['requirement_driven'])}"
+                f"; (b) conformance sweep alone {_det_cell(v3['conformance'])}; gold "
+                f"{_det_cell(v3['gold'])}; suite sizes {v3['suite_sizes']}")
+        else:
+            out.append(f"mode={name} FRESH held-out v3 bugs: {v3.get('status')}")
+        ru3 = block["requirement_understanding_v3"].get("splits", {}).get("test3")
+        out.append(f"mode={name} FRESH natural v3 (test3) understanding: {_ru_line(ru3)}")
+        pipe3 = block["pipeline_natural_v3"]
+        if "rejected" in pipe3:
+            out.append(f"mode={name} natural v3 rejected planner choices {pipe3['rejected']}: "
+                       f"{bd.reason_text(pipe3['rejected_by_reason'])}")
+        nc = block["noise_check"]
+        if nc.get("status") == "completed":
+            sp = nc["summary"]["parsed_f1"]
+            out.append(f"mode={name} natural v3 noise check: {len(nc['runs'])} run(s), parsed F1 "
+                       f"mean {sp['mean']} (min-max {sp['min']}-{sp['max']})")
+        det, held = block["bug_detection"], block["heldout_bug_detection"]
+        held2 = block["heldout_v2_bug_detection"]
+        ru2 = block["requirement_understanding_v2"].get("splits", {}).get("test2")
+        pdd = block.get("part_d_detection", {})
+        full2 = _det_cell(_part_d_cell(block, "heldout_v2")) if "status" not in pdd else "not run"
+        out.append(
+            f"mode={name} SEEN: held-out v2 requirement-driven {held2['generated']['detected']}/"
+            f"{held2['generated']['bugs']}, full output {full2}, gold {held2['gold']['detected']}/"
+            f"{held2['gold']['bugs']}; natural v2 {_ru_line(ru2)}; held-out v1 generated "
+            f"{held['generated']['detected']}/{held['generated']['bugs']}, gold "
+            f"{held['gold']['detected']}/{held['gold']['bugs']}; in-sample (tuned on) generated "
+            f"{det['generated']['detected']}/{det['generated']['bugs']}, gold "
+            f"{det['gold']['detected']}/{det['gold']['bugs']}; tests "
+            f"{block['generated_tests']['count']}; byte provenance "
+            f"{block['provenance']['passed']}/{block['provenance']['checked']}")
+        if "status" not in pdd:
+            out.append(f"mode={name} Part D (a) requirement-driven / (b) sweep / (c) full output: "
+                       + "; ".join(
+                           f"{k} {r['requirement_driven']['detected']}/{r['requirement_driven']['bugs']}"
+                           f" / {r['conformance']['detected']}/{r['conformance']['bugs']}"
+                           f" / {r['full_output']['detected']}/{r['full_output']['bugs']}"
+                           for k, r in pdd.items()))
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1358,42 +1758,8 @@ def main(argv: list[str] | None = None) -> int:
         compare_mock=not args.no_mock_compare, noise_runs=args.noise_runs,
         conformance=not args.skip_conformance,
     )
-    for name in report["modes_run"]:
-        block = report["modes"][name]
-        det = block["bug_detection"]
-        held = block["heldout_bug_detection"]
-        held2 = block["heldout_v2_bug_detection"]
-        prov = block["provenance"]
-        ru2 = block["requirement_understanding_v2"].get("splits", {}).get("test2")
-        ru2_txt = ("n/a" if ru2 is None else
-                   f"parsed exact {ru2['targets_parsed']['exact']}/{ru2['requirements']}, "
-                   f"P/R/F1 {ru2['targets_parsed']['precision']}/{ru2['targets_parsed']['recall']}/"
-                   f"{ru2['targets_parsed']['f1']}, exercised F1 {ru2['targets_exercised']['f1']}, "
-                   f"category recall {ru2['categories']['micro_recall']}, precondition recall "
-                   f"{ru2['preconditions']['micro_recall']}")
-        print(
-            f"mode={name} tests={block['generated_tests']['count']} "
-            f"HELD-OUT v2 (fresh) bug detection: generated {held2['generated']['detected']}/"
-            f"{held2['generated']['bugs']}, gold {held2['gold']['detected']}/"
-            f"{held2['gold']['bugs']}, union {held2['union']['detected']}/"
-            f"{held2['union']['bugs']}; natural v2 (fresh) understanding: {ru2_txt}; "
-            f"held-out v1 (seen): generated {held['generated']['detected']}/"
-            f"{held['generated']['bugs']}, gold {held['gold']['detected']}/{held['gold']['bugs']}, "
-            f"union {held['union']['detected']}/{held['union']['bugs']}; "
-            f"in-sample (templates tuned on these): generated "
-            f"{det['generated']['detected']}/{det['generated']['bugs']}, "
-            f"gold {det['gold']['detected']}/{det['gold']['bugs']}, "
-            f"union {det['union']['detected']}/{det['union']['bugs']}; "
-            f"byte provenance {prov['passed']}/{prov['checked']}"
-        )
-        pdd = block.get("part_d_detection", {})
-        if "status" not in pdd:
-            print(f"mode={name} PART D detection (requirement-driven / conformance sweep / full "
-                  "output): " + "; ".join(
-                      f"{k} {r['requirement_driven']['detected']}/{r['requirement_driven']['bugs']}"
-                      f" / {r['conformance']['detected']}/{r['conformance']['bugs']}"
-                      f" / {r['full_output']['detected']}/{r['full_output']['bugs']}"
-                      for k, r in pdd.items()))
+    for line in summary_lines(report):
+        print(line)
     conf = report["conformance"]
     if conf.get("status") == "completed":
         print(f"conformance sweep (LLM-independent): {conf['tests']} tests, generated in "
@@ -1404,7 +1770,8 @@ def main(argv: list[str] | None = None) -> int:
     if run:
         print(f"exported pytest run: {run['summary']}")
     print(f"report: {Path(args.out) / 'eval_report.md'}")
-    print(f"freeze: all recorded Part C hashes match and are clean = {report['freeze']['all_ok']}")
+    print(f"freeze ({report['freeze'].get('section')}): all recorded hashes match and are clean = "
+          f"{report['freeze']['all_ok']}")
     if args.before_after:
         print(f"before/after: {write_before_after(Path(args.out))}")
     if not report["provenance_ok"]:

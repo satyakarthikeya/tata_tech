@@ -39,6 +39,8 @@ class SendEvent:
     """Clock advance since the previous send step (or since power-on)."""
     s3_expired: bool
     """True if ``idle_ms`` exceeded the S3 time of the session active before this step."""
+    s3_dropped_session: bool = False
+    """True if the S3 expiry above dropped a NON-default session (the ECU really times out)."""
 
     @property
     def sid(self) -> int | None:
@@ -79,6 +81,8 @@ class TestTrace:
     speeds_set: list[int] = field(default_factory=list)
     nvm_fault_set: bool = False
     dtc_status_set: bool = False
+    dtc_sets: list[tuple[int, int, int]] = field(default_factory=list)
+    """``(step index, 3-byte DTC number, status byte)`` of every set_dtc_status step."""
 
 
 def _s3_ms(spec: EcuSpec, session: int) -> int:
@@ -107,9 +111,12 @@ def trace_test(spec: EcuSpec, test: TestCase) -> TestTrace:
             continue
         if step.kind == "set_dtc_status":
             out.dtc_status_set = True
+            out.dtc_sets.append((i, int(step.code.replace("0x", "").replace(" ", ""), 16),
+                                 step.status))
             continue
         expired = idle > _s3_ms(spec, session)
-        if expired and session != default:
+        dropped = expired and session != default
+        if dropped:
             session, unlocked = default, frozenset()
         event = SendEvent(
             index=i,
@@ -121,6 +128,7 @@ def trace_test(spec: EcuSpec, test: TestCase) -> TestTrace:
             nvm_write_fault=fault,
             idle_ms=idle,
             s3_expired=expired,
+            s3_dropped_session=dropped,
         )
         out.sends.append(event)
         idle = 0
