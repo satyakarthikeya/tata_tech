@@ -891,3 +891,12 @@ Quote fields containing commas. Validate the file with a short python snippet (c
 ## Final message to me
 The validation output, the count of requirements containing hex IDs, which are ambiguous, and any decisions (one line each) for me to log.
 ````
+
+## D5b and D6 — done (2026-10-04)
+
+- **Evaluation:** `python -m uds_assistant.eval.run_eval --mode ollama --noise-runs 3 --before-after` (about 39 minutes, log `outputs/partD/eval_run.log`, started-at `eval_run_started.txt`). Exit 0. All Part D freeze hashes matched and were clean at run time and again before the docs step (testgen d990ef45, llm 0dad8c41, agent 5875c862, gold 77874019).
+- **Fresh v3 headline:** bugs, full output mock 10/15, ollama 9/15 (requirement-driven 4/15 and 2/15, sweep 9/15 in both, gold 3/15). Natural v3 parsed P/R/F1 mock 0.857/0.267/0.407, ollama 0.596/0.622/0.609; category recall 42.0% and 70.0%; precondition recall 48.3% and 89.7%. Ollama: 19 false positives (service 15, did 4), 0 rejected planner choices, 0 truncations; parsed numbers identical over three runs.
+- **Written after the numbers existed:** `outputs/partD/before_after.md`, `outputs/partD/interpretation.md` (stored in the report via `--rerender`), `docs/RESULTS.md`, `FINAL_REPORT.md`.
+- **Checks:** ruff clean. Full pytest 1331 passed, 14 skipped, 1 failed in 888 s. The failure (`tests/export/test_export.py::test_gold_export_runs_and_passes`) was a temp file of the editor host vanishing during the child pytest's collection; `tests/export` alone passes (6 passed).
+- **Known gap, left alone (no new features):** `scripts/demo.py` and the Streamlit UI still render the Part C layout, so they label v2 as "FRESH" and do not show v3 or the sweep. Recorded in `FINAL_REPORT.md`.
+- No file under `uds_assistant/`, `data/`, `tests/` or `scripts/` was changed in D5b/D6.

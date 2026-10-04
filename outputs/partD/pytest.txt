@@ -1,0 +1,56 @@
+.................................................s...................... [  5%]
+........................................................................ [ 10%]
+........................................................................ [ 16%]
+........................................................................ [ 21%]
+..............................s......................................... [ 26%]
+.............F...................................s....s................. [ 32%]
+........................................................................ [ 37%]
+..............................................................sssssssss. [ 42%]
+........................................................................ [ 48%]
+........................................................................ [ 53%]
+........................................................................ [ 58%]
+........................................................................ [ 64%]
+........................................................................ [ 69%]
+........................................................................ [ 74%]
+........................................................................ [ 80%]
+........................................................................ [ 85%]
+........................................................................ [ 90%]
+........................................................................ [ 96%]
+.....................................s............                       [100%]
+================================== FAILURES ===================================
+______________________ test_gold_export_runs_and_passes _______________________
+
+tmp_path = WindowsPath('C:/Users/pasar/AppData/Local/Temp/pytest-of-pasar/pytest-206/test_gold_export_runs_and_pass0')
+gold = [TestCase(id='gold_read_vin_default', title='Read VIN in default session', requirement_ids=['REQ-001'], category='posi..., quote=None)], review_status='draft', explanation='Can return to default session from extended.', origin='gold'), ...]
+
+    def test_gold_export_runs_and_passes(tmp_path: Path, gold: list[TestCase]) -> None:
+        path = to_pytest(gold, tmp_path / "gold_export_test.py")
+        proc = _run_pytest(path)
+>       assert proc.returncode == 0, proc.stdout + proc.stderr
+E       AssertionError: 
+E         =================================== ERRORS ====================================
+E         ________________________ ERROR collecting test session ________________________
+E         C:\Python313\Lib\pathlib\_abc.py:437: in lstat
+E             return self.stat(follow_symlinks=False)
+E                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E         C:\Python313\Lib\pathlib\_local.py:515: in stat
+E             return os.stat(self, follow_symlinks=follow_symlinks)
+E                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E         E   FileNotFoundError: [WinError 2] The system cannot find the file specified: 'C:\\Users\\pasar\\AppData\\Local\\Temp\\agent-host-git-diff-e5d83e3f-d999-4103-b23c-6217e5e8a6e0'
+E         !!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+E         1 error in 2.30s
+E         
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['C:\\Python313\\python.exe', '-m', 'pytest', 'C:\\Users\\pasar\\AppData\\Local\\Temp\\pytest-of...a6e0'\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in 2.30s\n", stderr='').returncode
+
+tests\export\test_export.py:75: AssertionError
+============================== warnings summary ===============================
+tests/ui/test_streamlit_app.py::test_ui_shows_llm_backend_and_ollama_fallback_warning
+  C:\Users\pasar\Desktop\tata_tech\uds_assistant\ui\streamlit_app.py:59: UserWarning: LLM_MODE=ollama requested but Ollama is not reachable at http://127.0.0.1:9; falling back to the deterministic mock LLM.
+    llm = get_llm(cfg)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/export/test_export.py::test_gold_export_runs_and_passes - Assert...
+1 failed, 1331 passed, 14 skipped, 1 warning in 888.33s (0:14:48)
+done
