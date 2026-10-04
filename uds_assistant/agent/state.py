@@ -79,6 +79,8 @@ class PipelineState(BaseModel):
     """LLM calls (``complete_json``/``complete_text``) made by each node, re-plans summed."""
     fallback_events: list[str] = Field(default_factory=list)
     """Per-call fallbacks: an LLM call failed and the node continued without it."""
+    grounding_drops: list[str] = Field(default_factory=list)
+    """One line per item removed by parse grounding (same text as the ``Dropped ungrounded`` notes)."""
 
     def log(self, node: str, message: str) -> None:
         """Append a decision (call only on a node's private copy)."""
@@ -95,6 +97,17 @@ class PipelineDeps:
     store: AuditStore | None = None
     run_id: int | None = None
     catalog_cache: dict[str, object] = field(default_factory=dict)
+
+
+class TargetEvidence(BaseModel):
+    """One service/DID/routine a generated test exercises, and whether the text names it."""
+
+    kind: Literal["service", "did", "routine"]
+    id: str
+    name: str = ""
+    written: bool
+    """True if the id or a spec name/lexical pattern for it appears in the requirement text;
+    False = only inferred (e.g. a coverage test of a service the requirement never mentions)."""
 
 
 class PipelineResult(BaseModel):
@@ -121,6 +134,10 @@ class PipelineResult(BaseModel):
     """LLM call counters for this run (calls, http_requests, json_failures, retries, ...)."""
     fallback_events: list[str] = Field(default_factory=list)
     """Fallback-to-mock events: get_llm fallback warning (verbatim) and per-call LLM failures."""
+    grounding_drops: list[str] = Field(default_factory=list)
+    target_provenance: dict[str, list[TargetEvidence]] = Field(default_factory=dict)
+    """Per kept test id: its service/DID/routine targets with ``written`` true/false.
+    The tests' ``confidence``/``confidence_reason`` are derived from it."""
     status: Literal["completed", "failed"] = "completed"
 
     @property

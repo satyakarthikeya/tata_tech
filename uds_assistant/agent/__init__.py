@@ -18,6 +18,7 @@ from uds_assistant.agent.state import (
     PipelineResult,
     PipelineState,
     RejectedChoice,
+    TargetEvidence,
 )
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "PipelineResult",
     "PipelineState",
     "RejectedChoice",
+    "TargetEvidence",
     "langgraph_available",
     "resolve_engine",
     "run_pipeline",

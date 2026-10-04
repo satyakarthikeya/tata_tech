@@ -181,3 +181,14 @@ def test_review_unknown_test_404(client: TestClient) -> None:
     ).json()
     resp = client.post(f"/tests/{gen['run_id']}/not_a_test/review", json={})
     assert resp.status_code == 404
+
+
+def test_api_generate_includes_confidence(client: TestClient) -> None:
+    body = client.post(
+        "/generate",
+        json={"requirement_text": "The tester shall read the VIN (DID 0xF190).", "requirement_id": "R1"},
+    ).json()
+    assert body["tests"]
+    for t in body["tests"]:
+        assert t["confidence"] in ("high", "medium", "low") and t["confidence_reason"]
+    assert set(body["target_provenance"]) == {t["id"] for t in body["tests"]}

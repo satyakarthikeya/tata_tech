@@ -202,6 +202,7 @@ def parse(state: PipelineState, deps: PipelineDeps) -> PipelineState:
         for drop in drops:
             note = f"Dropped ungrounded {drop.field[:-1]} identifier {drop.identifier}: {drop.reason}."
             s.notes.append(note)
+            s.grounding_drops.append(note)
             s.log("parse", note)
         for sid, why in reasons.items():
             s.log("parse", f"service {sid} kept: {why}.")

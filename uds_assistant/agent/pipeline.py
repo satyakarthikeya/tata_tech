@@ -18,6 +18,7 @@ from collections.abc import Callable
 from typing import Literal
 
 from uds_assistant.agent import nodes
+from uds_assistant.agent.annotate import annotate_tests
 from uds_assistant.agent.state import PipelineDeps, PipelineResult, PipelineState
 from uds_assistant.llm.base import LLMClient, stats_delta
 from uds_assistant.rag.model import Retriever
@@ -134,12 +135,12 @@ def run_pipeline(
             store.finish_run(run_id, "failed")
         raise
 
-    tests = [inst.test for inst in final.validated]
+    fallback_events = list(getattr(llm, "fallback_events", [])) + final.fallback_events
+    tests, provenance = annotate_tests(final, deps, fallback_events)
     if store is not None and run_id is not None:
         for t in tests:
             store.record_test(run_id, t)
         store.finish_run(run_id, "completed")
-    fallback_events = list(getattr(llm, "fallback_events", [])) + final.fallback_events
     return PipelineResult(
         run_id=run_id,
         requirement_id=requirement_id,
@@ -160,4 +161,6 @@ def run_pipeline(
             stats_delta(llm_stats.snapshot(), stats_before) if llm_stats is not None else {}
         ),
         fallback_events=fallback_events,
+        grounding_drops=final.grounding_drops,
+        target_provenance=provenance,
     )

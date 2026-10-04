@@ -947,3 +947,7 @@ The validation output, the count of requirements containing hex IDs, which are a
 
 - **Misses:** QA-018 (key algorithm) answered instead of refused (retrieval overlap rule passes); QA-022 (S3 expiry) retrieved a project requirement sentence instead of the standard timing text; QA-023 (suppress bit) lacks the second sentence "negative responses are never suppressed" in mock, and ollama picked `project:subfunction-byte`. No re-run, no tuning.
 - **Tests:** tests/qa (+ `needs_model` test) and tests/eval/test_qa_eval.py; ruff clean; full pytest 1402 passed, 15 skipped (suite started before the last two small fixes; tests/qa and tests/eval/test_qa_eval.py re-run after them: pass); `RUN_MODEL_TESTS=1 pytest -m needs_model tests/qa`: 1 passed.
+
+## E3.2 — done
+
+Confidence indicators: shared rule `uds_assistant/agent/confidence.py` (rule table in DECISIONS.md E32-*), `TestCase.confidence`/`confidence_reason` set after explain in `agent/annotate.py`, `target_provenance` (written vs inferred) on `PipelineResult` and `/generate`, `qa_confidence` now a wrapper. Mock-mode generation for the 15 seeds is byte-identical before/after (206 tests); distribution 135 high / 71 medium / 0 low. Tests: tests/agent/test_confidence.py + API test; ruff clean; full pytest 1436 passed, 15 skipped.

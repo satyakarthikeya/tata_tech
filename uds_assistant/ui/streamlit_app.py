@@ -139,6 +139,7 @@ def _tests_table(backend: dict[str, object]) -> None:
             "category": t.category,
             "template_id": t.template_id or "(gold)",
             "review_status": t.review_status,
+            "confidence": t.confidence or "-",
             "steps": len(t.steps),
             "citations": len(t.citations),
         }

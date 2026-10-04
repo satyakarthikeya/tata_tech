@@ -22,7 +22,7 @@ from typing import Any, Literal
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from uds_assistant.agent import run_pipeline
+from uds_assistant.agent import TargetEvidence, run_pipeline
 from uds_assistant.config import Config, get_config
 from uds_assistant.export import render_capl, render_pytest
 from uds_assistant.llm.factory import get_llm
@@ -68,6 +68,8 @@ class GenerateResponse(BaseModel):
     tests: list[TestCase]
     notes: list[str]
     dropped_count: int
+    target_provenance: dict[str, list[TargetEvidence]] = Field(default_factory=dict)
+    """Per test id: its service/DID/routine targets and whether the requirement text names them."""
     governance_banner: str = GOVERNANCE_BANNER
 
 
@@ -214,6 +216,7 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
             tests=result.tests,
             notes=result.notes,
             dropped_count=len(result.dropped),
+            target_provenance=result.target_provenance,
         )
 
     # ------------------------------------------------------------------------------- ask

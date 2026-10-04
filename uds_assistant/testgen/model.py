@@ -108,6 +108,7 @@ TestStep = Annotated[
 Category = Literal["positive", "negative", "session", "security", "timing"]
 ReviewStatus = Literal["draft", "validated", "human_reviewed"]
 Origin = Literal["gold", "generated"]
+ConfidenceLevel = Literal["high", "medium", "low"]
 
 
 class TestCase(BaseModel):
@@ -128,6 +129,9 @@ class TestCase(BaseModel):
     review_status: ReviewStatus = "draft"
     explanation: str = ""
     origin: Origin = "gold"
+    confidence: ConfidenceLevel | None = None
+    """Only set on generated tests (see :mod:`uds_assistant.agent.confidence`); None = not rated."""
+    confidence_reason: str = ""
 
 
 def _to_plain(obj: object) -> object:

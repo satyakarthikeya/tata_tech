@@ -131,6 +131,23 @@ def _is_written(field: str, ident: str, tokens: set[str]) -> bool:
     return bool(forms & tokens)
 
 
+def target_is_written(kind: str, ident: str, name: str, text: str) -> bool:
+    """Is a test target (``kind`` = ``service`` | ``did`` | ``routine``) written in ``text``?
+
+    Written = the hex id appears (``0x27``/``0x0201``/``F190``, any case; a bare ``27`` does
+    not count for a service) or the spec ``name`` shares a distinctive word with the text
+    (DIDs/routines, same rule as :func:`name_matches_text`) or a strong lexical pattern of
+    the service matches (:mod:`.service_lexicon`). Otherwise the target is *inferred*.
+    Read-only: used for confidence, never to select tests.
+    """
+    tokens = written_identifiers(text)
+    digits = ident.upper().removeprefix("0X")
+    if kind == "service":
+        return "0X" + digits in tokens or first_hit(STRONG_RE.get(ident, ()), text) is not None
+    field = {"did": "dids", "routine": "routines"}[kind]
+    return _is_written(field, ident, tokens) or (bool(name) and name_matches_text(name, text))
+
+
 def ground_identifiers(
     parsed: dict[str, list[str]],
     text: str,
