@@ -927,6 +927,6 @@ The validation output, the count of requirements containing hex IDs, which are a
 
 ## E3.3 — done (2026-10-04 17:43)
 
-- **What:** four retrieval layers  /  /  /  (`ecu_spec` renamed `ecu`, alias kept for filters). New synthetic `data/oem_diagnostic_guidelines.md` ingested into the `oem` layer with its own BM25 index and own Chroma collection. `Chunk.layer`, `LayeredCitation`, and `uds_assistant/rag/layers.py` (`search_layer`, `search_layers`, `cite_hits`, `layer_counts`).
+- **What:** four retrieval layers `standard` / `oem` / `ecu` / `project` (`ecu_spec` renamed `ecu`, alias kept for filters). New synthetic `data/oem_diagnostic_guidelines.md` ingested into the `oem` layer with its own BM25 index and own Chroma collection. `Chunk.layer`, `LayeredCitation`, and `uds_assistant/rag/layers.py` (`search_layer`, `search_layers`, `cite_hits`, `layer_counts`).
 - **Generator effect:** none. The generator searches only the three core layers, and the core BM25 index is unchanged (scores bit-identical, tested), so mock tests and bytes are unchanged; tests/testgen, tests/agent, tests/eval all pass. `retrieval_compare` uses core layers only.
-- **Tests:** new `tests/rag/test_layers.py` (19 tests); `test_ingest.py` layer enumeration updated. Ruff clean; full pytest 1350 passed, 14 skipped.
+- **Tests:** new `tests/rag/test_layers.py` (17 tests); `test_ingest.py` layer enumeration updated. Ruff clean; full pytest 1350 passed, 14 skipped.
