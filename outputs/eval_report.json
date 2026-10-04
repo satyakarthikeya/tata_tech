@@ -26371,5 +26371,1054 @@
         "missing_response_pending"
       ]
     }
-  }
+  },
+  "provenance": {
+    "main_eval": {
+      "label": "Main evaluation run",
+      "source": "outputs/eval_report.json",
+      "timestamp": "2026-10-04T08:15:23.200078+00:00",
+      "date": "2026-10-04",
+      "git_commit": "1f0c293a2033da0e4316197341c814d10aa16b1f",
+      "git_short": "1f0c293",
+      "dirty": true,
+      "note": "commit = HEAD when the evaluation ran; dirty=true means uncommitted changes were present (e.g. the phase being evaluated before its commit)."
+    },
+    "qa": {
+      "label": "Diagnostic Q&A run",
+      "source": "outputs/qa/qa_eval.json",
+      "timestamp": "2026-10-04 13:02:45",
+      "date": "2026-10-04",
+      "git_commit": "9e66f7a4d7ac4ee7a35a3edd8eb40683c5162f32",
+      "git_short": "9e66f7a",
+      "dirty": null,
+      "note": "dirty flag not recorded in the Q&A json (the tree was checked clean before the run)"
+    },
+    "timing": {
+      "label": "Tool-side timing run",
+      "source": "outputs/timing/tool_timing.json",
+      "timestamp": "2026-10-04T11:51:04+00:00",
+      "date": "2026-10-04",
+      "git_commit": "8357ec0",
+      "git_short": "8357ec0",
+      "dirty": null,
+      "note": "dirty flag not recorded in the timing json"
+    },
+    "history": {
+      "part_d": {
+        "run_hashes": [
+          "942f438",
+          "1f0c293"
+        ],
+        "timestamps": [
+          "2026-10-03T20:49:18.726723+00:00",
+          "2026-10-04T08:15:23.200078+00:00"
+        ],
+        "source": "outputs/partD/before_after.md"
+      },
+      "part_c": {
+        "run_hashes": [
+          "38aa719",
+          "c669e1e"
+        ],
+        "timestamps": [
+          "2026-10-03T09:37:51.233888+00:00",
+          "2026-10-03T20:49:18.726723+00:00"
+        ],
+        "source": "outputs/partC/before_after.md"
+      }
+    }
+  },
+  "qa": {
+    "run": {
+      "label": "Diagnostic Q&A run",
+      "source": "outputs/qa/qa_eval.json",
+      "timestamp": "2026-10-04 13:02:45",
+      "date": "2026-10-04",
+      "git_commit": "9e66f7a4d7ac4ee7a35a3edd8eb40683c5162f32",
+      "git_short": "9e66f7a",
+      "dirty": null,
+      "note": "dirty flag not recorded in the Q&A json (the tree was checked clean before the run)"
+    },
+    "source": "outputs/qa/qa_eval.json",
+    "modes": {
+      "mock": {
+        "n_questions": 25,
+        "n_answerable": 21,
+        "n_unanswerable": 4,
+        "answer_accuracy": 0.9047619047619048,
+        "answer_accuracy_n": 19,
+        "citation_correctness": 0.9523809523809523,
+        "citation_correctness_n": 20,
+        "citation_precision": 0.8064516129032258,
+        "citation_precision_counts": [
+          25,
+          31
+        ],
+        "correct_not_found_rate": 0.75,
+        "correct_not_found_n": 3,
+        "false_not_found": 0,
+        "fallback_events": 0,
+        "mode": "mock",
+        "llm": "mock",
+        "total_seconds": 0.1
+      },
+      "ollama": {
+        "n_questions": 25,
+        "n_answerable": 21,
+        "n_unanswerable": 4,
+        "answer_accuracy": 0.9047619047619048,
+        "answer_accuracy_n": 19,
+        "citation_correctness": 0.9047619047619048,
+        "citation_correctness_n": 19,
+        "citation_precision": 0.7931034482758621,
+        "citation_precision_counts": [
+          23,
+          29
+        ],
+        "correct_not_found_rate": 0.75,
+        "correct_not_found_n": 3,
+        "false_not_found": 0,
+        "fallback_events": 13,
+        "mode": "ollama",
+        "llm": "ollama",
+        "total_seconds": 88.7
+      }
+    }
+  },
+  "timing": {
+    "run": {
+      "label": "Tool-side timing run",
+      "source": "outputs/timing/tool_timing.json",
+      "timestamp": "2026-10-04T11:51:04+00:00",
+      "date": "2026-10-04",
+      "git_commit": "8357ec0",
+      "git_short": "8357ec0",
+      "dirty": null,
+      "note": "dirty flag not recorded in the timing json"
+    },
+    "source": "outputs/timing/tool_timing.json",
+    "repeats": 3,
+    "requirements": [
+      "REQ-001",
+      "REQ-005",
+      "REQ-009",
+      "REQ-011",
+      "REQ-015"
+    ],
+    "skipped_modes": {},
+    "modes": {
+      "mock": {
+        "llm_used": "mock",
+        "per_requirement": {
+          "REQ-001": {
+            "mean_s": 0.776,
+            "min_s": 0.055,
+            "max_s": 2.214,
+            "tests_generated": 18,
+            "stages_mean_s": {
+              "generate": 0.031,
+              "validate": 0.014,
+              "explain": 0.005
+            }
+          },
+          "REQ-005": {
+            "mean_s": 0.099,
+            "min_s": 0.077,
+            "max_s": 0.116,
+            "tests_generated": 18,
+            "stages_mean_s": {
+              "generate": 0.044,
+              "validate": 0.036,
+              "explain": 0.006
+            }
+          },
+          "REQ-009": {
+            "mean_s": 0.085,
+            "min_s": 0.079,
+            "max_s": 0.093,
+            "tests_generated": 22,
+            "stages_mean_s": {
+              "generate": 0.041,
+              "validate": 0.028,
+              "explain": 0.005
+            }
+          },
+          "REQ-011": {
+            "mean_s": 0.077,
+            "min_s": 0.055,
+            "max_s": 0.12,
+            "tests_generated": 12,
+            "stages_mean_s": {
+              "generate": 0.049,
+              "validate": 0.015,
+              "explain": 0.003
+            }
+          },
+          "REQ-015": {
+            "mean_s": 0.046,
+            "min_s": 0.046,
+            "max_s": 0.047,
+            "tests_generated": 13,
+            "stages_mean_s": {
+              "generate": 0.023,
+              "validate": 0.011,
+              "explain": 0.003
+            }
+          }
+        },
+        "requirements": 5,
+        "mean_of_requirement_means_s": 0.217,
+        "min_requirement_mean_s": 0.046,
+        "max_requirement_mean_s": 0.776,
+        "tests_generated_total": 83,
+        "seconds_per_test_mean": 0.013
+      },
+      "ollama": {
+        "llm_used": "ollama",
+        "per_requirement": {
+          "REQ-001": {
+            "mean_s": 17.505,
+            "min_s": 17.439,
+            "max_s": 17.57,
+            "tests_generated": 5,
+            "stages_mean_s": {
+              "generate": 10.229,
+              "validate": 0.006,
+              "explain": 7.258
+            }
+          },
+          "REQ-005": {
+            "mean_s": 17.806,
+            "min_s": 17.625,
+            "max_s": 18.048,
+            "tests_generated": 4,
+            "stages_mean_s": {
+              "generate": 9.436,
+              "validate": 0.005,
+              "explain": 8.353
+            }
+          },
+          "REQ-009": {
+            "mean_s": 28.754,
+            "min_s": 28.616,
+            "max_s": 29.003,
+            "tests_generated": 8,
+            "stages_mean_s": {
+              "generate": 12.934,
+              "validate": 0.008,
+              "explain": 15.801
+            }
+          },
+          "REQ-011": {
+            "mean_s": 16.25,
+            "min_s": 14.248,
+            "max_s": 19.986,
+            "tests_generated": 4,
+            "stages_mean_s": {
+              "generate": 10.788,
+              "validate": 0.003,
+              "explain": 5.448
+            }
+          },
+          "REQ-015": {
+            "mean_s": 16.486,
+            "min_s": 16.297,
+            "max_s": 16.76,
+            "tests_generated": 4,
+            "stages_mean_s": {
+              "generate": 9.797,
+              "validate": 0.004,
+              "explain": 6.675
+            }
+          }
+        },
+        "requirements": 5,
+        "mean_of_requirement_means_s": 19.36,
+        "min_requirement_mean_s": 16.25,
+        "max_requirement_mean_s": 28.754,
+        "tests_generated_total": 25,
+        "seconds_per_test_mean": 3.872
+      }
+    }
+  },
+  "history": {
+    "part_d": {
+      "label": "historical",
+      "title": "Part D before / after",
+      "source": "outputs/partD/before_after.md",
+      "run_hashes": [
+        "942f438",
+        "1f0c293"
+      ],
+      "timestamps": [
+        "2026-10-03T20:49:18.726723+00:00",
+        "2026-10-04T08:15:23.200078+00:00"
+      ],
+      "text": "# Part D: before / after\n\nBefore = frozen baseline `outputs/partD/baseline_before_partD.json` (the Part C final report, commit `942f43898de38361f0797c5009e3cfcfd6f042c0`, report 2026-10-03T20:49:18.726723+00:00). After = `eval_report.json` generated 2026-10-04T08:15:23.200078+00:00 (git `1f0c293a2033da0e4316197341c814d10aa16b1f`, report version 5, template set `v3`).\n\n## (i) FRESH v3 rows (written blind after the Part D freeze; after only)\n\n| Metric | mock after | ollama after |\n|---|---|---|\n| **Held-out v3 bugs (15): FULL OUTPUT = requirement-driven + sweep (headline)** | **10/15** | **9/15** |\n| (a) requirement-driven only (comparable with Part C) | 4/15 | 2/15 |\n| (b) conformance sweep alone (LLM-independent) | 9/15 | 9/15 |\n| (d) gold (LLM-independent) | 3/15 | 3/15 |\n| Suite sizes (tests) | 206 requirement-driven, 1200 sweep, 1406 full output | 73 requirement-driven, 1200 sweep, 1273 full output |\n| **Natural v3 (test3, n=16): parsed exact** | 1/16 | 2/16 |\n| Natural v3: parsed P / R / F1 | 0.857 / 0.267 / 0.407 | 0.596 / 0.622 / 0.609 |\n| Natural v3: exercised F1 | 0.342 | 0.472 |\n| Natural v3: category recall (micro) | 42.0% | 70.0% |\n| Natural v3: precondition recall (micro) | 48.3% | 89.7% |\n| Natural v3: fallback / nothing generated | 7 | 0 |\n| Natural v3: parsed false positives by kind | service 2 | service 15, did 4 |\n| Natural v3: parsed false negatives by kind | service 24, did 8, routine 1 | service 9, did 5, routine 3 |\n| Natural v3: rejected planner choices by reason | 0 (none) | 0 (none) |\n| Natural v3: noise check | 1 run(s), parsed F1 mean 0.407 (min-max 0.407-0.407) | 3 run(s), parsed F1 mean 0.609 (min-max 0.609-0.609) |\n\n## (ii) SEEN v2 rows, before / after (context only: v2 is seen)\n\n| Metric | mock before | mock after | ollama before | ollama after |\n|---|---|---|---|---|\n| Held-out v2 bugs (15, SEEN): requirement-driven (generated) | 2/15 | 2/15 | 2/15 | 2/15 |\n| Held-out v2 bugs (SEEN): FULL OUTPUT (Part C had no sweep: = requirement-driven) | 2/15 | 9/15 | 2/15 | 9/15 |\n| Held-out v2 bugs (SEEN): gold | 5/15 | 5/15 | 5/15 | 5/15 |\n| Natural v2 (test2, n=16, SEEN): parsed exact | 0/16 | 0/16 | 4/16 | 4/16 |\n| Natural v2 (test2, n=16, SEEN): parsed P / R / F1 | 1.000 / 0.225 / 0.367 | 1.000 / 0.225 / 0.367 | 0.565 / 0.796 / 0.661 | 0.808 / 0.775 / 0.792 |\n| Natural v2 (test2, n=16, SEEN): exercised F1 | 0.450 | 0.450 | 0.583 | 0.639 |\n| Natural v2 (test2, n=16, SEEN): category recall (micro) | 48.0% | 48.0% | 74.0% | 72.0% |\n| Natural v2 (test2, n=16, SEEN): precondition recall (micro) | 55.6% | 55.6% | 77.8% | 92.6% |\n| Natural v2 (SEEN): parsed false positives by kind | none | none | service 25, did 5 | service 6, did 3 |\n| Natural v2 (SEEN): parsed false negatives by kind | service 30, did 7, routine 1 | service 30, did 7, routine 1 | service 6, did 2, routine 2 | service 7, did 2, routine 2 |\n\n## (iii) Rejected planner choices by reason\n\n| Set | mock before | mock after | ollama before | ollama after |\n|---|---|---|---|---|\n| 15 seed + 20 natural v1 requirements (SEEN) | 0 (none) | 0 (none) | 15 (unknown template id 2, option index out of range 3, option not in the offered shortlist 10) | 0 (none) |\n| Natural v2 (16, SEEN) | 0 (none) | 0 (none) | 12 (unknown template id 6, option index out of range 2, option not in the offered shortlist 4) | 0 (none) |\n\nNatural v3 (FRESH, after only): mock: 0 (none); ollama: 0 (none)\n\n## (iv) Parsed false positives by kind\n\n| Set | mock before | mock after | ollama before | ollama after |\n|---|---|---|---|---|\n| Natural v1 test split (n=12, SEEN) | service 1 | service 1 | service 17, did 4 | service 5, did 4 |\n| Natural v2 (n=16, SEEN) | none | none | service 25, did 5 | service 6, did 3 |\n\nNatural v3 (FRESH, after only): mock: service 2; ollama: service 15, did 4\n\n\n## (v) Latency and explain calls (35 seed + natural-v1 requirements)\n\n| Metric | mock before | mock after | ollama before | ollama after |\n|---|---|---|---|---|\n| Latency per requirement, mean / p95 | 0.27 s / 0.46 s | 0.38 s / 0.63 s | 21.37 s / 28.52 s | 21.85 s / 30.41 s |\n| Explain LLM calls per requirement, mean (min-max) | 0.89 (0-1) | 0.89 (0-1) | 1.00 (1-1) | 0.97 (0-1) |\n\n## (vi) SWS disagreements\n\n| Metric | before | after |\n|---|---|---|\n| SWS disagreements open | 5 | 5 |\n\nCounted from `docs/SWS_DISAGREEMENTS.md`: open D1, D3, D4, D8, D9 (5), FIXED D2, D5, D6, D7 (4); baseline open D1, D3, D4, D8, D9 (5).\n\n## (vii) Test counts: requirement-driven suite vs full output\n\n| Suite (tests) | mock before | mock after | ollama before | ollama after |\n|---|---|---|---|---|\n| requirement-driven / full output (Part C: no sweep) | 206 requirement-driven / 206 full output | 206 requirement-driven / 1406 full output | 66 requirement-driven / 66 full output | 73 requirement-driven / 1273 full output |\n\n**Comparability.** (1) The v3 bug set (15) and the natural-v3 set (16) are fresh and different from the v1 and v2 sets, so the v3 rows have only an 'after' value; they are not 'after' values of the v2 rows. (2) v1 and v2 (bugs and natural requirements) are SEEN: their Part C results were known when Part D was designed, so the v2 before/after rows are context, not independent evidence; only the v3 rows are. (3) mock is deterministic: its numbers repeat exactly. (4) ollama output varies from run to run, so small ollama differences are noise; the v3 noise check (mean and min-max over all runs) is in the report. (5) The conformance sweep is LLM-independent: it is identical in every mode, so 'full output' differs between modes only through the requirement-driven part. (6) Part C had no sweep, so its 'full output' equals its requirement-driven suite. (7) Latency, explain calls and the rejected-choice rows over the 35 seed + natural-v1 requirements use the same requirements in both reports; the baseline's explain calls are derived from tests kept only if the report lacks per-node LLM call counts."
+    },
+    "part_c": {
+      "label": "historical",
+      "title": "Part C before / after",
+      "source": "outputs/partC/before_after.md",
+      "run_hashes": [
+        "38aa719",
+        "c669e1e"
+      ],
+      "timestamps": [
+        "2026-10-03T09:37:51.233888+00:00",
+        "2026-10-03T20:49:18.726723+00:00"
+      ],
+      "text": "# Part C: before / after\n\nBefore = frozen baseline `outputs/partC/baseline_before_partC.json` (commit `38aa7197d0a330f6f2f8f550fb3796ea5ae9db20`, report 2026-10-03T09:37:51.233888+00:00). After = `eval_report.json` generated 2026-10-03T20:49:18.726723+00:00 (git `c669e1e1080b873361f0211b01e85f4d14f2cfd5`, template set `v3`).\n\n| Metric | mock before | mock after | ollama before | ollama after |\n|---|---|---|---|---|\n| **Held-out v2, FRESH (15 bugs): generated / gold / union** | n/a (no v2 before) | 2/15 / 5/15 / 5/15 | n/a (no v2 before) | 2/15 / 5/15 / 5/15 |\n| Held-out v1, SEEN (12 bugs): generated / gold / union | 3/12 / 3/12 / 5/12 | 10/12 / 3/12 / 11/12 | 3/12 / 3/12 / 5/12 | 5/12 / 3/12 / 6/12 |\n| In-sample (26 bugs): generated / gold / union | 25/26 / 24/26 / 26/26 | 25/26 / 24/26 / 26/26 | 21/26 / 24/26 / 26/26 | 19/26 / 24/26 / 26/26 |\n| **Natural v2, FRESH (test2, n=16): parsed exact** | n/a (no v2 before) | 0/16 | n/a (no v2 before) | 4/16 |\n| Natural v2, FRESH: parsed P / R / F1 | n/a (no v2 before) | 1.000 / 0.225 / 0.367 | n/a (no v2 before) | 0.565 / 0.796 / 0.661 |\n| Natural v2, FRESH: exercised F1 | n/a (no v2 before) | 0.450 | n/a (no v2 before) | 0.583 |\n| Natural v2, FRESH: category recall (micro) | n/a (no v2 before) | 48.0% | n/a (no v2 before) | 74.0% |\n| Natural v2, FRESH: precondition recall (micro) | n/a (no v2 before) | 55.6% | n/a (no v2 before) | 77.8% |\n| Natural v1 test split, SEEN (n=12): parsed exact | 5/12 | 5/12 | 4/12 | 3/12 |\n| Natural v1 test split, SEEN: parsed P / R / F1 | 0.933 / 0.560 / 0.700 | 0.933 / 0.560 / 0.700 | 0.512 / 0.880 / 0.647 | 0.500 / 0.840 / 0.627 |\n| Natural v1 test split, SEEN: exercised F1 | 0.449 | 0.425 | 0.435 | 0.416 |\n| Natural v1 test split, SEEN: category recall (micro) | 67.9% | 67.9% | 64.3% | 82.1% |\n| Natural v1 test split, SEEN: precondition recall (micro) | 80.0% | 80.0% | 73.3% | 73.3% |\n| Parsed precision / false positives, v1 test split (SEEN) | 0.933 / 1 FP | 0.933 / 1 FP | 0.512 / 21 FP | 0.500 / 21 FP |\n| **Parsed precision / false positives, v2 (FRESH)** | n/a (no v2 before) | 1.000 / 0 FP | n/a (no v2 before) | 0.565 / 30 FP |\n| Rejected planner choices (15 seed + 20 natural v1) | 0 | 0 | 10 | 15 |\n| Rejected planner choices, natural v2 (16, FRESH) | n/a (no v2 before) | 0 | n/a (no v2 before) | 12 |\n| Latency per requirement, mean / p95 (35 requirements) | 0.25 s / 0.45 s | 0.27 s / 0.46 s | 30.79 s / 43.41 s | 21.37 s / 28.52 s |\n| Explain LLM calls per requirement, mean (min-max) | 9.80 (0-18) (derived from tests kept) | 0.89 (0-1) | 4.51 (0-8) (derived from tests kept) | 1.00 (1-1) |\n| SWS disagreements open | 9 | 5 | 9 | 5 |\n\nSWS disagreements: counted from `docs/SWS_DISAGREEMENTS.md`: open D1, D3, D4, D8, D9 (5), FIXED D2, D5, D6, D7 (4); baseline open D1, D2, D3, D4, D5, D6, D7, D8, D9 (9).\n\n**Comparability.** (1) The v2 bug set (15) and the natural-v2 set (16) are different from the v1 sets, so v2 rows are not 'after' values of the v1 rows; there was no v2 'before'. (2) The v1 numbers are SEEN: the Part C templates were designed against the v1 held-out misses, so v1 'after' is not independent evidence; only the v2 rows are fresh. (3) mock is deterministic: its numbers repeat exactly. (4) ollama output varies from run to run (about +-0.05 F1 on parsed targets), so small ollama differences are noise; see the noise-check section of the report. (5) Latency and explain calls are wall-clock / call counts over the 35 seed + natural-v1 requirements in both reports, so they are comparable; the baseline's explain calls are derived from tests kept (explain was one call per kept test)."
+    }
+  },
+  "headline_cards": [
+    {
+      "id": "v3_bugs_full_output",
+      "label": "Fresh v3 bugs found (full output)",
+      "run": "main_eval",
+      "run_date": "2026-10-04",
+      "git_short": "1f0c293",
+      "values": {
+        "mock": {
+          "tests": 1406,
+          "bugs": 15,
+          "detected": 10,
+          "rate": 0.6667,
+          "undetected": [
+            "session_switch_keeps_pending_seed",
+            "lockout_expiry_resets_attempt_count",
+            "nrc_order_subfunction_before_length",
+            "read_did_speed_not_clamped",
+            "dtc_read_reports_masked_status"
+          ],
+          "only_requirement_driven": [
+            "dtc_clear_single_clears_neighbour"
+          ],
+          "only_conformance": [
+            "failed_key_keeps_pending_seed",
+            "nrc_order_write_range_before_condition",
+            "routine_results_trailing_bytes_accepted",
+            "write_stores_value_before_range_rejection",
+            "s3_timeout_clears_dtc_status",
+            "suppressed_request_does_not_restart_s3"
+          ]
+        },
+        "ollama": {
+          "tests": 1273,
+          "bugs": 15,
+          "detected": 9,
+          "rate": 0.6,
+          "undetected": [
+            "session_switch_keeps_pending_seed",
+            "lockout_expiry_resets_attempt_count",
+            "nrc_order_subfunction_before_length",
+            "read_did_speed_not_clamped",
+            "dtc_clear_single_clears_neighbour",
+            "dtc_read_reports_masked_status"
+          ],
+          "only_requirement_driven": [],
+          "only_conformance": [
+            "failed_key_keeps_pending_seed",
+            "nrc_order_write_range_before_condition",
+            "routine_results_trailing_bytes_accepted",
+            "write_stores_value_before_range_rejection",
+            "ecu_reset_resets_seed_counter",
+            "s3_timeout_clears_dtc_status",
+            "suppressed_request_does_not_restart_s3"
+          ]
+        }
+      },
+      "display": {
+        "mock": "10/15 (66.7%)",
+        "ollama": "9/15 (60.0%)"
+      }
+    },
+    {
+      "id": "v3_bugs_requirement_driven",
+      "label": "Fresh v3 bugs found (generated, requirement-driven)",
+      "run": "main_eval",
+      "run_date": "2026-10-04",
+      "git_short": "1f0c293",
+      "values": {
+        "mock": {
+          "tests": 206,
+          "valid_tests": 206,
+          "invalid_tests": 0,
+          "bugs": 15,
+          "detected": 4,
+          "rate": 0.2667,
+          "undetected": [
+            "session_switch_keeps_pending_seed",
+            "failed_key_keeps_pending_seed",
+            "lockout_expiry_resets_attempt_count",
+            "nrc_order_subfunction_before_length",
+            "nrc_order_write_range_before_condition",
+            "routine_results_trailing_bytes_accepted",
+            "read_did_speed_not_clamped",
+            "write_stores_value_before_range_rejection",
+            "dtc_read_reports_masked_status",
+            "s3_timeout_clears_dtc_status",
+            "suppressed_request_does_not_restart_s3"
+          ]
+        },
+        "ollama": {
+          "tests": 73,
+          "valid_tests": 73,
+          "invalid_tests": 0,
+          "bugs": 15,
+          "detected": 2,
+          "rate": 0.1333,
+          "undetected": [
+            "session_switch_keeps_pending_seed",
+            "failed_key_keeps_pending_seed",
+            "lockout_expiry_resets_attempt_count",
+            "nrc_order_subfunction_before_length",
+            "nrc_order_write_range_before_condition",
+            "routine_results_trailing_bytes_accepted",
+            "read_did_speed_not_clamped",
+            "write_stores_value_before_range_rejection",
+            "dtc_clear_single_clears_neighbour",
+            "dtc_read_reports_masked_status",
+            "ecu_reset_resets_seed_counter",
+            "s3_timeout_clears_dtc_status",
+            "suppressed_request_does_not_restart_s3"
+          ]
+        }
+      },
+      "display": {
+        "mock": "4/15 (26.7%)",
+        "ollama": "2/15 (13.3%)"
+      }
+    },
+    {
+      "id": "v3_bugs_conformance",
+      "label": "Fresh v3 bugs found (conformance sweep)",
+      "run": "main_eval",
+      "run_date": "2026-10-04",
+      "git_short": "1f0c293",
+      "values": {
+        "mock": {
+          "tests": 1200,
+          "valid_tests": 1200,
+          "invalid_tests": 0,
+          "bugs": 15,
+          "detected": 9,
+          "rate": 0.6,
+          "undetected": [
+            "session_switch_keeps_pending_seed",
+            "lockout_expiry_resets_attempt_count",
+            "nrc_order_subfunction_before_length",
+            "read_did_speed_not_clamped",
+            "dtc_clear_single_clears_neighbour",
+            "dtc_read_reports_masked_status"
+          ]
+        },
+        "ollama": {
+          "tests": 1200,
+          "valid_tests": 1200,
+          "invalid_tests": 0,
+          "bugs": 15,
+          "detected": 9,
+          "rate": 0.6,
+          "undetected": [
+            "session_switch_keeps_pending_seed",
+            "lockout_expiry_resets_attempt_count",
+            "nrc_order_subfunction_before_length",
+            "read_did_speed_not_clamped",
+            "dtc_clear_single_clears_neighbour",
+            "dtc_read_reports_masked_status"
+          ]
+        }
+      },
+      "display": {
+        "mock": "9/15 (60.0%)",
+        "ollama": "9/15 (60.0%)"
+      }
+    },
+    {
+      "id": "v3_bugs_gold",
+      "label": "Fresh v3 bugs found (gold tests)",
+      "run": "main_eval",
+      "run_date": "2026-10-04",
+      "git_short": "1f0c293",
+      "values": {
+        "mock": {
+          "tests": 60,
+          "valid_tests": 60,
+          "invalid_tests": 0,
+          "bugs": 15,
+          "detected": 3,
+          "rate": 0.2,
+          "undetected": [
+            "session_switch_keeps_pending_seed",
+            "failed_key_keeps_pending_seed",
+            "lockout_expiry_resets_attempt_count",
+            "nrc_order_subfunction_before_length",
+            "nrc_order_write_range_before_condition",
+            "routine_results_trailing_bytes_accepted",
+            "read_did_speed_not_clamped",
+            "write_stores_value_before_range_rejection",
+            "dtc_read_reports_masked_status",
+            "ecu_reset_resets_seed_counter",
+            "s3_timeout_clears_dtc_status",
+            "suppressed_request_does_not_restart_s3"
+          ]
+        },
+        "ollama": {
+          "tests": 60,
+          "valid_tests": 60,
+          "invalid_tests": 0,
+          "bugs": 15,
+          "detected": 3,
+          "rate": 0.2,
+          "undetected": [
+            "session_switch_keeps_pending_seed",
+            "failed_key_keeps_pending_seed",
+            "lockout_expiry_resets_attempt_count",
+            "nrc_order_subfunction_before_length",
+            "nrc_order_write_range_before_condition",
+            "routine_results_trailing_bytes_accepted",
+            "read_did_speed_not_clamped",
+            "write_stores_value_before_range_rejection",
+            "dtc_read_reports_masked_status",
+            "ecu_reset_resets_seed_counter",
+            "s3_timeout_clears_dtc_status",
+            "suppressed_request_does_not_restart_s3"
+          ]
+        }
+      },
+      "display": {
+        "mock": "3/15 (20.0%)",
+        "ollama": "3/15 (20.0%)"
+      }
+    },
+    {
+      "id": "natural_v3_target_f1_parsed",
+      "label": "Natural v3: parsed F1",
+      "run": "main_eval",
+      "run_date": "2026-10-04",
+      "git_short": "1f0c293",
+      "values": {
+        "mock": 0.4068,
+        "ollama": 0.6087
+      },
+      "display": {
+        "mock": "0.407",
+        "ollama": "0.609"
+      }
+    },
+    {
+      "id": "natural_v3_category_recall_micro",
+      "label": "Natural v3: category recall",
+      "run": "main_eval",
+      "run_date": "2026-10-04",
+      "git_short": "1f0c293",
+      "values": {
+        "mock": 0.42,
+        "ollama": 0.7
+      },
+      "display": {
+        "mock": "42.0%",
+        "ollama": "70.0%"
+      }
+    },
+    {
+      "id": "natural_v3_precondition_recall_micro",
+      "label": "Natural v3: precondition recall",
+      "run": "main_eval",
+      "run_date": "2026-10-04",
+      "git_short": "1f0c293",
+      "values": {
+        "mock": 0.4828,
+        "ollama": 0.8966
+      },
+      "display": {
+        "mock": "48.3%",
+        "ollama": "89.7%"
+      }
+    },
+    {
+      "id": "simulator_rules_agreement",
+      "label": "Simulator vs rules engine agreement",
+      "run": "main_eval",
+      "run_date": "2026-10-04",
+      "git_short": "1f0c293",
+      "values": {
+        "all": {
+          "agreed": 5000,
+          "total": 5000,
+          "rate": 1.0
+        }
+      },
+      "display": {
+        "all": "5000/5000 (100.0%)"
+      }
+    },
+    {
+      "id": "gold_clean_pass",
+      "label": "Gold tests passing on the clean simulator",
+      "run": "main_eval",
+      "run_date": "2026-10-04",
+      "git_short": "1f0c293",
+      "values": {
+        "all": {
+          "passed": 60,
+          "total": 60,
+          "rate": 1.0
+        }
+      },
+      "display": {
+        "all": "60/60 (100.0%)"
+      }
+    },
+    {
+      "id": "udsoncan_virtual_can",
+      "label": "udsoncan virtual-CAN sequence",
+      "run": "main_eval",
+      "run_date": "2026-10-04",
+      "git_short": "1f0c293",
+      "values": {
+        "all": {
+          "status": "pass"
+        }
+      },
+      "display": {
+        "all": "PASS"
+      }
+    },
+    {
+      "id": "qa_answer_accuracy",
+      "label": "Q&A answer accuracy",
+      "run": "qa",
+      "run_date": "2026-10-04",
+      "git_short": "9e66f7a",
+      "values": {
+        "mock": 0.9047619047619048,
+        "ollama": 0.9047619047619048
+      },
+      "display": {
+        "mock": "90.5%",
+        "ollama": "90.5%"
+      }
+    },
+    {
+      "id": "qa_citation_correctness",
+      "label": "Q&A citation correctness",
+      "run": "qa",
+      "run_date": "2026-10-04",
+      "git_short": "9e66f7a",
+      "values": {
+        "mock": 0.9523809523809523,
+        "ollama": 0.9047619047619048
+      },
+      "display": {
+        "mock": "95.2%",
+        "ollama": "90.5%"
+      }
+    },
+    {
+      "id": "qa_citation_precision",
+      "label": "Q&A citation precision",
+      "run": "qa",
+      "run_date": "2026-10-04",
+      "git_short": "9e66f7a",
+      "values": {
+        "mock": 0.8064516129032258,
+        "ollama": 0.7931034482758621
+      },
+      "display": {
+        "mock": "80.6%",
+        "ollama": "79.3%"
+      }
+    },
+    {
+      "id": "qa_correct_not_found_rate",
+      "label": "Q&A correct not-found rate",
+      "run": "qa",
+      "run_date": "2026-10-04",
+      "git_short": "9e66f7a",
+      "values": {
+        "mock": 0.75,
+        "ollama": 0.75
+      },
+      "display": {
+        "mock": "75.0%",
+        "ollama": "75.0%"
+      }
+    },
+    {
+      "id": "timing_mean_s",
+      "label": "Tool-side generation time per requirement (mean of 5)",
+      "run": "timing",
+      "run_date": "2026-10-04",
+      "git_short": "8357ec0",
+      "values": {
+        "mock": 0.217,
+        "ollama": 19.36
+      },
+      "display": {
+        "mock": "0.22 s",
+        "ollama": "19.36 s"
+      }
+    }
+  ],
+  "success_metrics": [
+    {
+      "id": "test_design_time",
+      "label": "Test design time",
+      "definition": "Tool side: wall-clock seconds to generate the tests for one requirement (mean over repeats, then mean over the 5 timed requirements). Manual side: hand-writing time per docs/TEST_DESIGN_TIME.md.",
+      "how_measured": "scripts/time_generation.py, in-process, repeats per requirement; no human review time included",
+      "status": "tool side measured; manual comparison pending owner measurement",
+      "values": {
+        "mock": {
+          "mean_of_requirement_means_s": 0.217,
+          "min_s": 0.046,
+          "max_s": 0.776,
+          "tests_generated": 83
+        },
+        "ollama": {
+          "mean_of_requirement_means_s": 19.36,
+          "min_s": 16.25,
+          "max_s": 28.754,
+          "tests_generated": 25
+        }
+      },
+      "run": "timing",
+      "run_ref": {
+        "label": "Tool-side timing run",
+        "source": "outputs/timing/tool_timing.json",
+        "timestamp": "2026-10-04T11:51:04+00:00",
+        "date": "2026-10-04",
+        "git_commit": "8357ec0",
+        "git_short": "8357ec0",
+        "dirty": null,
+        "note": "dirty flag not recorded in the timing json"
+      },
+      "manual_comparison": "pending owner measurement"
+    },
+    {
+      "id": "generation_accuracy",
+      "label": "Generation accuracy",
+      "definition": "Fraction of generated send-steps whose expected response bytes equal what the rules-engine oracle predicts, and fraction of generated tests passing on the bug-free simulator.",
+      "how_measured": "expected_response_accuracy in the main eval. Circular by construction (bytes come from the oracle); independent evidence is the simulator/rules agreement.",
+      "status": "measured (proxy)",
+      "run": "main_eval",
+      "run_ref": {
+        "label": "Main evaluation run",
+        "source": "outputs/eval_report.json",
+        "timestamp": "2026-10-04T08:15:23.200078+00:00",
+        "date": "2026-10-04",
+        "git_commit": "1f0c293a2033da0e4316197341c814d10aa16b1f",
+        "git_short": "1f0c293",
+        "dirty": true,
+        "note": "commit = HEAD when the evaluation ran; dirty=true means uncommitted changes were present (e.g. the phase being evaluated before its commit)."
+      },
+      "values": {
+        "mock": {
+          "oracle_agreeing_steps": 691,
+          "oracle_send_steps": 691,
+          "tests_fully_agreeing": 206,
+          "tests": 206,
+          "clean_simulator_pass_rate": 1.0,
+          "gold_exact_overlap": 1.0
+        },
+        "ollama": {
+          "oracle_agreeing_steps": 226,
+          "oracle_send_steps": 226,
+          "tests_fully_agreeing": 73,
+          "tests": 73,
+          "clean_simulator_pass_rate": 1.0,
+          "gold_exact_overlap": 1.0
+        }
+      }
+    },
+    {
+      "id": "coverage",
+      "label": "Coverage",
+      "definition": "(a) seed requirements with at least one generated test; (b) for the conformance sweep, oracle-observable coverage items covered by its 1200 tests (phase 1 = every stimulus/response-class pair and setup x service pair).",
+      "how_measured": "coverage block of each mode and conformance.stats.phases; not code coverage",
+      "status": "measured",
+      "run": "main_eval",
+      "run_ref": {
+        "label": "Main evaluation run",
+        "source": "outputs/eval_report.json",
+        "timestamp": "2026-10-04T08:15:23.200078+00:00",
+        "date": "2026-10-04",
+        "git_commit": "1f0c293a2033da0e4316197341c814d10aa16b1f",
+        "git_short": "1f0c293",
+        "dirty": true,
+        "note": "commit = HEAD when the evaluation ran; dirty=true means uncommitted changes were present (e.g. the phase being evaluated before its commit)."
+      },
+      "values": {
+        "mock": {
+          "requirements_with_tests": 15,
+          "requirements": 15,
+          "category_totals": {
+            "positive": 43,
+            "negative": 77,
+            "session": 25,
+            "security": 30,
+            "timing": 31
+          }
+        },
+        "ollama": {
+          "requirements_with_tests": 15,
+          "requirements": 15,
+          "category_totals": {
+            "positive": 26,
+            "negative": 27,
+            "session": 4,
+            "security": 7,
+            "timing": 9
+          }
+        },
+        "sweep_phases": [
+          {
+            "phase": 1,
+            "items": 1034,
+            "covered": 1034
+          },
+          {
+            "phase": 2,
+            "items": 2038,
+            "covered": 1336
+          },
+          {
+            "phase": 3,
+            "items": 1012,
+            "covered": 696
+          },
+          {
+            "phase": 4,
+            "items": 2694,
+            "covered": 921
+          }
+        ]
+      }
+    },
+    {
+      "id": "reuse_rate",
+      "label": "Reuse rate (proxy)",
+      "definition": "Fraction of generated tests instantiated from the reusable template catalog, and how many of the registered templates were used. 100% by construction (the LLM never writes bytes), so it shows catalog coverage, not saved effort.",
+      "how_measured": "template_reuse in the main eval; exported pytest files also ran green",
+      "status": "measured (proxy)",
+      "run": "main_eval",
+      "run_ref": {
+        "label": "Main evaluation run",
+        "source": "outputs/eval_report.json",
+        "timestamp": "2026-10-04T08:15:23.200078+00:00",
+        "date": "2026-10-04",
+        "git_commit": "1f0c293a2033da0e4316197341c814d10aa16b1f",
+        "git_short": "1f0c293",
+        "dirty": true,
+        "note": "commit = HEAD when the evaluation ran; dirty=true means uncommitted changes were present (e.g. the phase being evaluated before its commit)."
+      },
+      "values": {
+        "mock": {
+          "tests": 206,
+          "template_instantiations": 206,
+          "templates_used": 27,
+          "templates_registered": 27
+        },
+        "ollama": {
+          "tests": 73,
+          "template_instantiations": 73,
+          "templates_used": 22,
+          "templates_registered": 27
+        }
+      }
+    },
+    {
+      "id": "defect_detection",
+      "label": "Defect detection",
+      "definition": "Held-out v3 bugs (15, written blind after the Part D freeze) found by the system's full output = requirement-driven tests + conformance sweep.",
+      "how_measured": "heldout_v3 in part_d_detection; a bug counts if any test fails with it injected",
+      "status": "measured",
+      "run": "main_eval",
+      "run_ref": {
+        "label": "Main evaluation run",
+        "source": "outputs/eval_report.json",
+        "timestamp": "2026-10-04T08:15:23.200078+00:00",
+        "date": "2026-10-04",
+        "git_commit": "1f0c293a2033da0e4316197341c814d10aa16b1f",
+        "git_short": "1f0c293",
+        "dirty": true,
+        "note": "commit = HEAD when the evaluation ran; dirty=true means uncommitted changes were present (e.g. the phase being evaluated before its commit)."
+      },
+      "values": {
+        "mock": {
+          "full_output": {
+            "tests": 1406,
+            "bugs": 15,
+            "detected": 10,
+            "rate": 0.6667,
+            "undetected": [
+              "session_switch_keeps_pending_seed",
+              "lockout_expiry_resets_attempt_count",
+              "nrc_order_subfunction_before_length",
+              "read_did_speed_not_clamped",
+              "dtc_read_reports_masked_status"
+            ],
+            "only_requirement_driven": [
+              "dtc_clear_single_clears_neighbour"
+            ],
+            "only_conformance": [
+              "failed_key_keeps_pending_seed",
+              "nrc_order_write_range_before_condition",
+              "routine_results_trailing_bytes_accepted",
+              "write_stores_value_before_range_rejection",
+              "s3_timeout_clears_dtc_status",
+              "suppressed_request_does_not_restart_s3"
+            ]
+          },
+          "requirement_driven": {
+            "tests": 206,
+            "valid_tests": 206,
+            "invalid_tests": 0,
+            "bugs": 15,
+            "detected": 4,
+            "rate": 0.2667,
+            "undetected": [
+              "session_switch_keeps_pending_seed",
+              "failed_key_keeps_pending_seed",
+              "lockout_expiry_resets_attempt_count",
+              "nrc_order_subfunction_before_length",
+              "nrc_order_write_range_before_condition",
+              "routine_results_trailing_bytes_accepted",
+              "read_did_speed_not_clamped",
+              "write_stores_value_before_range_rejection",
+              "dtc_read_reports_masked_status",
+              "s3_timeout_clears_dtc_status",
+              "suppressed_request_does_not_restart_s3"
+            ]
+          },
+          "conformance": {
+            "tests": 1200,
+            "valid_tests": 1200,
+            "invalid_tests": 0,
+            "bugs": 15,
+            "detected": 9,
+            "rate": 0.6,
+            "undetected": [
+              "session_switch_keeps_pending_seed",
+              "lockout_expiry_resets_attempt_count",
+              "nrc_order_subfunction_before_length",
+              "read_did_speed_not_clamped",
+              "dtc_clear_single_clears_neighbour",
+              "dtc_read_reports_masked_status"
+            ]
+          },
+          "gold": {
+            "tests": 60,
+            "valid_tests": 60,
+            "invalid_tests": 0,
+            "bugs": 15,
+            "detected": 3,
+            "rate": 0.2,
+            "undetected": [
+              "session_switch_keeps_pending_seed",
+              "failed_key_keeps_pending_seed",
+              "lockout_expiry_resets_attempt_count",
+              "nrc_order_subfunction_before_length",
+              "nrc_order_write_range_before_condition",
+              "routine_results_trailing_bytes_accepted",
+              "read_did_speed_not_clamped",
+              "write_stores_value_before_range_rejection",
+              "dtc_read_reports_masked_status",
+              "ecu_reset_resets_seed_counter",
+              "s3_timeout_clears_dtc_status",
+              "suppressed_request_does_not_restart_s3"
+            ]
+          }
+        },
+        "ollama": {
+          "full_output": {
+            "tests": 1273,
+            "bugs": 15,
+            "detected": 9,
+            "rate": 0.6,
+            "undetected": [
+              "session_switch_keeps_pending_seed",
+              "lockout_expiry_resets_attempt_count",
+              "nrc_order_subfunction_before_length",
+              "read_did_speed_not_clamped",
+              "dtc_clear_single_clears_neighbour",
+              "dtc_read_reports_masked_status"
+            ],
+            "only_requirement_driven": [],
+            "only_conformance": [
+              "failed_key_keeps_pending_seed",
+              "nrc_order_write_range_before_condition",
+              "routine_results_trailing_bytes_accepted",
+              "write_stores_value_before_range_rejection",
+              "ecu_reset_resets_seed_counter",
+              "s3_timeout_clears_dtc_status",
+              "suppressed_request_does_not_restart_s3"
+            ]
+          },
+          "requirement_driven": {
+            "tests": 73,
+            "valid_tests": 73,
+            "invalid_tests": 0,
+            "bugs": 15,
+            "detected": 2,
+            "rate": 0.1333,
+            "undetected": [
+              "session_switch_keeps_pending_seed",
+              "failed_key_keeps_pending_seed",
+              "lockout_expiry_resets_attempt_count",
+              "nrc_order_subfunction_before_length",
+              "nrc_order_write_range_before_condition",
+              "routine_results_trailing_bytes_accepted",
+              "read_did_speed_not_clamped",
+              "write_stores_value_before_range_rejection",
+              "dtc_clear_single_clears_neighbour",
+              "dtc_read_reports_masked_status",
+              "ecu_reset_resets_seed_counter",
+              "s3_timeout_clears_dtc_status",
+              "suppressed_request_does_not_restart_s3"
+            ]
+          },
+          "conformance": {
+            "tests": 1200,
+            "valid_tests": 1200,
+            "invalid_tests": 0,
+            "bugs": 15,
+            "detected": 9,
+            "rate": 0.6,
+            "undetected": [
+              "session_switch_keeps_pending_seed",
+              "lockout_expiry_resets_attempt_count",
+              "nrc_order_subfunction_before_length",
+              "read_did_speed_not_clamped",
+              "dtc_clear_single_clears_neighbour",
+              "dtc_read_reports_masked_status"
+            ]
+          },
+          "gold": {
+            "tests": 60,
+            "valid_tests": 60,
+            "invalid_tests": 0,
+            "bugs": 15,
+            "detected": 3,
+            "rate": 0.2,
+            "undetected": [
+              "session_switch_keeps_pending_seed",
+              "failed_key_keeps_pending_seed",
+              "lockout_expiry_resets_attempt_count",
+              "nrc_order_subfunction_before_length",
+              "nrc_order_write_range_before_condition",
+              "routine_results_trailing_bytes_accepted",
+              "read_did_speed_not_clamped",
+              "write_stores_value_before_range_rejection",
+              "dtc_read_reports_masked_status",
+              "ecu_reset_resets_seed_counter",
+              "s3_timeout_clears_dtc_status",
+              "suppressed_request_does_not_restart_s3"
+            ]
+          }
+        }
+      }
+    }
+  ]
 }

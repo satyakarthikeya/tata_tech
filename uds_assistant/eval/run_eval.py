@@ -47,6 +47,7 @@ from uds_assistant.eval.heldout_v3 import heldout_v3_analysis
 from uds_assistant.eval.provenance import check_provenance
 from uds_assistant.eval.report_md import provenance_failures, render_markdown
 from uds_assistant.eval.retrieval_compare import run_retrieval_comparison
+from uds_assistant.eval.run_provenance import attach_extras
 from uds_assistant.export import to_capl, to_pytest
 from uds_assistant.llm.client import OllamaClient
 from uds_assistant.llm.factory import get_llm
@@ -1600,8 +1601,14 @@ def run_evaluation(
     return report
 
 
-def write_report(report: dict[str, Any], out: Path) -> None:
-    """Write ``eval_report.json`` and ``eval_report.md`` for ``report`` into ``out``."""
+def write_report(report: dict[str, Any], out: Path, qa_json: Path | None = None,
+                 timing_json: Path | None = None) -> None:
+    """Write ``eval_report.json`` and ``eval_report.md`` for ``report`` into ``out``.
+
+    Run provenance, the Q&A / timing summaries, the History tables, headline cards and success
+    metrics are attached first (:func:`run_provenance.attach_extras`); no metric is recomputed.
+    """
+    attach_extras(report, out, qa_json, timing_json)
     (out / "eval_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     (out / "eval_report.md").write_text(render_markdown(report), encoding="utf-8")
 
@@ -1620,7 +1627,8 @@ def write_before_after(out: Path, baseline: Path | None = None) -> Path:
     return target
 
 
-def rerender(out: Path, interpretation_file: Path | None = None) -> dict[str, Any]:
+def rerender(out: Path, interpretation_file: Path | None = None, qa_json: Path | None = None,
+             timing_json: Path | None = None) -> dict[str, Any]:
     """Re-render the Markdown from an existing ``eval_report.json`` (no metric is recomputed).
 
     With ``interpretation_file``, its text is stored as ``report["interpretation"]`` (prose
@@ -1632,7 +1640,7 @@ def rerender(out: Path, interpretation_file: Path | None = None) -> dict[str, An
             "source": str(interpretation_file).replace("\\", "/"),
             "text": interpretation_file.read_text(encoding="utf-8").strip(),
         }
-    write_report(report, out)
+    write_report(report, out, qa_json, timing_json)
     return report
 
 
@@ -1665,6 +1673,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="only re-render eval_report.md from the existing eval_report.json")
     parser.add_argument("--interpretation", default=None,
                         help="with --rerender: a text file stored as the interpretation section")
+    parser.add_argument("--qa-json", default=None,
+                        help="Q&A eval json (default <out>/qa/qa_eval.json) for the Q&A section")
+    parser.add_argument("--timing-json", default=None,
+                        help="timing json (default <out>/timing/tool_timing.json)")
     return parser
 
 
@@ -1745,7 +1757,9 @@ def main(argv: list[str] | None = None) -> int:
     """
     args = build_parser().parse_args(argv)
     if args.rerender:
-        rerender(Path(args.out), Path(args.interpretation) if args.interpretation else None)
+        rerender(Path(args.out), Path(args.interpretation) if args.interpretation else None,
+                 Path(args.qa_json) if args.qa_json else None,
+                 Path(args.timing_json) if args.timing_json else None)
         print(f"re-rendered {Path(args.out) / 'eval_report.md'}")
         if args.before_after:
             print(f"rendered {write_before_after(Path(args.out))}")

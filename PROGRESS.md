@@ -951,3 +951,12 @@ The validation output, the count of requirements containing hex IDs, which are a
 ## E3.2 — done
 
 Confidence indicators: shared rule `uds_assistant/agent/confidence.py` (rule table in DECISIONS.md E32-*), `TestCase.confidence`/`confidence_reason` set after explain in `agent/annotate.py`, `target_provenance` (written vs inferred) on `PipelineResult` and `/generate`, `qa_confidence` now a wrapper. Mock-mode generation for the 15 seeds is byte-identical before/after (206 tests); distribution 135 high / 71 medium / 0 low. Tests: tests/agent/test_confidence.py + API test; ruff clean; full pytest 1436 passed, 15 skipped.
+
+## E2 — done (2026-10-04)
+
+- **Clean Q&A run:** `qa_eval --modes mock,ollama` at git `9e66f7a` (no modified tracked files under `uds_assistant/`), 2026-10-04 13:02 UTC. Headline scores identical to the earlier dirty run (`3a8c4e3+dirty`, 12:30): mock/ollama answer accuracy 90.5%/90.5%, citation correctness 95.2%/90.5%, precision 80.6%/79.3%, correct not-found 75%/75%; ollama fallback events 12 -> 13 and some answer wording differ. Earlier run files kept.
+- **Report:** `eval/run_provenance.py` + renderer: "Run provenance" table first, every section header states its run, Diagnostic Q&A and Tool-side timing sections with their own runs, Part C/D before/after only in the final History section (labelled historical, with their own hashes). `--rerender` (no metric recomputed; `eval_report.json` contents unchanged except the new keys), new `--qa-json` / `--timing-json`.
+- **JSON keys added:** `provenance`, `qa`, `timing`, `history`, `headline_cards`, `success_metrics`.
+- **Docs:** `docs/RESULTS.md` rewritten as one page (each section with run date + hash, five success metrics defined from existing data); `FINAL_REPORT.md` labelled with runs, Part D before/after moved to a final History section.
+- **Not changed:** no re-run of the v3 evaluation (main eval stays 2026-10-04, `1f0c293`); `uds_assistant/ui/` untouched.
+- **Tests:** `tests/eval/test_run_provenance.py` (7 tests: provenance first, every header labelled, History last and historical, Q&A/timing match their json, JSON keys, missing inputs omitted). Ruff clean; full pytest 1443 passed, 15 skipped.

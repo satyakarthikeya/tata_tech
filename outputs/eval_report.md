@@ -1,5 +1,19 @@
 # Evaluation report — UDS test generation assistant
 
+## Run provenance
+
+Each data source below was produced by its own run; every section header states which one. Numbers are never mixed across runs inside a section. Historical before/after tables appear only in the final History section.
+
+| Data source | Used for | Run (UTC) | Git hash | Uncommitted changes |
+|---|---|---|---|---|
+| Main evaluation | every section not listed below (bug detection, requirement understanding, correctness, coverage, noise check, retrieval) | 2026-10-04T08:15:23.200078+00:00 | `1f0c293` | yes |
+| Diagnostic Q&A | section 'Diagnostic Q&A' | 2026-10-04 13:02:45 | `9e66f7a` | not recorded |
+| Tool-side timing | section 'Tool-side timing' | 2026-10-04T11:51:04+00:00 | `8357ec0` | not recorded |
+
+- History / part d (historical): runs `942f438`, `1f0c293` (2026-10-03T20:49:18.726723+00:00, 2026-10-04T08:15:23.200078+00:00)
+- History / part c (historical): runs `38aa719`, `c669e1e` (2026-10-03T09:37:51.233888+00:00, 2026-10-03T20:49:18.726723+00:00)
+
+
 - **Generated:** 2026-10-04T08:15:23.200078+00:00 (git `1f0c293a2033da0e4316197341c814d10aa16b1f`, uncommitted changes present)
 - **LLM mode used:** `ollama` (requested `ollama`)
 - **Modes evaluated in this invocation:** `mock`, `ollama`
@@ -15,7 +29,7 @@
 
 > **Template set v3:** v2 + 4 generic templates (malformed 0x22 lengths, seed request while unlocked, routine status across session change / ECU reset, written DID value byte order + retention across S3 timeout / ECU reset) and new parameter variants of 3 templates (lockout + ECU reset, precondition failing while locked, routine start with the suppress bit). Added in Part C3 from the static stimulus analysis of the held-out v1 misses, so v1 held-out numbers after v3 are 'seen'; only fresh held-out sets measure v3 fairly.
 
-## Headline metrics
+## Headline metrics — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 | Metric | mock | ollama |
 |---|---|---|
@@ -48,7 +62,7 @@
 
 Rows 1-2 are the FRESH HEADLINE: both v3 data sets were written blind, after the Part D freeze, and nothing was tuned on them. The bug headline is the system's FULL OUTPUT (requirement-driven tests plus the conformance sweep, per bug); rows 1a-1c report its parts separately so Part C numbers stay comparable. Rows 3-5, 8 and the gold figures do not depend on the LLM; everything else is measured per mode. Rows 9-14 are SEEN or tuned-on sets (v1 and v2 results were known when Part D was designed; the natural v1 dev split shaped the prompts; the 26 in-sample bugs shaped the templates) and are not independent evidence. The self-consistency check (expected responses vs the oracle that produced them) is in the appendix.
 
-## Part D — conformance sweep and full-output bug detection
+## Part D — conformance sweep and full-output bug detection — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 _Part D rows. The existing headline above keeps its Part C meaning (requirement-driven suite). (a) = requirement-driven tests from the 15 seed requirements (the Part C 'generated' suite); (b) = the requirement-independent conformance sweep alone; (c) = the system's full output, (a) ∪ (b). The conformance sweep is generated from the spec alone, uses no LLM and is identical in every mode; only (a), and therefore (c), depend on the mode._
 
@@ -114,7 +128,7 @@ Selected tests by stimulus family (service) and by setup dimension:
 | session_change | 18 |
 | timing | 361 |
 
-## Interpretation: where the LLM helped and where it didn't
+## Interpretation: where the LLM helped and where it didn't — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 ### Summary (Part D, fresh v3 data)
 
@@ -221,7 +235,7 @@ Cases per requirement (returned / expected): REQ-001 3/5, REQ-002 6/8, REQ-003 3
 
 _Written after reading the measured numbers in this report (source `outputs/partD/interpretation.md`); no number was edited by hand._
 
-## Noise check — natural v3 (FRESH), run-to-run variation
+## Noise check — natural v3 (FRESH), run-to-run variation — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 ### mode=mock: 1 run(s) over the 16 natural-v3 requirements (requested 3)
 
@@ -245,7 +259,34 @@ Determinism check: a second `mock` run over natural v3 was identical = **True** 
 
 _Run 1 is the run used for every main table. Every run is listed; the summary is the mean and the min-max range over ALL runs, never the best run._
 
-## Mock vs Ollama — side by side
+## Diagnostic Q&A (blind set `data/qa_eval.csv`) — run 2026-10-04 · git `9e66f7a`
+
+25 questions (21 answerable, 4 unanswerable). This is its own run, separate from the main evaluation; per-question rows are in `outputs/qa/qa_eval.md`.
+
+| Metric | mock | ollama |
+|---|---|---|
+| answer accuracy (answerable) | 90.5% (19/21) | 90.5% (19/21) |
+| citation correctness | 95.2% (20/21) | 90.5% (19/21) |
+| citation precision | 80.6% (25/31) | 79.3% (23/29) |
+| correct not-found (unanswerable) | 75.0% (3/4) | 75.0% (3/4) |
+| false not-found (answerable) | 0 | 0 |
+| LLM fallback events | 0 | 13 |
+| seconds (all questions) | 0.1 | 88.7 |
+
+## Tool-side timing (generation time per requirement) — run 2026-10-04 · git `8357ec0`
+
+5 requirements (REQ-001, REQ-005, REQ-009, REQ-011, REQ-015), 3 repeats each, in-process wall clock from `scripts/time_generation.py`. This is tool compute time only; the manual comparison in `docs/TEST_DESIGN_TIME.md` is **pending owner measurement**. The first mock repeat includes warm-up.
+
+| Requirement (mean, min–max over repeats) | mock | ollama |
+|---|---|---|
+| REQ-001 | 0.776 s (0.055–2.214), 18 tests | 17.505 s (17.439–17.57), 5 tests |
+| REQ-005 | 0.099 s (0.077–0.116), 18 tests | 17.806 s (17.625–18.048), 4 tests |
+| REQ-009 | 0.085 s (0.079–0.093), 22 tests | 28.754 s (28.616–29.003), 8 tests |
+| REQ-011 | 0.077 s (0.055–0.12), 12 tests | 16.25 s (14.248–19.986), 4 tests |
+| REQ-015 | 0.046 s (0.046–0.047), 13 tests | 16.486 s (16.297–16.76), 4 tests |
+| **mean of requirement means** | 0.217 s | 19.36 s |
+
+## Mock vs Ollama — side by side — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 ### Requirement understanding — natural v3 (split test3): FRESH HEADLINE
 
@@ -843,9 +884,9 @@ _wall clock seconds of one run_pipeline call per requirement (parse through expl
 
 _Byte provenance: each generated test re-instantiated from TEMPLATES[template_id].instantiate(spec, params_model.model_validate(test.parameters)) (conformance-sweep tests: from the conformance registry, which the planner never sees); template_id must be registered, parameters must round-trip, and every step must be identical (request and expected-response bytes, time/environment/DTC steps, descriptions, timing limits)._
 
-## Retrieval comparison (BM25 vs Chroma)
+## Retrieval comparison (BM25 vs Chroma) — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
-Queries are the `text` of each row of `data/requirements_natural.csv`; 19 of 20 scored (NAT-020 excluded: no target service/DID/routine). Relevant chunks: ecu_spec chunks carrying a target DID/routine identifier; for rows with no DID/routine, the standard-collection `svc-<sid>` chunk of each target service. Search spans all collections; MRR uses the first relevant rank in the top 10 (0 if none); citation validity is over the top 3 hits.
+Queries are the `text` of each row of `data/requirements_natural.csv`; 19 of 20 scored (NAT-020 excluded: no target service/DID/routine). Relevant chunks: ecu chunks carrying a target DID/routine identifier; for rows with no DID/routine, the standard-collection `svc-<sid>` chunk of each target service. Search spans all collections; MRR uses the first relevant rank in the top 10 (0 if none); citation validity is over the top 3 hits.
 
 | split | backend | queries | hit@1 | hit@3 | MRR | citation validity (top 3) |
 |---|---|---|---|---|---|---|
@@ -880,7 +921,7 @@ Rank of the first relevant chunk per query (0 = not in top 10):
 | NAT-018 | test | 1 | 9 | 5 |
 | NAT-019 | test | 1 | 1 | 2 |
 
-## LLM-independent checks (details)
+## LLM-independent checks (details) — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 - Simulator ↔ rules engine: 5000/5000 requests agreed over 89 seeded walks (seed 20261003).
 - Gold tests on the bug-free simulator: 60/60.
@@ -892,7 +933,7 @@ Rank of the first relevant chunk per query (0 = not in top 10):
   - 2E 0100 write 0x50: positive
   - 22 0100 read-back: 0x50
 
-## Freeze verification (Part D freeze: templates / sweep / prompts / agent / gold)
+## Freeze verification (Part D freeze: templates / sweep / prompts / agent / gold) — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Recorded hashes are parsed from PROGRESS.md 'Part D freeze' table; current = `git rev-parse HEAD:<path>` when this report ran.
 
@@ -909,11 +950,11 @@ Recorded hashes are parsed from PROGRESS.md 'Part D freeze' table; current = `gi
 
 All recorded freeze hashes match and are clean: **True**.
 
-# Details — mode=mock
+# Details — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Generated tests (seed requirements): **206** (119 unique template instantiations); 206/206 (100.0%) pass on the clean simulator; P2/P2* wall-clock warnings: 0.
 
-## Held-out v3 bug detection (15 FRESH bugs) — FRESH HEADLINE — mode=mock
+## Held-out v3 bug detection (15 FRESH bugs) — FRESH HEADLINE — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Scope: held-out v3 (FRESH): 15 bugs written blind by a subagent after the Part D freeze, which could not see templates, the conformance sweep, prompts, eval code or any report; nothing was changed after seeing these results. Catalog: `data/bugs/heldout_v3_catalog.yaml`.
 
@@ -1026,7 +1067,7 @@ Totals: (a) requirement-driven 4/15 (26.7%), (b) sweep alone 9/15 (60.0%), (c) f
 
 _Reasons come from `uds_assistant/eval/heldout_v3.py`: one predicate per bug, written only from the bug descriptions in `data/bugs/heldout_v3_catalog.yaml` and `docs/behaviour_contract.md` before any v3 result existed. "no X test ..." means no test in that suite applies the stimulus; "N X test(s) ..., but none of their expected responses differs" means the stimulus is present but the oracle-derived expectations do not distinguish the bug. Reporting only — nothing was changed in response._
 
-## Requirement understanding, natural v3 (split test3, FRESH HEADLINE) — mode=mock
+## Requirement understanding, natural v3 (split test3, FRESH HEADLINE) — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Source: `data/requirements_natural_v3.csv` (16 labelled rows). Each requirement was run through the agent pipeline (`mode=mock`, Bm25Retriever). **The test3 split is the main number (fresh, nothing tuned on it).**
 
@@ -1056,7 +1097,7 @@ Source: `data/requirements_natural_v3.csv` (16 labelled rows). Each requirement 
 | NAT3-015 | test3 (ambiguous) | 0 | did:0x0130, did:0x0131, service:0x2E | no | did:0x0130, did:0x0131, service:0x2E | - | no | did:0x0130, did:0x0131, service:0x2E | 0 | negative, positive, security | extended_session, security_level_1 | no parsed services/DIDs/routines; zero tests |
 | NAT3-016 | test3 | 1 | (none) | no | - | service:0x22 | no | - | 2 | positive | - | - |
 
-## Held-out v2 bug detection (15 bugs, SEEN) — mode=mock
+## Held-out v2 bug detection (15 bugs, SEEN) — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Scope: held-out v2, now SEEN: 15 bugs written blind by a subagent after the Part C freeze (fresh in Part C); their Part C results were known before Part D, so they are no longer independent evidence. Catalog: `data/bugs/heldout_v2_catalog.yaml`.
 
@@ -1147,7 +1188,7 @@ Totals: generated 2/15 (13.3%), gold 5/15 (33.3%), union 5/15 (33.3%). Invalid t
 
 _Reasons come from `uds_assistant/eval/heldout_v2.py`: one predicate per bug, written only from the bug descriptions in `data/bugs/heldout_v2_catalog.yaml` and `docs/behaviour_contract.md` before any v2 result existed. "no test X" means no test in that suite applies the stimulus; "N test(s) X, but none of their expected responses differs" means the stimulus is present but the oracle-derived expectations do not distinguish the bug. Reporting only — nothing was changed in response._
 
-## Requirement understanding, natural v2 (split test2, SEEN) — mode=mock
+## Requirement understanding, natural v2 (split test2, SEEN) — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Source: `data/requirements_natural_v2.csv` (16 labelled rows). Each requirement was run through the agent pipeline (`mode=mock`, Bm25Retriever). **The test2 split is SEEN (fresh in Part C).**
 
@@ -1177,7 +1218,7 @@ Source: `data/requirements_natural_v2.csv` (16 labelled rows). Each requirement 
 | NAT2-015 | test2 (ambiguous) | 0 | service:0x10, service:0x14 | no | service:0x10, service:0x14 | - | no | service:0x10, service:0x14 | 0 | negative, session | programming_session | no parsed services/DIDs/routines; zero tests |
 | NAT2-016 | test2 | 8 | (none) | no | - | - | no | - | 3 | - | - | no parsed services/DIDs/routines |
 
-## Held-out bug detection (12 v1 bugs — SEEN: templates designed against these misses) — mode=mock
+## Held-out bug detection (12 v1 bugs — SEEN: templates designed against these misses) — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Scope: held-out v1, now SEEN: bugs written by an independent subagent that could not see templates, gold tests, eval, LLM or agent code; the template-set-v3 coverage templates were then designed against the misses, so these 12 are no longer independent. Catalog: `data/bugs/heldout_catalog.yaml`.
 
@@ -1217,7 +1258,7 @@ Totals: generated 10/12 (83.3%), gold 3/12 (25.0%), union 11/12 (91.7%). Invalid
 
 _Reasons come from a static trigger analysis (`uds_assistant/eval/heldout.py`): for each held-out bug, a predicate written from its catalog description checks whether a test applies the stimulus the bug needs. Reporting only — nothing in templates, gold tests, mock LLM or planner was changed in response._
 
-## Requirement understanding (natural requirements) — natural v1: test split SEEN, dev tuned on — mode=mock
+## Requirement understanding (natural requirements) — natural v1: test split SEEN, dev tuned on — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Source: `data/requirements_natural.csv` (20 labelled rows). Each requirement was run through the agent pipeline (`mode=mock`, Bm25Retriever). **The test split is the v1 number, but it is SEEN; dev is what the prompts were tuned on.**
 
@@ -1252,7 +1293,7 @@ Source: `data/requirements_natural.csv` (20 labelled rows). Each requirement was
 | NAT-019 | test | 19 | routine:0x0203, service:0x31 | yes | - | - | no | - | 10 | positive | - | - |
 | NAT-020 | test | 0 | (none) | yes | - | - | yes | - | 0 | - | - | no parsed services/DIDs/routines; zero tests |
 
-## Secondary: in-sample bug detection (26 bugs — in-sample, templates tuned on these) — mode=mock
+## Secondary: in-sample bug detection (26 bugs — in-sample, templates tuned on these) — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Scope: in-sample (templates tuned on these). Generated 25/26 (96.2%), gold 24/26 (92.3%), union 26/26 (100.0%). This is an optimistic, non-independent number: template set v2 was written after seeing which of these bugs v1 missed, by the same author as the catalog.
 
@@ -1305,7 +1346,7 @@ Baseline read from `eval_report_baseline_v1.json` (run 2026-10-02T21:21:46.27999
 Invalid tests (fail on the clean simulator, excluded from credit): generated 0, gold 0.
 Detected only by the generated suite: lockout_delay_never_expires, seed_not_consumed. Only by gold: missing_response_pending. Undetected by both: -.
 
-## Coverage (generated tests per category per seed requirement) — mode=mock
+## Coverage (generated tests per category per seed requirement) — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 | Requirement | positive | negative | session | security | timing | total |
 |---|---|---|---|---|---|---|
@@ -1328,17 +1369,17 @@ Detected only by the generated suite: lockout_delay_never_expires, seed_not_cons
 
 Categories present: 100.0%; requirements covered by ≥2 categories: 14/15.
 
-## Request validity — mode=mock
+## Request validity — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 - Send steps: 691; decodable: 691; not rejected with a format NRC (0x11/0x12/0x13): 645 (unadjusted rate 93.3%).
 - Intentional format probes (NRC in the template's `intended_nrcs`): 46. Adjusted validity: **691/691 (100.0%)**.
 
-## Template reuse and citations — mode=mock
+## Template reuse and citations — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 - Template reuse: 206/206 (100.0%); templates used: 27/27; per template: `condition_not_met` 4, `dtc_clear_specific_keeps_others` 3, `dtc_read_clear` 3, `negative_response_with_suppress_bit` 13, `nrc_priority_session_over_identifier` 11, `read_did_invalid_length` 3, `read_did_positive` 9, `read_did_wrong_session_or_unknown` 4, `read_multiple_dids` 9, `routine_sequence` 2, `routine_start_results` 4, `s3_keepalive_boundary` 13, `s3_timeout_reverts_session` 13, `security_invalid_key_lockout` 12, `seed_replay_rejected` 6, `seed_request_while_unlocked` 6, `service_not_in_session` 21, `session_change_relocks_security` 6, `session_change_resets_routine` 4, `suppress_positive_response` 6, `unsupported_subfunction` 23, `write_did_invalid_length` 5, `write_did_out_of_range` 5, `write_did_secured_positive` 4, `write_did_value_retained` 10, `write_did_without_security` 4, `write_readonly_did` 3
 - Citations: 967/967 valid; tests with ≥1 valid citation: 100.0%.
 
-## Pipeline statistics (seed requirements) — mode=mock
+## Pipeline statistics (seed requirements) — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 | Requirement | tests | dropped | rejected | plan attempts | status | wall s |
 |---|---|---|---|---|---|---|
@@ -1360,7 +1401,7 @@ Categories present: 100.0%; requirements covered by ≥2 categories: 14/15.
 
 Totals: 206 kept, 0 dropped, 0 rejected, 0 re-plans, 0 failed runs.
 
-## Appendix: Self-consistency check (circular by construction) — mode=mock
+## Appendix: Self-consistency check (circular by construction) — mode=mock — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Expected bytes in generated tests are produced by the rules-engine oracle, so agreement with a fresh oracle re-run is a consistency check, not an independent accuracy measure. Kept here for completeness; it is not a headline metric.
 
@@ -1369,11 +1410,11 @@ Expected bytes in generated tests are produced by the rules-engine oracle, so ag
 - Gold, exact overlap: 25/25 (100.0%) generated/gold pairs with identical step sequences agree.
 - Gold, shared prefix: 21/21 (100.0%) distinct send steps reached by an identical prefix in both suites agree.
 
-# Details — mode=ollama
+# Details — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Generated tests (seed requirements): **73** (64 unique template instantiations); 73/73 (100.0%) pass on the clean simulator; P2/P2* wall-clock warnings: 0.
 
-## Held-out v3 bug detection (15 FRESH bugs) — FRESH HEADLINE — mode=ollama
+## Held-out v3 bug detection (15 FRESH bugs) — FRESH HEADLINE — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Scope: held-out v3 (FRESH): 15 bugs written blind by a subagent after the Part D freeze, which could not see templates, the conformance sweep, prompts, eval code or any report; nothing was changed after seeing these results. Catalog: `data/bugs/heldout_v3_catalog.yaml`.
 
@@ -1491,7 +1532,7 @@ Totals: (a) requirement-driven 2/15 (13.3%), (b) sweep alone 9/15 (60.0%), (c) f
 
 _Reasons come from `uds_assistant/eval/heldout_v3.py`: one predicate per bug, written only from the bug descriptions in `data/bugs/heldout_v3_catalog.yaml` and `docs/behaviour_contract.md` before any v3 result existed. "no X test ..." means no test in that suite applies the stimulus; "N X test(s) ..., but none of their expected responses differs" means the stimulus is present but the oracle-derived expectations do not distinguish the bug. Reporting only — nothing was changed in response._
 
-## Requirement understanding, natural v3 (split test3, FRESH HEADLINE) — mode=ollama
+## Requirement understanding, natural v3 (split test3, FRESH HEADLINE) — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Source: `data/requirements_natural_v3.csv` (16 labelled rows). Each requirement was run through the agent pipeline (`mode=ollama`, Bm25Retriever). **The test3 split is the main number (fresh, nothing tuned on it).**
 
@@ -1521,7 +1562,7 @@ Source: `data/requirements_natural_v3.csv` (16 labelled rows). Each requirement 
 | NAT3-015 | test3 (ambiguous) | 6 | did:0x0130, did:0x0131, service:0x2E | no | did:0x0131, service:0x2E | service:0x22 | no | did:0x0131 | 5 | security | - | - |
 | NAT3-016 | test3 | 8 | (none) | no | - | service:0x22 | no | - | 6 | - | - | - |
 
-## Held-out v2 bug detection (15 bugs, SEEN) — mode=ollama
+## Held-out v2 bug detection (15 bugs, SEEN) — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Scope: held-out v2, now SEEN: 15 bugs written blind by a subagent after the Part C freeze (fresh in Part C); their Part C results were known before Part D, so they are no longer independent evidence. Catalog: `data/bugs/heldout_v2_catalog.yaml`.
 
@@ -1612,7 +1653,7 @@ Totals: generated 2/15 (13.3%), gold 5/15 (33.3%), union 5/15 (33.3%). Invalid t
 
 _Reasons come from `uds_assistant/eval/heldout_v2.py`: one predicate per bug, written only from the bug descriptions in `data/bugs/heldout_v2_catalog.yaml` and `docs/behaviour_contract.md` before any v2 result existed. "no test X" means no test in that suite applies the stimulus; "N test(s) X, but none of their expected responses differs" means the stimulus is present but the oracle-derived expectations do not distinguish the bug. Reporting only — nothing was changed in response._
 
-## Requirement understanding, natural v2 (split test2, SEEN) — mode=ollama
+## Requirement understanding, natural v2 (split test2, SEEN) — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Source: `data/requirements_natural_v2.csv` (16 labelled rows). Each requirement was run through the agent pipeline (`mode=ollama`, Bm25Retriever). **The test2 split is SEEN (fresh in Part C).**
 
@@ -1642,7 +1683,7 @@ Source: `data/requirements_natural_v2.csv` (16 labelled rows). Each requirement 
 | NAT2-015 | test2 (ambiguous) | 4 | service:0x10, service:0x14 | no | service:0x10 | - | no | - | 1 | negative | - | - |
 | NAT2-016 | test2 | 8 | (none) | no | - | service:0x22, service:0x2E | no | - | 8 | - | - | - |
 
-## Held-out bug detection (12 v1 bugs — SEEN: templates designed against these misses) — mode=ollama
+## Held-out bug detection (12 v1 bugs — SEEN: templates designed against these misses) — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Scope: held-out v1, now SEEN: bugs written by an independent subagent that could not see templates, gold tests, eval, LLM or agent code; the template-set-v3 coverage templates were then designed against the misses, so these 12 are no longer independent. Catalog: `data/bugs/heldout_catalog.yaml`.
 
@@ -1684,7 +1725,7 @@ Totals: generated 8/12 (66.7%), gold 3/12 (25.0%), union 9/12 (75.0%). Invalid t
 
 _Reasons come from a static trigger analysis (`uds_assistant/eval/heldout.py`): for each held-out bug, a predicate written from its catalog description checks whether a test applies the stimulus the bug needs. Reporting only — nothing in templates, gold tests, mock LLM or planner was changed in response._
 
-## Requirement understanding (natural requirements) — natural v1: test split SEEN, dev tuned on — mode=ollama
+## Requirement understanding (natural requirements) — natural v1: test split SEEN, dev tuned on — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Source: `data/requirements_natural.csv` (20 labelled rows). Each requirement was run through the agent pipeline (`mode=ollama`, Bm25Retriever). **The test split is the v1 number, but it is SEEN; dev is what the prompts were tuned on.**
 
@@ -1719,7 +1760,7 @@ Source: `data/requirements_natural.csv` (20 labelled rows). Each requirement was
 | NAT-019 | test | 4 | routine:0x0203, service:0x31 | no | routine:0x0203 | did:0x0150, service:0x10, service:0x27 | no | routine:0x0203, service:0x31 | 6 | security | - | - |
 | NAT-020 | test | 0 | (none) | yes | - | - | yes | - | 0 | - | - | no parsed services/DIDs/routines; zero tests |
 
-## Secondary: in-sample bug detection (26 bugs — in-sample, templates tuned on these) — mode=ollama
+## Secondary: in-sample bug detection (26 bugs — in-sample, templates tuned on these) — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Scope: in-sample (templates tuned on these). Generated 21/26 (80.8%), gold 24/26 (92.3%), union 25/26 (96.2%). This is an optimistic, non-independent number: template set v2 was written after seeing which of these bugs v1 missed, by the same author as the catalog.
 
@@ -1757,7 +1798,7 @@ Scope: in-sample (templates tuned on these). Generated 21/26 (80.8%), gold 24/26
 Invalid tests (fail on the clean simulator, excluded from credit): generated 0, gold 0.
 Detected only by the generated suite: lockout_delay_never_expires. Only by gold: nrc_order_security_before_length, write_length_off_by_one, dtc_clear_ignores_group, missing_response_pending. Undetected by both: seed_not_consumed.
 
-## Coverage (generated tests per category per seed requirement) — mode=ollama
+## Coverage (generated tests per category per seed requirement) — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 | Requirement | positive | negative | session | security | timing | total |
 |---|---|---|---|---|---|---|
@@ -1780,17 +1821,17 @@ Detected only by the generated suite: lockout_delay_never_expires. Only by gold:
 
 Categories present: 100.0%; requirements covered by ≥2 categories: 12/15.
 
-## Request validity — mode=ollama
+## Request validity — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 - Send steps: 226; decodable: 226; not rejected with a format NRC (0x11/0x12/0x13): 206 (unadjusted rate 91.1%).
 - Intentional format probes (NRC in the template's `intended_nrcs`): 20. Adjusted validity: **226/226 (100.0%)**.
 
-## Template reuse and citations — mode=ollama
+## Template reuse and citations — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 - Template reuse: 73/73 (100.0%); templates used: 22/27; per template: `condition_not_met` 2, `dtc_read_clear` 1, `negative_response_with_suppress_bit` 11, `nrc_priority_session_over_identifier` 1, `read_did_invalid_length` 2, `read_did_positive` 12, `read_did_wrong_session_or_unknown` 2, `read_multiple_dids` 5, `routine_sequence` 1, `s3_keepalive_boundary` 1, `s3_timeout_reverts_session` 5, `security_invalid_key_lockout` 4, `seed_request_while_unlocked` 1, `service_not_in_session` 3, `session_change_relocks_security` 2, `session_change_resets_routine` 1, `suppress_positive_response` 3, `unsupported_subfunction` 5, `write_did_out_of_range` 2, `write_did_secured_positive` 4, `write_did_value_retained` 4, `write_readonly_did` 1
 - Citations: 353/353 valid; tests with ≥1 valid citation: 100.0%.
 
-## Pipeline statistics (seed requirements) — mode=ollama
+## Pipeline statistics (seed requirements) — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 | Requirement | tests | dropped | rejected | plan attempts | status | wall s |
 |---|---|---|---|---|---|---|
@@ -1812,7 +1853,7 @@ Categories present: 100.0%; requirements covered by ≥2 categories: 12/15.
 
 Totals: 73 kept, 0 dropped, 0 rejected, 0 re-plans, 0 failed runs.
 
-## Appendix: Self-consistency check (circular by construction) — mode=ollama
+## Appendix: Self-consistency check (circular by construction) — mode=ollama — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 Expected bytes in generated tests are produced by the rules-engine oracle, so agreement with a fresh oracle re-run is a consistency check, not an independent accuracy measure. Kept here for completeness; it is not a headline metric.
 
@@ -1821,7 +1862,7 @@ Expected bytes in generated tests are produced by the rules-engine oracle, so ag
 - Gold, exact overlap: 11/11 (100.0%) generated/gold pairs with identical step sequences agree.
 - Gold, shared prefix: 15/15 (100.0%) distinct send steps reached by an identical prefix in both suites agree.
 
-# Shared
+# Shared — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 ### Precondition mapping (how 'established' is derived from test steps)
 
@@ -1837,7 +1878,7 @@ Expected bytes in generated tests are produced by the rules-engine oracle, so ag
 - `s3_elapsed`: clock advanced by more than the active session's S3 time between two send steps
 - `lockout_active`: an expected 7F 27 36 (exceededNumberOfAttempts) or 7F 27 37 (requiredTimeDelayNotExpired) response
 
-## Exports
+## Exports — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 - `exports/generated_tests_test.py` (mode=mock)
 - `exports/gold_tests_test.py` (mode=mock)
@@ -1853,7 +1894,7 @@ Expected bytes in generated tests are produced by the rules-engine oracle, so ag
 - Ran `generated_tests_test.py` for mode=ollama (transport `inprocess`) with pytest in a subprocess: **PASSED** — `73 passed in 1.20s` (4.51 s).
 - CAPL files (`*.can`) are **UNVERIFIED TEMPLATES — not compiled or run in CANoe**.
 
-## Runtime
+## Runtime — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 | Phase | seconds |
 |---|---|
@@ -1888,7 +1929,7 @@ Expected bytes in generated tests are produced by the rules-engine oracle, so ag
 | retrieval_compare | 5.636 |
 | total | 2327.64 |
 
-## Metric definitions
+## Metric definitions — run 2026-10-04 · git `1f0c293`, uncommitted changes
 
 - **request_validity**: Over every send step of every generated test: the request is replayed through the rules-engine oracle in sequence (same set-up and time steps). A request counts as well-formed if (a) protocol.codec.decode_request decodes it and (b) the oracle does not reject it with a format NRC (0x11 serviceNotSupported, 0x12 subFunctionNotSupported, 0x13 incorrectMessageLengthOrInvalidFormat), unless that NRC is listed in the template's declared intended_nrcs (a deliberate malformed-request probe such as write_did_invalid_length -> 0x13). rate = well-formed / send steps. The unadjusted rate (no intent exemption) is reported alongside.
 - **expected_response_accuracy**: SELF-CONSISTENCY CHECK, circular by construction (expected bytes are produced by the same oracle; reported in an appendix, not a headline). oracle: share of generated send steps whose expected response frames equal a fresh rules-engine re-run of the test (and share of whole tests with zero mismatches). simulator: share of generated tests passing on the bug-free independent simulator. gold: (1) exact overlap = generated tests whose full step sequence (requests and set-up/time steps, ignoring expected responses) is identical to a gold test; agreement = identical expected responses on every step. (2) shared-prefix overlap = every distinct send step reached by an identical step prefix from power-on in both a generated and a gold test (deduplicated by prefix); agreement = identical expected frames for that step.
@@ -1916,3 +1957,125 @@ Expected bytes in generated tests are produced by the rules-engine oracle, so ag
 - **by_kind**: Parsed (and exercised) false positives and false negatives by identifier kind (service / did / routine / dtc), per requirement set, from each requirement's missed and extra identifiers. tp = label items of that kind minus the missed ones.
 - **rejected_by_reason**: Rejected planner choices by reason: unknown template id; option index out of range; option not in the offered shortlist; duplicate / other (a choice that previously failed, or an instantiate / validate failure). Counted per requirement set.
 - **seen_sets**: SEEN = their results were known when Part D was designed or tuned: held-out v1 and v2 bugs, natural v1 (test and dev) and v2 requirements. The 26 in-sample bugs were tuned on. Only the v3 rows are independent evidence.
+
+## History
+
+**Historical, not current results.** These before/after tables compare earlier runs with the Part C or Part D final reports. They are kept for the record, were produced by the runs named in each heading, and are not the headline of this report (see the sections above, each labelled with its own run).
+
+### Part D before / after — **historical** — runs `942f438`, `1f0c293` (2026-10-03T20:49:18.726723+00:00, 2026-10-04T08:15:23.200078+00:00)
+
+_Source: `outputs/partD/before_after.md`. Headings below are demoted; content is verbatim._
+
+
+Before = frozen baseline `outputs/partD/baseline_before_partD.json` (the Part C final report, commit `942f43898de38361f0797c5009e3cfcfd6f042c0`, report 2026-10-03T20:49:18.726723+00:00). After = `eval_report.json` generated 2026-10-04T08:15:23.200078+00:00 (git `1f0c293a2033da0e4316197341c814d10aa16b1f`, report version 5, template set `v3`).
+
+#### (i) FRESH v3 rows (written blind after the Part D freeze; after only)
+
+| Metric | mock after | ollama after |
+|---|---|---|
+| **Held-out v3 bugs (15): FULL OUTPUT = requirement-driven + sweep (headline)** | **10/15** | **9/15** |
+| (a) requirement-driven only (comparable with Part C) | 4/15 | 2/15 |
+| (b) conformance sweep alone (LLM-independent) | 9/15 | 9/15 |
+| (d) gold (LLM-independent) | 3/15 | 3/15 |
+| Suite sizes (tests) | 206 requirement-driven, 1200 sweep, 1406 full output | 73 requirement-driven, 1200 sweep, 1273 full output |
+| **Natural v3 (test3, n=16): parsed exact** | 1/16 | 2/16 |
+| Natural v3: parsed P / R / F1 | 0.857 / 0.267 / 0.407 | 0.596 / 0.622 / 0.609 |
+| Natural v3: exercised F1 | 0.342 | 0.472 |
+| Natural v3: category recall (micro) | 42.0% | 70.0% |
+| Natural v3: precondition recall (micro) | 48.3% | 89.7% |
+| Natural v3: fallback / nothing generated | 7 | 0 |
+| Natural v3: parsed false positives by kind | service 2 | service 15, did 4 |
+| Natural v3: parsed false negatives by kind | service 24, did 8, routine 1 | service 9, did 5, routine 3 |
+| Natural v3: rejected planner choices by reason | 0 (none) | 0 (none) |
+| Natural v3: noise check | 1 run(s), parsed F1 mean 0.407 (min-max 0.407-0.407) | 3 run(s), parsed F1 mean 0.609 (min-max 0.609-0.609) |
+
+#### (ii) SEEN v2 rows, before / after (context only: v2 is seen)
+
+| Metric | mock before | mock after | ollama before | ollama after |
+|---|---|---|---|---|
+| Held-out v2 bugs (15, SEEN): requirement-driven (generated) | 2/15 | 2/15 | 2/15 | 2/15 |
+| Held-out v2 bugs (SEEN): FULL OUTPUT (Part C had no sweep: = requirement-driven) | 2/15 | 9/15 | 2/15 | 9/15 |
+| Held-out v2 bugs (SEEN): gold | 5/15 | 5/15 | 5/15 | 5/15 |
+| Natural v2 (test2, n=16, SEEN): parsed exact | 0/16 | 0/16 | 4/16 | 4/16 |
+| Natural v2 (test2, n=16, SEEN): parsed P / R / F1 | 1.000 / 0.225 / 0.367 | 1.000 / 0.225 / 0.367 | 0.565 / 0.796 / 0.661 | 0.808 / 0.775 / 0.792 |
+| Natural v2 (test2, n=16, SEEN): exercised F1 | 0.450 | 0.450 | 0.583 | 0.639 |
+| Natural v2 (test2, n=16, SEEN): category recall (micro) | 48.0% | 48.0% | 74.0% | 72.0% |
+| Natural v2 (test2, n=16, SEEN): precondition recall (micro) | 55.6% | 55.6% | 77.8% | 92.6% |
+| Natural v2 (SEEN): parsed false positives by kind | none | none | service 25, did 5 | service 6, did 3 |
+| Natural v2 (SEEN): parsed false negatives by kind | service 30, did 7, routine 1 | service 30, did 7, routine 1 | service 6, did 2, routine 2 | service 7, did 2, routine 2 |
+
+#### (iii) Rejected planner choices by reason
+
+| Set | mock before | mock after | ollama before | ollama after |
+|---|---|---|---|---|
+| 15 seed + 20 natural v1 requirements (SEEN) | 0 (none) | 0 (none) | 15 (unknown template id 2, option index out of range 3, option not in the offered shortlist 10) | 0 (none) |
+| Natural v2 (16, SEEN) | 0 (none) | 0 (none) | 12 (unknown template id 6, option index out of range 2, option not in the offered shortlist 4) | 0 (none) |
+
+Natural v3 (FRESH, after only): mock: 0 (none); ollama: 0 (none)
+
+#### (iv) Parsed false positives by kind
+
+| Set | mock before | mock after | ollama before | ollama after |
+|---|---|---|---|---|
+| Natural v1 test split (n=12, SEEN) | service 1 | service 1 | service 17, did 4 | service 5, did 4 |
+| Natural v2 (n=16, SEEN) | none | none | service 25, did 5 | service 6, did 3 |
+
+Natural v3 (FRESH, after only): mock: service 2; ollama: service 15, did 4
+
+
+#### (v) Latency and explain calls (35 seed + natural-v1 requirements)
+
+| Metric | mock before | mock after | ollama before | ollama after |
+|---|---|---|---|---|
+| Latency per requirement, mean / p95 | 0.27 s / 0.46 s | 0.38 s / 0.63 s | 21.37 s / 28.52 s | 21.85 s / 30.41 s |
+| Explain LLM calls per requirement, mean (min-max) | 0.89 (0-1) | 0.89 (0-1) | 1.00 (1-1) | 0.97 (0-1) |
+
+#### (vi) SWS disagreements
+
+| Metric | before | after |
+|---|---|---|
+| SWS disagreements open | 5 | 5 |
+
+Counted from `docs/SWS_DISAGREEMENTS.md`: open D1, D3, D4, D8, D9 (5), FIXED D2, D5, D6, D7 (4); baseline open D1, D3, D4, D8, D9 (5).
+
+#### (vii) Test counts: requirement-driven suite vs full output
+
+| Suite (tests) | mock before | mock after | ollama before | ollama after |
+|---|---|---|---|---|
+| requirement-driven / full output (Part C: no sweep) | 206 requirement-driven / 206 full output | 206 requirement-driven / 1406 full output | 66 requirement-driven / 66 full output | 73 requirement-driven / 1273 full output |
+
+**Comparability.** (1) The v3 bug set (15) and the natural-v3 set (16) are fresh and different from the v1 and v2 sets, so the v3 rows have only an 'after' value; they are not 'after' values of the v2 rows. (2) v1 and v2 (bugs and natural requirements) are SEEN: their Part C results were known when Part D was designed, so the v2 before/after rows are context, not independent evidence; only the v3 rows are. (3) mock is deterministic: its numbers repeat exactly. (4) ollama output varies from run to run, so small ollama differences are noise; the v3 noise check (mean and min-max over all runs) is in the report. (5) The conformance sweep is LLM-independent: it is identical in every mode, so 'full output' differs between modes only through the requirement-driven part. (6) Part C had no sweep, so its 'full output' equals its requirement-driven suite. (7) Latency, explain calls and the rejected-choice rows over the 35 seed + natural-v1 requirements use the same requirements in both reports; the baseline's explain calls are derived from tests kept only if the report lacks per-node LLM call counts.
+
+### Part C before / after — **historical** — runs `38aa719`, `c669e1e` (2026-10-03T09:37:51.233888+00:00, 2026-10-03T20:49:18.726723+00:00)
+
+_Source: `outputs/partC/before_after.md`. Headings below are demoted; content is verbatim._
+
+
+Before = frozen baseline `outputs/partC/baseline_before_partC.json` (commit `38aa7197d0a330f6f2f8f550fb3796ea5ae9db20`, report 2026-10-03T09:37:51.233888+00:00). After = `eval_report.json` generated 2026-10-03T20:49:18.726723+00:00 (git `c669e1e1080b873361f0211b01e85f4d14f2cfd5`, template set `v3`).
+
+| Metric | mock before | mock after | ollama before | ollama after |
+|---|---|---|---|---|
+| **Held-out v2, FRESH (15 bugs): generated / gold / union** | n/a (no v2 before) | 2/15 / 5/15 / 5/15 | n/a (no v2 before) | 2/15 / 5/15 / 5/15 |
+| Held-out v1, SEEN (12 bugs): generated / gold / union | 3/12 / 3/12 / 5/12 | 10/12 / 3/12 / 11/12 | 3/12 / 3/12 / 5/12 | 5/12 / 3/12 / 6/12 |
+| In-sample (26 bugs): generated / gold / union | 25/26 / 24/26 / 26/26 | 25/26 / 24/26 / 26/26 | 21/26 / 24/26 / 26/26 | 19/26 / 24/26 / 26/26 |
+| **Natural v2, FRESH (test2, n=16): parsed exact** | n/a (no v2 before) | 0/16 | n/a (no v2 before) | 4/16 |
+| Natural v2, FRESH: parsed P / R / F1 | n/a (no v2 before) | 1.000 / 0.225 / 0.367 | n/a (no v2 before) | 0.565 / 0.796 / 0.661 |
+| Natural v2, FRESH: exercised F1 | n/a (no v2 before) | 0.450 | n/a (no v2 before) | 0.583 |
+| Natural v2, FRESH: category recall (micro) | n/a (no v2 before) | 48.0% | n/a (no v2 before) | 74.0% |
+| Natural v2, FRESH: precondition recall (micro) | n/a (no v2 before) | 55.6% | n/a (no v2 before) | 77.8% |
+| Natural v1 test split, SEEN (n=12): parsed exact | 5/12 | 5/12 | 4/12 | 3/12 |
+| Natural v1 test split, SEEN: parsed P / R / F1 | 0.933 / 0.560 / 0.700 | 0.933 / 0.560 / 0.700 | 0.512 / 0.880 / 0.647 | 0.500 / 0.840 / 0.627 |
+| Natural v1 test split, SEEN: exercised F1 | 0.449 | 0.425 | 0.435 | 0.416 |
+| Natural v1 test split, SEEN: category recall (micro) | 67.9% | 67.9% | 64.3% | 82.1% |
+| Natural v1 test split, SEEN: precondition recall (micro) | 80.0% | 80.0% | 73.3% | 73.3% |
+| Parsed precision / false positives, v1 test split (SEEN) | 0.933 / 1 FP | 0.933 / 1 FP | 0.512 / 21 FP | 0.500 / 21 FP |
+| **Parsed precision / false positives, v2 (FRESH)** | n/a (no v2 before) | 1.000 / 0 FP | n/a (no v2 before) | 0.565 / 30 FP |
+| Rejected planner choices (15 seed + 20 natural v1) | 0 | 0 | 10 | 15 |
+| Rejected planner choices, natural v2 (16, FRESH) | n/a (no v2 before) | 0 | n/a (no v2 before) | 12 |
+| Latency per requirement, mean / p95 (35 requirements) | 0.25 s / 0.45 s | 0.27 s / 0.46 s | 30.79 s / 43.41 s | 21.37 s / 28.52 s |
+| Explain LLM calls per requirement, mean (min-max) | 9.80 (0-18) (derived from tests kept) | 0.89 (0-1) | 4.51 (0-8) (derived from tests kept) | 1.00 (1-1) |
+| SWS disagreements open | 9 | 5 | 9 | 5 |
+
+SWS disagreements: counted from `docs/SWS_DISAGREEMENTS.md`: open D1, D3, D4, D8, D9 (5), FIXED D2, D5, D6, D7 (4); baseline open D1, D2, D3, D4, D5, D6, D7, D8, D9 (9).
+
+**Comparability.** (1) The v2 bug set (15) and the natural-v2 set (16) are different from the v1 sets, so v2 rows are not 'after' values of the v1 rows; there was no v2 'before'. (2) The v1 numbers are SEEN: the Part C templates were designed against the v1 held-out misses, so v1 'after' is not independent evidence; only the v2 rows are fresh. (3) mock is deterministic: its numbers repeat exactly. (4) ollama output varies from run to run (about +-0.05 F1 on parsed targets), so small ollama differences are noise; see the noise-check section of the report. (5) Latency and explain calls are wall-clock / call counts over the 35 seed + natural-v1 requirements in both reports, so they are comparable; the baseline's explain calls are derived from tests kept (explain was one call per kept test).

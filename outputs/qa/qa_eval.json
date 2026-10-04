@@ -1,6 +1,6 @@
 {
-  "git_hash": "3a8c4e36c4244b45fa0b300aa683d7cf2519eec4+dirty",
-  "timestamp": "2026-10-04 12:30:06",
+  "git_hash": "9e66f7a4d7ac4ee7a35a3edd8eb40683c5162f32",
+  "timestamp": "2026-10-04 13:02:45",
   "modes": [
     "mock",
     "ollama"
@@ -1049,7 +1049,7 @@
             "fallback_events": [],
             "llm_mode": "mock"
           },
-          "seconds": 0.01,
+          "seconds": 0.0,
           "gold_chunk_ids": [
             "standard:nrc-order",
             "standard:uds-reference-notes-own-words-summary"
@@ -1084,10 +1084,10 @@
       "correct_not_found_rate": 0.75,
       "correct_not_found_n": 3,
       "false_not_found": 0,
-      "fallback_events": 12,
+      "fallback_events": 13,
       "mode": "ollama",
       "llm": "ollama",
-      "total_seconds": 82.9,
+      "total_seconds": 88.7,
       "rows": [
         {
           "id": "QA-001",
@@ -1117,7 +1117,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 3.37,
+          "seconds": 8.51,
           "gold_chunk_ids": [
             "ecu:did:VIN"
           ],
@@ -1159,7 +1159,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 3.4,
+          "seconds": 3.38,
           "gold_chunk_ids": [
             "ecu:did:interior_lighting_brightness_pct"
           ],
@@ -1201,7 +1201,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 3.63,
+          "seconds": 3.71,
           "gold_chunk_ids": [
             "ecu:did:coding_variant_id"
           ],
@@ -1243,7 +1243,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 3.3,
+          "seconds": 3.37,
           "gold_chunk_ids": [
             "ecu:did:factory_reset_flag"
           ],
@@ -1285,7 +1285,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 3.22,
+          "seconds": 3.34,
           "gold_chunk_ids": [
             "ecu:did:manufacturer_part_number"
           ],
@@ -1347,7 +1347,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 3.36,
+          "seconds": 3.57,
           "gold_chunk_ids": [
             "ecu:did:driver_door_lock_state"
           ],
@@ -1389,7 +1389,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 3.4,
+          "seconds": 3.65,
           "gold_chunk_ids": [
             "ecu:did:wiper_sensitivity_level"
           ],
@@ -1429,7 +1429,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 3.57,
+          "seconds": 3.67,
           "gold_chunk_ids": [
             "ecu:routine:nvm_factory_restore"
           ],
@@ -1454,7 +1454,7 @@
           ],
           "notes": "name phrasing",
           "response": {
-            "answer": "Session: extended, Security Level: 0x01 are needed to start the lighting self test routine.",
+            "answer": "Session and security level needed to start the lighting self test routine are extended session and security level 0x01.",
             "citations": [
               {
                 "chunk_id": "ecu:routine:lighting_self_test",
@@ -1469,7 +1469,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 3.21,
+          "seconds": 3.4,
           "gold_chunk_ids": [
             "ecu:routine:lighting_self_test"
           ],
@@ -1509,7 +1509,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 3.37,
+          "seconds": 3.45,
           "gold_chunk_ids": [
             "standard:nrcs"
           ],
@@ -1540,7 +1540,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 0.0,
+          "seconds": 0.01,
           "correct_not_found": true
         },
         {
@@ -1588,7 +1588,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 4.33,
+          "seconds": 4.47,
           "gold_chunk_ids": [
             "standard:nrcs",
             "standard:svc-0x2e"
@@ -1632,7 +1632,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 3.32,
+          "seconds": 3.37,
           "gold_chunk_ids": [
             "standard:nrcs"
           ],
@@ -1684,7 +1684,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 3.3,
+          "seconds": 3.47,
           "gold_chunk_ids": [
             "ecu:session:default",
             "ecu:session:extended",
@@ -1731,7 +1731,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 3.26,
+          "seconds": 3.35,
           "gold_chunk_ids": [
             "ecu:session:default",
             "ecu:session:extended",
@@ -1775,7 +1775,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 3.36,
+          "seconds": 3.5,
           "gold_chunk_ids": [
             "ecu:security_level:extended_diag",
             "ecu:security_level:programming"
@@ -1799,24 +1799,31 @@
           "gold_source_ids": [],
           "notes": "algorithm not defined; notes only say a synthetic algorithm exists",
           "response": {
-            "answer": "The seed length is 4 bytes.",
+            "answer": "Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function 0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in sessions ['0x03']. - Otherwise compare the key with `compute_key(seed, level)` from `uds_assistant.protocol.security`.",
             "citations": [
               {
                 "chunk_id": "ecu:security_level:extended_diag",
                 "layer": "ecu",
                 "source": "data/bcm_spec.yaml",
                 "quote": "Security level 0x01 extended_diag: seed sub-function 0x01, key sub-function 0x02, seed length 4 bytes, max attempts 3, lockout delay 10000ms, allowed in sessions ['0x03']."
+              },
+              {
+                "chunk_id": "project:0x27-securityaccess",
+                "layer": "project",
+                "source": "docs/behaviour_contract.md",
+                "quote": "- Otherwise compare the key with `compute_key(seed, level)` from `uds_assistant.protocol.security`."
               }
             ],
             "confidence": "low",
             "confidence_reason": "retrieval only; weak match (best sentence covers 67% of the question terms); LLM phrasing was rejected and the template answer used",
             "status": "answered",
             "fallback_events": [
-              "claim dropped: only 50% of its terms occur in its quote"
+              "claim dropped: only 50% of its terms occur in its quote",
+              "LLM phrasing produced no verified claim, template answer used"
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 5.26,
+          "seconds": 4.1,
           "correct_not_found": false
         },
         {
@@ -1852,7 +1859,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 3.39,
+          "seconds": 3.28,
           "gold_chunk_ids": [
             "ecu:session:default",
             "ecu:session:extended",
@@ -1899,7 +1906,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 3.23,
+          "seconds": 3.35,
           "gold_chunk_ids": [
             "ecu:did:vehicle_speed_kph"
           ],
@@ -1952,7 +1959,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 5.47,
+          "seconds": 5.54,
           "gold_chunk_ids": [
             "standard:nrcs",
             "standard:svc-0x22"
@@ -1996,7 +2003,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 3.91,
+          "seconds": 3.76,
           "gold_chunk_ids": [
             "standard:timing"
           ],
@@ -2039,7 +2046,7 @@
             ],
             "llm_mode": "ollama"
           },
-          "seconds": 5.42,
+          "seconds": 5.51,
           "gold_chunk_ids": [
             "standard:nrc-order",
             "standard:uds-reference-notes-own-words-summary"
@@ -2114,7 +2121,7 @@
             "fallback_events": [],
             "llm_mode": "ollama"
           },
-          "seconds": 4.83,
+          "seconds": 4.9,
           "gold_chunk_ids": [
             "standard:nrc-order",
             "standard:uds-reference-notes-own-words-summary"

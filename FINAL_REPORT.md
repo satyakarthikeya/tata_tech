@@ -10,8 +10,10 @@ evaluation) and the Phase 9 wrap-up. Eval numbers are copied exactly from
 fresh `python -m pytest -q` run (Python 3.13.6, Windows, git repo at
 `tata_tech`); none are estimated or rounded up.
 
+**Run labels.** Unless a heading or bullet names another run, every evaluation number in this report is from the **Main eval run: 2026-10-04, git `1f0c293`** (recorded with uncommitted phase files; generator bytes verified unchanged since, DECISIONS E32/E33). The diagnostic Q&A run (2026-10-04, git `9e66f7a`) and the tool-side timing run (2026-10-04, git `8357ec0`) are reported only in `docs/RESULTS.md` and `outputs/eval_report.md`. Earlier-run tables (Part C and Part D before/after) are under **History** at the end and are historical. `docs/RESULTS.md` is the one-page summary; this report must not contradict it.
+
 **Headline (fresh v3 data: written blind after the Part D freeze, nothing tuned
-on it).**
+on it; Main eval run 2026-10-04, git `1f0c293`).**
 
 - **Held-out v3 bug detection by the system's full output (requirement-driven
   tests plus the conformance sweep) is 10/15 (66.7%) with mock and 9/15
@@ -179,6 +181,8 @@ on it).**
 
 ## Test counts
 
+_Run: Part D documentation step, 2026-10-04 (the commit is recorded in `PROGRESS.md` D5b/D6; later Part E counts are in `PROGRESS.md`)._
+
 Full suite (default, model tests skipped): `python -m pytest -q` → **1331 passed, 14 skipped, 1 failed in 888.33s (0:14:48)**. The failure, `tests/export/test_export.py::test_gold_export_runs_and_passes`, was an environment error: the child pytest process hit `FileNotFoundError` on a temp file of the editor host (`agent-host-git-diff-…` in the user temp directory) while collecting. Re-running `python -m pytest -q tests/export` alone gave **6 passed in 30.18s**. The 14 skips are the `needs_model` tests plus 1 UI test that only applies to an older report version. 1346 tests are collected in total.
 `python -m ruff check .` → **All checks passed!**
 
@@ -216,10 +220,9 @@ From `outputs/eval_report.md` (generated 2026-10-04T08:15:23Z, git `1f0c293`,
 report version 5, template set `v3`, 27 templates plus the conformance sweep,
 Bm25Retriever, LangGraph engine; ollama = `qwen2.5:3b-instruct-q4_K_M`, num_ctx
 4096, temperature 0, keep_alive 10m). Both columns come from one invocation on
-the same inputs. A fuller walkthrough with the before/after table, the noise
-check and the missed bug list is in `docs/RESULTS.md`.
+the same inputs. The one-page summary (with the Q&A, timing and success-metric tables, each with its own run) is `docs/RESULTS.md`; the before/after table is under History at the end of this report.
 
-### Headline table
+### Headline table (Main eval run 2026-10-04, git `1f0c293`)
 
 | Metric | mock | ollama |
 |---|---|---|
@@ -244,7 +247,7 @@ check and the missed bug list is in `docs/RESULTS.md`.
 | **SEEN** Natural v1 test split (n=12): parsed exact; P/R/F1 | 5/12; 0.933/0.560/0.700 | 5/12; 0.690/0.800/0.741 |
 | **In-sample (tuned on)** 26 bugs: req-driven / sweep / full / gold | 25 / 26 / 26 / 24 | 21 / 26 / 26 / 24 |
 
-### Noise check (natural v3, ollama, 3 runs; mean and min-max)
+### Noise check (natural v3, ollama, 3 runs; mean and min-max; Main eval run 2026-10-04, git `1f0c293`)
 
 | Metric | run 1 | mean (min-max) |
 |---|---|---|
@@ -257,29 +260,9 @@ check and the missed bug list is in `docs/RESULTS.md`.
 
 The mock is deterministic; a second mock run was identical.
 
-### Before / after Part D (`outputs/partD/before_after.md`)
+The Part D before/after table is **historical** and lives under **History** at the end of this report.
 
-| Metric | mock before | mock after | ollama before | ollama after |
-|---|---|---|---|---|
-| **Held-out v3, FRESH: full output** | n/a | 10/15 | n/a | 9/15 |
-| Held-out v3, FRESH: req-driven / sweep / gold | n/a | 4 / 9 / 3 | n/a | 2 / 9 / 3 |
-| **Natural v3, FRESH: parsed P / R / F1** | n/a | 0.857 / 0.267 / 0.407 | n/a | 0.596 / 0.622 / 0.609 |
-| Held-out v2, SEEN: req-driven | 2/15 | 2/15 | 2/15 | 2/15 |
-| Held-out v2, SEEN: full output | 2/15 | 9/15 | 2/15 | 9/15 |
-| Natural v2, SEEN: parsed P / R / F1 | 1.000 / 0.225 / 0.367 | 1.000 / 0.225 / 0.367 | 0.565 / 0.796 / 0.661 | 0.808 / 0.775 / 0.792 |
-| Parsed FP, natural v2 (SEEN) | none | none | service 25, did 5 | service 6, did 3 |
-| Parsed FP, natural v1 test split (SEEN) | service 1 | service 1 | service 17, did 4 | service 5, did 4 |
-| Parsed FP, natural v3 (FRESH) | n/a | service 2 | n/a | service 15, did 4 |
-| Rejected planner choices (35 old requirements) | 0 | 0 | 15 | 0 |
-| Rejected planner choices, natural v2 (SEEN) | 0 | 0 | 12 | 0 |
-| Latency per requirement, mean / p95 (35) | 0.27 s / 0.46 s | 0.38 s / 0.63 s | 21.37 s / 28.52 s | 21.85 s / 30.41 s |
-| Explain calls per requirement, mean | 0.89 | 0.89 | 1.00 | 0.97 |
-| SWS disagreements open | 5 | 5 | 5 | 5 |
-
-The v3 rows have no "before". v1 and v2 "after" numbers are SEEN: Part D was
-designed after their results were known.
-
-### Held-out v3 detail
+### Held-out v3 detail (Main eval run 2026-10-04, git `1f0c293`)
 
 - **Missed by the full output (5 with mock, 6 with ollama).** No test applies
   the stimulus: `session_switch_keeps_pending_seed`,
@@ -292,7 +275,7 @@ designed after their results were known.
   `write_stores_value_before_range_rejection`, `s3_timeout_clears_dtc_status`).
 - Invalid generated tests: 0 in every suite.
 
-### Interpretation (condensed from `outputs/partD/interpretation.md`)
+### Interpretation (condensed from `outputs/partD/interpretation.md`; Main eval run 2026-10-04, git `1f0c293`)
 
 - **Better:** fresh bug detection (full output 9-10/15 against 2/15 in Part C on
   a different set), almost entirely from the sweep; rejected planner choices
@@ -308,7 +291,7 @@ designed after their results were known.
 - **Provenance:** 613/613 mock, 552/552 ollama, 1200/1200 sweep; every Part D
   freeze hash matches and is clean.
 
-### Retrieval: BM25 vs Chroma (19 of 20 natural requirements scored)
+### Retrieval: BM25 vs Chroma (19 of 20 natural requirements scored; Main eval run 2026-10-04, git `1f0c293`)
 
 Re-run in this evaluation; the numbers are identical to Part C's.
 
@@ -324,13 +307,15 @@ Re-run in this evaluation; the numbers are identical to Part C's.
 Citation validity over the top 3 hits is 100.0% for both. Neither backend is
 clearly better; the default stays BM25.
 
-### Appendix: self-consistency (circular by construction)
+### Appendix: self-consistency (circular by construction; Main eval run 2026-10-04, git `1f0c293`)
 
 Expected-response accuracy vs the oracle is 100% by construction: the expected
 bytes are produced by the oracle itself, so this is not an independent accuracy
 measure and is not a headline metric.
 
 ## Part A changes
+
+_Historical: figures here come from the Part A runs (see `PROGRESS.md` for each run's hash), not from the Main eval._
 
 Part A (A1-A6) was done after the Phase 9 wrap-up to make the evaluation less
 circular. Templates and gold tests were not changed after the held-out results
@@ -366,6 +351,8 @@ time).
   set; none was found (`docs/RECONCILIATION.md`), so nothing was ported.
 
 ## Part B changes
+
+_Historical: figures here come from the Part B runs (see `PROGRESS.md` for each run's hash), not from the Main eval._
 
 Historical: the figures quoted in this section (for example 343/343 and 158/158
 provenance, 10 rejected choices, 19.2 minutes) are the Part B run on template
@@ -457,6 +444,8 @@ sets.
 
 ## Part C changes
 
+_Historical: baseline git `38aa719` (2026-10-03T09:37Z) and final report git `c669e1e` (2026-10-03T20:49Z); not the Main eval._
+
 Part C (C0-C6) fixed the problems Part B found, then measured on fresh data
 whether the fixes worked. Order: change, freeze, write blind data, measure.
 Details are in `PROGRESS.md` (Part C) and `DECISIONS.md` (`[PC-…]` to
@@ -542,6 +531,8 @@ Details are in `PROGRESS.md` (Part C) and `DECISIONS.md` (`[PC-…]` to
   `tests/` or `scripts/` was changed in this documentation step (C6b).
 
 ## Part D changes
+
+_Figures: Main eval run 2026-10-04, git `1f0c293` unless a bullet names another run._
 
 Part D (D0-D6) went after the three Part C weaknesses: 2/15 fresh bug
 detection, poor parsed precision (false positives mostly services), and rising
@@ -635,6 +626,8 @@ before any v3 result existed. Details are in `PROGRESS.md` (Part D) and
 
 ## Known limitations
 
+_Figures: Main eval run 2026-10-04, git `1f0c293` unless a bullet names another run._
+
 - **Detection on fresh bugs is 9-10/15 with the sweep and 2-4/15 without it.**
   The model does not change what can be found; both modes reach 9/15 through
   the sweep. Five bugs are missed in both modes because no test applies the
@@ -713,3 +706,29 @@ before any v3 result existed. Details are in `PROGRESS.md` (Part D) and
    retrieval step itself was compared so far).
 7. Justify or trim the 27-template design size against the original 8-12
    target.
+
+## History
+
+Historical tables from earlier runs, kept for the record. They are not the current headline; the current results are in `docs/RESULTS.md` and the first sections of this report. Part C's table is in `outputs/partC/before_after.md` (before = git `38aa719`, 2026-10-03T09:37Z; after = git `c669e1e`, 2026-10-03T20:49Z).
+
+### Before / after Part D (**historical**; before = Part C final report, git `942f438`, 2026-10-03T20:49Z; after = Main eval, 2026-10-04, git `1f0c293`; source `outputs/partD/before_after.md`)
+
+| Metric | mock before | mock after | ollama before | ollama after |
+|---|---|---|---|---|
+| **Held-out v3, FRESH: full output** | n/a | 10/15 | n/a | 9/15 |
+| Held-out v3, FRESH: req-driven / sweep / gold | n/a | 4 / 9 / 3 | n/a | 2 / 9 / 3 |
+| **Natural v3, FRESH: parsed P / R / F1** | n/a | 0.857 / 0.267 / 0.407 | n/a | 0.596 / 0.622 / 0.609 |
+| Held-out v2, SEEN: req-driven | 2/15 | 2/15 | 2/15 | 2/15 |
+| Held-out v2, SEEN: full output | 2/15 | 9/15 | 2/15 | 9/15 |
+| Natural v2, SEEN: parsed P / R / F1 | 1.000 / 0.225 / 0.367 | 1.000 / 0.225 / 0.367 | 0.565 / 0.796 / 0.661 | 0.808 / 0.775 / 0.792 |
+| Parsed FP, natural v2 (SEEN) | none | none | service 25, did 5 | service 6, did 3 |
+| Parsed FP, natural v1 test split (SEEN) | service 1 | service 1 | service 17, did 4 | service 5, did 4 |
+| Parsed FP, natural v3 (FRESH) | n/a | service 2 | n/a | service 15, did 4 |
+| Rejected planner choices (35 old requirements) | 0 | 0 | 15 | 0 |
+| Rejected planner choices, natural v2 (SEEN) | 0 | 0 | 12 | 0 |
+| Latency per requirement, mean / p95 (35) | 0.27 s / 0.46 s | 0.38 s / 0.63 s | 21.37 s / 28.52 s | 21.85 s / 30.41 s |
+| Explain calls per requirement, mean | 0.89 | 0.89 | 1.00 | 0.97 |
+| SWS disagreements open | 5 | 5 | 5 | 5 |
+
+The v3 rows have no "before". v1 and v2 "after" numbers are SEEN: Part D was
+designed after their results were known.

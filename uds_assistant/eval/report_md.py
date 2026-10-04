@@ -12,6 +12,7 @@ from typing import Any
 from uds_assistant.eval.breakdown import REJECTION_LABELS, REJECTION_REASONS
 from uds_assistant.eval.metrics import CATEGORIES
 from uds_assistant.eval.retrieval_compare import render_section as _retrieval_section
+from uds_assistant.eval.run_provenance import run_tag
 
 MODES = ("mock", "ollama")
 HELDOUT_V3_NOTE = (
@@ -1544,29 +1545,175 @@ def _part_d(report: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _tag(lines: list[str], tag: str | None, only_first: bool = False) -> list[str]:
+    """Append ``tag`` to the section headers (``#`` and ``##`` lines) of ``lines``."""
+    if not tag:
+        return lines
+    out: list[str] = []
+    done = False
+    for line in lines:
+        if line.startswith(("# ", "## ")) and not (only_first and done):
+            line = f"{line} — {tag}"
+            done = True
+        out.append(line)
+    return out
+
+
+def _provenance_block(report: dict[str, Any]) -> list[str]:
+    """Top-of-report table: every data source with its own date and git hash."""
+    prov = report.get("provenance")
+    if not prov:
+        return []
+
+    def row(name: str, what: str, ref: dict[str, Any] | None) -> list[Any]:
+        if not ref:
+            return [name, what, "not available", "-", "-"]
+        dirty = ref.get("dirty")
+        return [name, what, ref.get("timestamp") or "n/a", f"`{ref.get('git_short')}`",
+                "yes" if dirty else ("no" if dirty is False else "not recorded")]
+
+    rows = [
+        row("Main evaluation", "every section not listed below (bug detection, requirement "
+            "understanding, correctness, coverage, noise check, retrieval)", prov.get("main_eval")),
+        row("Diagnostic Q&A", "section 'Diagnostic Q&A'", prov.get("qa")),
+        row("Tool-side timing", "section 'Tool-side timing'", prov.get("timing")),
+    ]
+    lines = ["## Run provenance", "",
+             ("Each data source below was produced by its own run; every section header states "
+              "which one. Numbers are never mixed across runs inside a section. Historical "
+              "before/after tables appear only in the final History section."), ""]
+    lines += _table(["Data source", "Used for", "Run (UTC)", "Git hash", "Uncommitted changes"], rows)
+    hist = prov.get("history", {})
+    if hist:
+        lines.append("")
+        for key, h in hist.items():
+            lines.append(f"- History / {key.replace('_', ' ')} (historical): runs "
+                         + ", ".join(f"`{x}`" for x in h["run_hashes"])
+                         + f" ({', '.join(h['timestamps'])})")
+    lines.append("")
+    return lines
+
+
+def _qa_section(report: dict[str, Any]) -> list[str]:
+    qa = report.get("qa")
+    if not qa:
+        return []
+    modes = list(qa["modes"])
+    lines = [f"## Diagnostic Q&A (blind set `data/qa_eval.csv`) — {run_tag(qa['run'])}", ""]
+    first = qa["modes"][modes[0]]
+    lines += [(f"{first['n_questions']} questions ({first['n_answerable']} answerable, "
+               f"{first['n_unanswerable']} unanswerable). This is its own run, separate from the "
+               "main evaluation; per-question rows are in `outputs/qa/qa_eval.md`."), ""]
+
+    def cell(m: str, key: str, n_key: str, den_key: str) -> str:
+        r = qa["modes"][m]
+        return f"{_pct(r[key])} ({r[n_key]}/{r[den_key]})"
+
+    def prec(m: str) -> str:
+        a, b = qa["modes"][m]["citation_precision_counts"]
+        return f"{_pct(qa['modes'][m]['citation_precision'])} ({a}/{b})"
+
+    rows = [
+        ["answer accuracy (answerable)",
+         *[cell(m, "answer_accuracy", "answer_accuracy_n", "n_answerable") for m in modes]],
+        ["citation correctness",
+         *[cell(m, "citation_correctness", "citation_correctness_n", "n_answerable")
+           for m in modes]],
+        ["citation precision", *[prec(m) for m in modes]],
+        ["correct not-found (unanswerable)",
+         *[cell(m, "correct_not_found_rate", "correct_not_found_n", "n_unanswerable")
+           for m in modes]],
+        ["false not-found (answerable)", *[qa["modes"][m]["false_not_found"] for m in modes]],
+        ["LLM fallback events", *[qa["modes"][m]["fallback_events"] for m in modes]],
+        ["seconds (all questions)", *[qa["modes"][m]["total_seconds"] for m in modes]],
+    ]
+    lines += _table(["Metric", *modes], rows)
+    lines.append("")
+    return lines
+
+
+def _timing_section(report: dict[str, Any]) -> list[str]:
+    tm = report.get("timing")
+    if not tm:
+        return []
+    reqs = tm["requirements"] or []
+    lines = [f"## Tool-side timing (generation time per requirement) — {run_tag(tm['run'])}", "",
+             (f"{len(reqs)} requirements ({', '.join(reqs)}), {tm['repeats']} repeats each, "
+              "in-process wall clock from `scripts/time_generation.py`. This is tool compute time "
+              "only; the manual comparison in `docs/TEST_DESIGN_TIME.md` is **pending owner "
+              "measurement**. The first mock repeat includes warm-up."), ""]
+    modes = list(tm["modes"])
+    rows = []
+    for rq in reqs:
+        cells: list[Any] = [rq]
+        for m in modes:
+            r = tm["modes"][m]["per_requirement"].get(rq)
+            cells.append("n/a" if not r else f"{r['mean_s']} s ({r['min_s']}–{r['max_s']}), "
+                         f"{r['tests_generated']} tests")
+        rows.append(cells)
+    rows.append(["**mean of requirement means**",
+                 *[f"{tm['modes'][m]['mean_of_requirement_means_s']} s" for m in modes]])
+    lines += _table(["Requirement (mean, min–max over repeats)", *modes], rows)
+    lines.append("")
+    return lines
+
+
+def _history_section(report: dict[str, Any]) -> list[str]:
+    hist = report.get("history")
+    lines = ["## History", ""]
+    if not hist:
+        return lines + ["_No historical tables found next to this report._", ""]
+    lines += [("**Historical, not current results.** These before/after tables compare earlier runs "
+               "with the Part C or Part D final reports. They are kept for the record, were "
+               "produced by the runs named in each heading, and are not the headline of this "
+               "report (see the sections above, each labelled with its own run)."), ""]
+    for h in hist.values():
+        runs = ", ".join(f"`{x}`" for x in h["run_hashes"]) or "n/a"
+        stamps = ", ".join(h["timestamps"]) or "n/a"
+        lines += [f"### {h['title']} — **historical** — runs {runs} ({stamps})", "",
+                  f"_Source: `{h['source']}`. Headings below are demoted; content is verbatim._", ""]
+        body = h["text"].splitlines()
+        if body and body[0].startswith("# "):
+            body = body[1:]
+        lines += [("##" + b) if b.startswith("#") else b for b in body]
+        lines.append("")
+    return lines
+
+
 def render_markdown(report: dict[str, Any]) -> str:
-    """Return the Markdown report text."""
-    lines = _header(report)
-    lines += _headline(report)
-    lines += _part_d(report)
-    lines += _interpretation(report)
-    lines += _noise_section(report)
-    lines += _side_by_side(report)
+    """Return the Markdown report text.
+
+    Order: title and run provenance, the main-run sections (each header carries the main run's
+    date and git hash), the Diagnostic Q&A and Tool-side timing sections (own runs), the long
+    per-mode details, and last the History section with the historical before/after tables.
+    """
+    prov = report.get("provenance") or {}
+    tag = run_tag(prov["main_eval"]) if prov.get("main_eval") else None
+    head = _header(report)
+    lines = head[:1] + [""] + _provenance_block(report) + head[1:]
+    lines += _tag(_headline(report), tag)
+    lines += _tag(_part_d(report), tag)
+    lines += _tag(_interpretation(report), tag, only_first=True)
+    lines += _tag(_noise_section(report), tag)
+    lines += _qa_section(report) + _timing_section(report)
+    lines += _tag(_side_by_side(report), tag)
     if "retrieval_comparison" in report:
-        lines += _retrieval_section(report["retrieval_comparison"])
-    lines += _checks(report)
-    lines += _freeze(report)
+        lines += _tag(_retrieval_section(report["retrieval_comparison"]), tag)
+    lines += _tag(_checks(report), tag)
+    lines += _tag(_freeze(report), tag)
     for mode in _completed(report):
-        lines += _mode_details(report, mode)
-    lines += ["# Shared", ""]
-    lines += ["### Precondition mapping (how 'established' is derived from test steps)", ""]
-    lines += [f"- `{k}`: {v}" for k, v in report.get("precondition_mapping", {}).items()]
-    lines.append("")
-    lines += _exports(report)
-    lines += ["## Runtime", ""]
-    lines += _table(["Phase", "seconds"], [[k, v] for k, v in report["runtime_seconds"].items()])
-    lines += ["", "## Metric definitions", ""]
+        lines += _tag(_mode_details(report, mode), tag)
+    shared = ["# Shared", "",
+              "### Precondition mapping (how 'established' is derived from test steps)", ""]
+    shared += [f"- `{k}`: {v}" for k, v in report.get("precondition_mapping", {}).items()]
+    shared.append("")
+    shared += _exports(report)
+    shared += ["## Runtime", ""]
+    shared += _table(["Phase", "seconds"], [[k, v] for k, v in report["runtime_seconds"].items()])
+    shared += ["", "## Metric definitions", ""]
     for key, text in report["metric_definitions"].items():
-        lines.append(f"- **{key}**: {text}")
-    lines.append("")
+        shared.append(f"- **{key}**: {text}")
+    shared.append("")
+    lines += _tag(shared, tag)
+    lines += _history_section(report)
     return "\n".join(lines)
