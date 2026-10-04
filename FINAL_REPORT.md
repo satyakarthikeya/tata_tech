@@ -628,6 +628,19 @@ before any v3 result existed. Details are in `PROGRESS.md` (Part D) and
 
 _Figures: Main eval run 2026-10-04, git `1f0c293` unless a bullet names another run._
 
+- **Door-lock sanity check: the natural requirement did not produce the intended pair of tests (E4, 2026-10-04).**
+  For "The door lock status must only be writable in extended session after
+  security unlock." neither mode produced a negative write (expect 0x33, no
+  unlock) together with a positive write after unlock. Mock: 5 tests, none
+  writes a door-lock DID (it wrote DID 0x0100, interior lighting brightness,
+  in the default session, and tested SecurityAccess subfunction errors).
+  Ollama: 5 tests; one writes the read-only door-lock DID 0x0110 after
+  switching to the programming session, with no unlock, and expects 0x31; one
+  writes DID 0x0160 (coding variant id) and expects 0x33; none writes a
+  door-lock DID after a successful unlock. In the
+  synthetic spec the door-lock DIDs 0x0110/0x0111 are read-only (no write
+  session), so a positive write after unlock cannot exist for them. Details:
+  PROGRESS.md "Door-lock sanity check". Not tuned on.
 - **Detection on fresh bugs is 9-10/15 with the sweep and 2-4/15 without it.**
   The model does not change what can be found; both modes reach 9/15 through
   the sweep. Five bugs are missed in both modes because no test applies the

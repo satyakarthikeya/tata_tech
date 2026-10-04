@@ -960,3 +960,33 @@ Confidence indicators: shared rule `uds_assistant/agent/confidence.py` (rule tab
 - **Docs:** `docs/RESULTS.md` rewritten as one page (each section with run date + hash, five success metrics defined from existing data); `FINAL_REPORT.md` labelled with runs, Part D before/after moved to a final History section.
 - **Not changed:** no re-run of the v3 evaluation (main eval stays 2026-10-04, `1f0c293`); `uds_assistant/ui/` untouched.
 - **Tests:** `tests/eval/test_run_provenance.py` (7 tests: provenance first, every header labelled, History last and historical, Q&A/timing match their json, JSON keys, missing inputs omitted). Ruff clean; full pytest 1443 passed, 15 skipped.
+
+## E4 — done (2026-10-04)
+
+- **What:** `uds_assistant/ui/streamlit_app.py` rebuilt as five tabs (Ask, Generate & Review, Run on Simulator, Export, Results) plus a sidebar (LLM mode, retriever, the governance banner once). Logic moved to `uds_assistant/ui/`: `decode.py` (step decoder, protocol constants only), `state.py` (approve/reject/comment through the existing store API), `bugs.py`, `examples.py`, `env.py` (probes, paths), `results_cards.py` (six cards), `results_detail.py` (expander tables, mostly the old Results code). No generation, planner or backend code changed.
+- **Ollama / Chroma disabled:** `st.radio` cannot disable one option, so an unavailable backend is removed from the radio, the radio is disabled and a sidebar warning gives the reason (reachability: cached short-timeout `GET /api/tags`; Chroma: `chroma_available`).
+- **Tests:** `tests/ui/test_decode.py` (decoder), `tests/ui/test_tabs.py` (AppTest per tab: Ask answer + citations + not_found, Generate with example/table/decoded steps/chips, approve/reject/comment stored in a temp audit DB, Run clean / caught / not caught / scopes, Export buttons, Results cards + graceful degrade + mtime cache, sidebar Ollama/Chroma disabled), `tests/ui/test_tabs_model.py` (`needs_model`: natural requirement in ollama mode, then the v3 bug; passed with `RUN_MODEL_TESTS=1`). `tests/ui/test_streamlit_app.py` updated only where the structure changed (multiselect -> selectbox, new labels/columns, sidebar success boxes); assertions kept. Headless `streamlit run` started and answered `/_stcore/health` 200 after 10 s; killed.
+- **Demo bug (verified):** on the natural door-lock requirement the fresh v3 bug `session_response_p2_star_in_ms` is caught by both modes (mock 2 tests, ollama 3 tests, also through the UI by the model test). On the four example requirements, mock catches only `session_response_p2_star_in_ms` (REQ-001 7, REQ-005 15, REQ-010 7 tests) and `ecu_reset_resets_seed_counter` (1 test on REQ-005 and REQ-010); ollama catches only `session_response_p2_star_in_ms` (3 tests each).
+
+### Door-lock sanity check (not tuned on; run once per mode)
+
+Requirement: "The door lock status must only be writable in extended session after security unlock." (id REQ-DOOR, run via `run_pipeline`, BM25.) In the synthetic spec the door-lock DIDs 0x0110 and 0x0111 are read-only (`write_sessions: []`), so a positive write after unlock does not exist for them.
+
+Mock (llm=mock, 2.0 s, 5 tests, 0 dropped), steps as request -> expected:
+- `req_door__tpl_service_not_in_session_27_01` session: `2701 -> 7f277f`
+- `req_door__tpl_service_not_in_session_2e_01` session: `2e010000 -> 7f2e7f` (DID 0x0100 in the default session)
+- `req_door__tpl_unsupported_subfunction_27_02` negative: `1002 -> 5002003201f4`, `2707 -> 7f2712`
+- `req_door__tpl_unsupported_subfunction_27_03` negative: `1003 -> 5003003201f4`, `2707 -> 7f2712`
+- `req_door__tpl_nrc_priority_2e_01` negative: `2edead00 -> 7f2e7f`
+Parsed: services 0x27, 0x2E; no DID.
+
+Ollama (llm=ollama, 29.8 s, 5 tests, 0 dropped):
+- `req_door__tpl_write_readonly_0110` negative: `1002 -> 5002003201f4`, `2e011000 -> 7f2e31`, `220110 -> 62011001`
+- `req_door__tpl_read_did_positive_0110_03` positive: `1003 -> 5003003201f4`, `220110 -> 62011001`
+- `req_door__tpl_session_relock_03` security: `1002 -> 5002003201f4`, `2703 -> 67030b7ced5e`, `270420a92dba -> 6704`, `1002 -> 5002003201f4`, `2e01600000 -> 7f2e33`, `2703 -> 6703a8198afb`
+- `req_door__tpl_negative_suppress_10_03` negative: `1003 -> 5003003201f4`, `1087 -> 7f1012`
+- `req_door__tpl_read_badlen_0110_01` negative: `22 -> 7f2213`, `2201 -> 7f2213`, `22011000 -> 7f2213`, `220110 -> 62011001`
+Parsed: services 0x27, 0x2E, 0x10; DIDs 0x0110, 0x0111; session 0x03; level 0x01.
+
+**Result: neither mode produced both a negative write of the door-lock DID without security unlock expecting 0x33 and a positive write after unlock.** Mock never mentions a door-lock DID. Ollama parsed the right DIDs and wrote 0x0110 once, without unlock, expecting 0x31 (read-only DID, not 0x33); its relock test writes 0x0160 (coding variant), not a door-lock DID. A short limitation note is in FINAL_REPORT.md under "Known limitations".
+- **Full suite:** `python -m pytest -q`: 1479 passed, 16 skipped (14:34); ruff clean; tests/ui 56 passed + 1 skipped, plus 1 `needs_model` test passed.

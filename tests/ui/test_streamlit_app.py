@@ -119,25 +119,6 @@ def test_app_shows_headline_heldout_and_understanding() -> None:
 
 
 @pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
-def test_bug_multiselect_labels_in_sample_heldout_v1_and_v2() -> None:
-    """Run section needs generated tests, so seed session state directly."""
-    from streamlit.testing.v1 import AppTest
-
-    from uds_assistant.simulator import HELDOUT_BUG_IDS, HELDOUT_V2_BUG_IDS
-
-    at = AppTest.from_file(str(UI_FILE), default_timeout=60)
-    at.run()
-    at.button[0].click().run()  # "Generate tests" with the default requirement
-    assert not at.exception
-    ms = next(m for m in at.multiselect if "Inject bug" in m.label)
-    assert any(o.startswith("[in-sample]") for o in ms.options)
-    held = [o for o in ms.options if o.startswith("[held-out v1, seen]")]
-    assert len(held) == len(HELDOUT_BUG_IDS)
-    held_v2 = [o for o in ms.options if o.startswith("[held-out v2, fresh]")]
-    assert len(held_v2) == len(HELDOUT_V2_BUG_IDS)
-
-
-@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
 def test_app_tolerates_older_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A report without held-out / understanding / agreement keys must not crash the UI."""
     import json
@@ -436,7 +417,7 @@ def test_v3_report_shows_v2_headline_noise_before_after_freeze(
 def test_v3_freeze_mismatch_is_flagged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     at = _app(tmp_path, monkeypatch, _report(freeze_ok=False), BEFORE_AFTER)
     assert any("MISMATCH" in e.value for e in at.error)
-    assert not at.success
+    assert not any('MATCH' in x.value and 'MISMATCH' not in x.value for x in at.success)
     freeze = next(df.value for df in at.dataframe if "worktree clean" in df.value.columns)
     assert list(freeze["result"]) == ["MISMATCH"]
 
@@ -472,48 +453,80 @@ def test_v2_report_shows_v1_and_na_for_v2_rows(tmp_path: Path, monkeypatch: pyte
     assert any("did NOT beat" in i.value for i in at.info)
 
 
-def _generate_and_run(requirement: str, bug_prefix: str, bug_id: str):
+REQ_BRIGHTNESS = (
+    "Writing the interior lighting brightness DID (0x0100) shall require extended session "
+    "and security level 0x01."
+)
+
+
+def _generate(requirement: str = REQ_BRIGHTNESS):
+    """Fresh app with a generated suite (mock LLM); the audit DB is the per-test temp DB."""
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_file(str(UI_FILE), default_timeout=120)
     at.run()
-    at.text_area[0].set_value(requirement)
+    at.text_area(key="req_text").set_value(requirement)
     next(b for b in at.button if b.label == "Generate tests").click().run()
     assert not at.exception
-    clean = next(b for b in at.button if b.label == "Run suite on simulator")
-    clean.click().run()
+    return at
+
+
+def _run(at, label: str | None = None):
+    if label is not None:
+        at.selectbox(key="bug_choice").select(label)
+    at.radio(key="run_scope").set_value("all tests")
+    next(b for b in at.button if b.label == "Run on simulator").click().run()
     assert not at.exception
+    return at
+
+
+def _generate_and_run(requirement: str, bug_prefix: str, bug_id: str):
+    at = _run(_generate(requirement))
     clean_metric = next(m.value for m in at.metric if m.label == "Passed")
-    ms = next(m for m in at.multiselect if "Inject bug" in m.label)
-    label = next(o for o in ms.options if o.startswith(bug_prefix) and f" {bug_id} " in o)
-    ms.set_value([label])
-    next(b for b in at.button if b.label == "Run suite on simulator").click().run()
-    assert not at.exception
-    return at, clean_metric
+    label = next(
+        o
+        for o in at.selectbox(key="bug_choice").options
+        if o.startswith(bug_prefix) and f" {bug_id} " in o
+    )
+    return _run(at, label), clean_metric
+
+
+@pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
+def test_bug_selectbox_labels_in_sample_and_all_heldout_sets() -> None:
+    """The Run tab needs generated tests; the bug dropdown lists all four catalogs."""
+    from uds_assistant.simulator import HELDOUT_BUG_IDS, HELDOUT_V2_BUG_IDS, HELDOUT_V3_BUG_IDS
+
+    at = _generate(REQ_BRIGHTNESS)
+    sb = at.selectbox(key="bug_choice")
+    assert sb.options[0].startswith("no bug")
+    assert any(o.startswith("[in-sample]") for o in sb.options)
+    for prefix, ids in (
+        ("[held-out v1]", HELDOUT_BUG_IDS),
+        ("[held-out v2]", HELDOUT_V2_BUG_IDS),
+        ("[held-out v3, fresh]", HELDOUT_V3_BUG_IDS),
+    ):
+        assert len([o for o in sb.options if o.startswith(prefix)]) == len(ids), prefix
 
 
 @pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
 def test_ui_clean_run_then_in_sample_bug_shows_expected_vs_actual() -> None:
-    """The click-through of docs/UI_CHECKLIST.md steps 2-7 (mock LLM)."""
-    req = (
-        "Writing the interior lighting brightness DID (0x0100) shall require extended session "
-        "and security level 0x01."
-    )
-    at, clean = _generate_and_run(req, "[in-sample]", "write_ignores_value_range")
+    """The click-through of docs/UI_CHECKLIST.md (Generate, Run clean, Run with a bug), mock LLM."""
+    at, clean = _generate_and_run(REQ_BRIGHTNESS, "[in-sample]", "write_ignores_value_range")
     passed, total = clean.split("/")
     assert passed == total  # clean simulator: everything passes
     res = next(df.value for df in at.dataframe if "failure" in df.value.columns)
-    failed = res[~res["passed"]]
+    failed = res[res["result"] == "FAIL"]
     assert len(failed) >= 1
     assert "expected" in " ".join(failed["failure"]) and "got" in " ".join(failed["failure"])
-    assert any("human_reviewed" in b.label for b in at.button)
+    assert any(s.value.startswith("Bug caught by") for s in at.success)
+    assert any(b.label == "Approve" for b in at.button)
 
 
 @pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
 def test_ui_heldout_v2_bug_can_be_injected() -> None:
     at, clean = _generate_and_run(
         "The tester shall be able to read the VIN (DID 0xF190) in any diagnostic session.",
-        "[held-out v2, fresh]",
+        "[held-out v2]",
         "multi_did_read_dedups_repeats",
     )
     passed, total = clean.split("/")
@@ -523,33 +536,27 @@ def test_ui_heldout_v2_bug_can_be_injected() -> None:
 
 @pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
 def test_ui_shows_llm_backend_and_ollama_fallback_warning(monkeypatch: pytest.MonkeyPatch) -> None:
-    """LLM_MODE=ollama with an unreachable server (closed port, no real Ollama) falls back to mock
-    and the page says so, instead of only warning in the terminal."""
-    import streamlit as st
+    """The sidebar probe says Ollama is up but the pipeline's own probe fails (closed port): the
+    existing mock fallback is shown on the page as a warning instead of only in the terminal."""
     from streamlit.testing.v1 import AppTest
 
-    st.cache_resource.clear()
-    monkeypatch.setenv("LLM_MODE", "ollama")
+    from uds_assistant.ui import env
+
     monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")
-    try:
-        at = AppTest.from_file(str(UI_FILE), default_timeout=120)
-        at.run()
-        next(b for b in at.button if b.label == "Generate tests").click().run()
-        assert not at.exception
-        assert any("LLM backend used: mock" in c.value for c in at.caption)
-        assert any("falling back to the deterministic mock LLM" in w.value for w in at.warning)
-    finally:
-        st.cache_resource.clear()
+    monkeypatch.setattr(env, "ollama_status", lambda: (True, "Ollama reachable (patched)"))
+    at = AppTest.from_file(str(UI_FILE), default_timeout=120)
+    at.run()
+    at.radio(key="llm_mode").set_value("ollama").run()
+    at.text_area(key="req_text").set_value(REQ_BRIGHTNESS)
+    next(b for b in at.button if b.label == "Generate tests").click().run()
+    assert not at.exception
+    assert any("LLM backend used: mock" in c.value for c in at.caption)
+    assert any("falling back to the deterministic mock LLM" in w.value for w in at.warning)
 
 
 @pytest.mark.skipif(not _HAS_STREAMLIT, reason="streamlit not installed")
 def test_ui_default_run_reports_mock_backend_without_fallback() -> None:
-    from streamlit.testing.v1 import AppTest
-
-    at = AppTest.from_file(str(UI_FILE), default_timeout=120)
-    at.run()
-    next(b for b in at.button if b.label == "Generate tests").click().run()
-    assert not at.exception
+    at = _generate()
     assert any("LLM backend used: mock" in c.value for c in at.caption)
     assert not any(w.value.startswith("Fallback:") for w in at.warning)
 
@@ -565,31 +572,27 @@ def test_ui_default_run_reports_mock_backend_without_fallback() -> None:
             "step 3: expected ['7f2e31'], got ['6e0100']",
         ),
         (
-            "[held-out v1, seen]",
+            "[held-out v1]",
             "seed_returned_while_unlocked",
             "req_ui_001__tpl_seed_while_unlocked_01",
             "step 3: expected ['670100000000'], got ['670132a31485']",
         ),
         (
-            "[held-out v2, fresh]",
+            "[held-out v2]",
             "session_reentry_keeps_unlock",
             "req_ui_001__tpl_session_relock_01",
             "step 4: expected ['7f2e33'], got ['6e0100']",
         ),
     ],
 )
-def test_ui_checklist_step6_expected_failures(
+def test_ui_checklist_expected_failures(
     prefix: str, bug_id: str, test_id: str, failure: str
 ) -> None:
-    """Pins the exact screen contents quoted in docs/UI_CHECKLIST.md step 6."""
-    req = (
-        "Writing the interior lighting brightness DID (0x0100) shall require extended session "
-        "and security level 0x01."
-    )
-    at, clean = _generate_and_run(req, prefix, bug_id)
+    """Pins the exact screen contents quoted in docs/UI_CHECKLIST.md (Run tab)."""
+    at, clean = _generate_and_run(REQ_BRIGHTNESS, prefix, bug_id)
     assert clean == "18/18"
     res = next(df.value for df in at.dataframe if "failure" in df.value.columns)
-    failed = res[~res["passed"]]
+    failed = res[res["result"] == "FAIL"]
     assert list(failed["test_id"]) == [test_id]
     assert list(failed["failure"]) == [failure]
     assert next(m.value for m in at.metric if m.label == "Passed") == "17/18"

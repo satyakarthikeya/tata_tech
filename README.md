@@ -209,8 +209,7 @@ from a flatter path.)
 streamlit run uds_assistant/ui/streamlit_app.py
 ```
 
-An engineering UI over the same pipeline (generate → review → run → export; the bug picker offers `[in-sample]`, `[held-out v1, seen]` and `[held-out v2, fresh]` bugs, and after generating it shows which LLM backend actually ran). The evaluation section reads `outputs/eval_report.json` (versions 2 and 3) and `outputs/partC/before_after.md` and shows the freeze status, the fresh v2 headline, the noise check, the before/after table, the side-by-side mock | ollama comparison, latency, rejections/retries, fallback and truncation events, byte-provenance counts, and the BM25 vs Chroma retrieval comparison (`n/a` for anything an older report lacks). It has only been tested headless (AppTest); the manual click-through procedure is [`docs/UI_CHECKLIST.md`](docs/UI_CHECKLIST.md) and has not been done in a real browser.
-calling `agent.run_pipeline` / `runner.run_suite` / `export.render_*` directly
+A five-tab demo UI over the same pipeline: **Ask** (cited Q&A with confidence badge and citations), **Generate & Review** (empty requirement box with 4 examples, decoded steps, written/inferred targets, approve/reject/comment stored in the audit DB), **Run on Simulator** (one bug from the in-sample / held-out v1 / v2 / v3 catalogs or none, "Bug caught by N tests"), **Export** (pytest, CAPL marked unverified) and **Results** (six headline cards from `outputs/eval_report.json`, each with run date and git hash, details in collapsed expanders). The sidebar selects the LLM mode and retriever (an unavailable Ollama or Chroma option is removed and the radio disabled, with the reason) and shows the governance banner once. The logic lives in `uds_assistant/ui/` modules (`decode`, `state`, `bugs`, `examples`, `results_cards`, `results_detail`, `env`); `streamlit_app.py` only wires the tabs. Headless-tested with AppTest (`tests/ui`); the manual click-through is [`docs/UI_CHECKLIST.md`](docs/UI_CHECKLIST.md) and the 7-minute demo path is in [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md). It calls `agent.run_pipeline` / `runner.run_suite` / `export.render_*` directly
 rather than over HTTP, with its own audit trail (`outputs/ui_audit.sqlite`).
 
 ## Exports
@@ -365,7 +364,7 @@ circular by construction.
 - [`docs/RESULTS.md`](docs/RESULTS.md) — results walkthrough, including the mock vs ollama comparison
 - [`outputs/partC/interpretation.md`](outputs/partC/interpretation.md) — Part C interpretation: what improved, what did not, and why (Part B: [`outputs/eval_interpretation.md`](outputs/eval_interpretation.md))
 - [`outputs/partC/before_after.md`](outputs/partC/before_after.md) — before/after Part C table with comparability notes
-- [`docs/UI_CHECKLIST.md`](docs/UI_CHECKLIST.md) — manual click-through checklist for the Streamlit UI (not yet done in a real browser)
+- [`docs/UI_CHECKLIST.md`](docs/UI_CHECKLIST.md) — manual click-through checklist for the Streamlit UI (per-tab checklist)
 - [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — demo script (`python scripts/demo.py`), with an optional ollama segment and a recorded fallback
 - [`docs/SWS_DISAGREEMENTS.md`](docs/SWS_DISAGREEMENTS.md) — rules engine vs AUTOSAR Dcm SWS (D1–D9: D2, D5, D6, D7 fixed in Part C; D1, D3, D4, D8, D9 open)
 - [`docs/RECONCILIATION.md`](docs/RECONCILIATION.md) — search for an older doc set (none found)

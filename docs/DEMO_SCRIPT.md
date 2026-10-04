@@ -1,4 +1,47 @@
-# Live demo script (about 8 minutes mock-only; about 10 minutes with the ollama segment)
+# Live demo script: the Streamlit UI (7 minutes) and the terminal demo (below)
+
+Audience: Tata Technologies reviewers. The UI demo below is the main one; the older terminal walkthrough (`scripts/demo.py`) follows it unchanged and works as a fallback when no browser is available.
+
+Setup (2 minutes before): start Ollama (`ollama serve` if it is not already running; model `qwen2.5:3b-instruct-q4_K_M`), then
+
+```powershell
+cd C:\Users\pasar\Desktop\tata_tech
+streamlit run uds_assistant/ui/streamlit_app.py
+```
+
+Browser at `http://localhost:8501`, zoom 125%. Warm-up: in the Generate tab load the REQ-NL-DOOR example, run it once in ollama mode (loads the model, ~30 s), then reload the page (the audit DB keeps the run, the page state starts clean). The sidebar should show "Ollama reachable".
+
+All numbers below were measured on the build machine on 2026-10-04 and are orientation only; read the screen. Ollama output is not bit-deterministic: test ids and counts can differ a little between runs.
+
+## Per-tab walkthrough
+
+| Tab | What it does | Say |
+|---|---|---|
+| Ask | Cited Q&A from the approved sources (standard, OEM, ECU spec, project). Confidence badge high/medium/low with a reason, expandable citations (layer, source, quote), "Not found in the approved sources." when nothing supports an answer. | "It only answers from the approved sources and shows its quote. If it cannot support an answer it refuses." |
+| Generate & Review | Requirement text (empty box, 4 examples) to cited tests. Table (id, category, confidence, review status); select a test to see decoded steps, which targets were written vs inferred, explanation, citations, confidence. Approve / Reject / Add comment go to the audit DB. | "Every byte comes from templates plus the rules engine, never from the model. The model only picks which test templates to use." |
+| Run on Simulator | Pick one bug (or none) from four catalogs, run the selected / approved / all tests on the separate simulator, see "Bug caught by N tests" or "Bug not caught", and the first failing step decoded (expected vs actual). | "A second ECU implementation, written separately. A bug counts as caught only by a test that passes on the clean simulator." |
+| Export | pytest file and CAPL template. CAPL is labelled "unverified — never run in CANoe". | "The pytest file runs standalone. The CAPL has never been run in CANoe, so I do not claim it works." |
+| Results | Six headline cards from `outputs/eval_report.json`, each with run date and git hash; details in collapsed expanders; History is labelled historical. | "Fresh v3 bugs: 10/15 for the full output, but only 4/15 from the requirement-driven tests alone. I show the weak numbers too." |
+
+## 7-minute demo path
+
+| # | Step | Time | What to do and say |
+|---|---|---|---|
+| 1 | Frame | 0:30 | Show the title and the sidebar. "Local, offline-capable. The ECU spec is synthetic and the banner says tests need human review before real hardware. The model never produces bytes." Point at the mock/ollama radio and the Ollama-reachable line. |
+| 2 | Ask | 1:00 | Ask tab: pick "What is the length of DID 0xF190?" and click Ask (mock, instant): high-confidence answer, open Citations (ecu layer, `data/bcm_spec.yaml`, quote). Then pick "What does DID 0x0999 contain?": the "Not found in the approved sources." callout. "Refusing beats guessing: the Q&A refusal rate on unanswerable questions is 75% (3 of 4), and the page shows that number in Results." |
+| 3 | Generate, natural requirement, Ollama | 1:45 | Sidebar: select `ollama`. Generate & Review: "Load example", choose REQ-NL-DOOR, click Generate tests. Takes about 20-30 s (spinner "Running ... (ollama)"); fill the time: "the 3B model reads the sentence, chooses test templates, the rules engine computes the expected bytes". Result: 5 tests, table with confidence. To show the fallback: stop Ollama (`Stop-Process -Name ollama*` or quit the tray app), click Generate again: yellow "Fallback: LLM_MODE=ollama requested but Ollama is not reachable ... falling back to the deterministic mock LLM." and "LLM backend used: mock" (5 tests in about 0.1 s). Restart Ollama and reload for the rest, or just stay on the mock result, which also works with the next steps. |
+| 4 | Review | 1:15 | Select a test: decoded steps (`10 03 → 50 03 00 32 01 F4 (positive)`), the written/inferred chips, citations, confidence badge and reason. Be honest here: for this requirement neither mode produces the write-after-unlock test (see Limitations: "Door-lock sanity check" in PROGRESS.md); the door-lock DIDs are read-only in the synthetic spec. Type a comment, click Approve: status becomes `human_reviewed` in the table. |
+| 5 | Run with a held-out v3 bug | 1:15 | Run on Simulator: no bug first, "all tests": "All tests pass on the clean simulator." Then choose `[held-out v3, fresh] session_response_p2_star_in_ms` (the description says P2* is reported in milliseconds instead of 10 ms units), run: "Bug caught by 3 tests." (ollama run: 3 tests; mock: 2 tests; verified for both on this requirement, 2026-10-04). Open the first failing step: expected `50 03 00 32 01 F4`, actual shows P2* as `13 88`. "This bug was written blind after the freeze. Many fresh bugs are not caught by one requirement's tests (try `dtc_read_reports_masked_status`: Bug not caught)." |
+| 6 | Results | 1:00 | Results tab: read the six cards. "Correctness 5000/5000 against the oracle, 60/60 gold on the clean simulator. Fresh v3 bugs: 10/15 full output, 4/15 requirement-driven. Mock versus Ollama on natural language: F1 0.41 versus 0.61, so the model understands more but at 19 s per requirement versus 0.2 s." Point at the "run date · git hash" under each card, then open History: "historical, not current". |
+| 7 | Close | 0:15 | "Export gives a pytest file and an unverified CAPL template. Limits are in FINAL_REPORT.md." |
+
+Total 7:00. If the fallback in step 3 is skipped, the path is 6:00 and leaves room for questions.
+
+Fallbacks: Ollama down at the start: stay in mock mode (the sidebar shows the option disabled with the reason) and say so; every step still works. The browser page blank: `python scripts/demo.py` (terminal demo below).
+
+---
+
+# Terminal demo script (scripts/demo.py; about 8 minutes mock-only; about 10 minutes with the ollama segment)
 
 Audience: Tata Technologies reviewers. Steps 1 to 7 run offline in a terminal with the mock LLM (a deterministic keyword stand-in for a language model): no internet, no GPU, no real LLM. Step 6b is an optional ~2 minute segment with the real local model (Ollama, Qwen2.5-3B); it needs a GPU and Ollama running, and has a pre-recorded fallback if either is unavailable.
 
