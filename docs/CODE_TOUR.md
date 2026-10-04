@@ -21,10 +21,12 @@ Quick glossary:
 4. The LLM picks from a fixed menu of test templates (`testgen/`; for a small-context model the menu is first cut to a ranked shortlist). It never writes bytes. Template ids it returns are normalised, never fuzzy-matched.
 5. Templates generate the actual request bytes; the rules engine (`rules/`) computes the expected response bytes.
 6. A validator re-checks every test (schema, byte provenance, oracle agreement, citations) and sends bad ones back for a retry (at most 2 retries). Explanations are then written by one batched LLM call per requirement.
-7. Validated tests run on an independent simulator (`simulator/`) via the runner (`runner/`); bugs from three catalogs (in-sample, held-out v1, held-out v2) can be switched on to see which tests fail.
-8. The evaluation (`eval/`) measures this honestly: simulator-vs-rules agreement, gold tests, a udsoncan cross-check, detection of the 15 fresh held-out v2 bugs (the headline), requirement understanding on 16 fresh natural v2 requirements, a noise check, and the older v1 and in-sample numbers labelled as seen.
+7. Validated tests run on an independent simulator (`simulator/`) via the runner (`runner/`); bugs from four catalogs (in-sample, held-out v1, v2, v3) can be switched on to see which tests fail. A requirement-independent conformance sweep (`testgen/conformance.py`, 1200 tests) is run alongside.
+8. The evaluation (`eval/`) measures this honestly: simulator-vs-rules agreement, gold tests, a udsoncan cross-check, detection of the 15 fresh held-out v3 bugs (the headline: requirement-driven tests plus the sweep), requirement understanding on 16 fresh natural v3 requirements, a noise check, a blind Q&A score, run provenance on every section, and the older v1, v2 and in-sample numbers labelled as seen.
 9. Results and decisions are stored in SQLite (`store/`), and tests export to pytest and CAPL (`export/`).
-10. A FastAPI service (`api/`) and a Streamlit page (`ui/`) wrap all of it; `config.py` holds the two switches (`LLM_MODE`, `RETRIEVER`).
+10. A FastAPI service (`api/`) and a five-tab Streamlit UI (`ui/`) wrap all of it; `config.py` holds the switches (`LLM_MODE`, `RETRIEVER`, `EMBEDDER`).
+11. Separately, `qa/` answers diagnostic questions with citations: deterministic spec lookups plus retrieval over four layers (standard / OEM / ECU / project), refusing with `not_found` when the evidence does not support an answer (`POST /ask`, UI Ask tab).
+12. Every generated test and Q&A answer carries a confidence level (`agent/confidence.py`).
 
 ---
 
@@ -107,6 +109,7 @@ Quick glossary:
 - [templates.py](../uds_assistant/testgen/templates.py): `TEMPLATES`, `applicable_params`, `validate_test`; the original templates
 - [templates_v2.py](../uds_assistant/testgen/templates_v2.py): the generic templates added in v2
 - [templates_v3.py](../uds_assistant/testgen/templates_v3.py): the four general templates added in Part C
+- [conformance.py](../uds_assistant/testgen/conformance.py): the Part D conformance sweep, 1200 requirement-independent tests (54 state setups x 215 stimuli, greedy covering); every expected byte comes from the rules engine; not offered to the planner
 - [execute.py](../uds_assistant/testgen/execute.py): `run_test_on_simulator`
 
 **Data in/out.** In: spec + template parameters. Out: `TestCase` objects (request hex, expected-response hex, citations).
@@ -146,13 +149,14 @@ Variants are appended after the base options, so earlier option indices and test
 
 ## rag/
 
-**What it does.** Retrieval-augmented generation (RAG) = fetch relevant text before generating. It chunks the spec, UDS notes and requirements into a searchable corpus (BM25 keyword ranking by default; Chroma vectors optional and not installed) so tests can cite their evidence.
+**What it does.** Retrieval-augmented generation (RAG) = fetch relevant text before generating. It chunks the spec, UDS notes and requirements into a searchable corpus (BM25 keyword ranking by default; Chroma vectors with fastembed embeddings optional, run in Part B) so tests can cite their evidence.
 
 **Key code**
 - [ingest.py](../uds_assistant/rag/ingest.py): `build_corpus`
 - [bm25.py](../uds_assistant/rag/bm25.py): `Bm25Retriever`
 - [citations.py](../uds_assistant/rag/citations.py): `citation_is_valid`
 - [factory.py](../uds_assistant/rag/factory.py): `get_retriever` (falls back to BM25)
+- [layers.py](../uds_assistant/rag/layers.py): `search_layer`, `search_layers`, `cite_hits`, `layer_counts`; the four layers **standard / oem / ecu / project** are separate collections, each chunk keeps its `layer`, and `LayeredCitation` says which layer a quote came from. The synthetic OEM guideline `data/oem_diagnostic_guidelines.md` is the `oem` layer. The generator searches only standard, ECU and project (`DECISIONS.md` E33-NO-OEM-IN-GEN); Q&A uses all four with top-k per layer (raw scores of separate indexes are not comparable, E33-MERGE)
 
 **Data in/out.** In: spec YAML, markdown notes, requirements CSV. Out: ranked chunks (`Hit`) and a yes/no on whether a citation points at a real chunk.
 
@@ -195,10 +199,14 @@ Variants are appended after the base options, so earlier option indices and test
 - [nodes.py](../uds_assistant/agent/nodes.py): `parse`, `plan`, `instantiate`, `validate`, `check_test`
 - [options.py](../uds_assistant/agent/options.py): the menu of template options shown to the LLM
 - [graph.py](../uds_assistant/agent/graph.py): LangGraph wiring
+- [service_lexicon.py](../uds_assistant/agent/service_lexicon.py): domain keywords used by the Part D service-evidence grounding
+- [confidence.py](../uds_assistant/agent/confidence.py): the shared confidence rule (`generated_test_confidence`, `answer_confidence`): start at a base level, drop one level per fired signal (weak retrieval score, target only inferred, validator rejections or retries, grounding drops, fallback events), floor at `low`; the reason lists every fired signal. Rule table: `DECISIONS.md` E32-*
+- [annotate.py](../uds_assistant/agent/annotate.py): runs after explain; sets `confidence` and `confidence_reason` on a copy of each kept test and records which targets were written in the requirement vs inferred. Steps, ids and citations are untouched
 
 **Data in/out.** In: requirement text and id. Out: `PipelineResult` (validated tests, dropped tests, decision log, parsed requirement).
 
 **Likely questions**
+0. *How is confidence computed?* By `confidence.py`, from signals the pipeline already records. In mock mode on the 15 seeds it is 135 high, 71 medium and 0 low; `low` is exercised by unit tests only, so the thresholds are not validated on real data.
 1. *What is checked before a test is kept?* `check_test`: schema, "byte provenance" (steps must equal a fresh template instantiation), oracle agreement, and valid citations.
 2. *What happens on failure?* The test is dropped, the reason is fed back as feedback, and the planner is re-run up to 2 times. In the seed run: 0 dropped, 0 re-plans.
 3. *Is it deterministic?* With the mock LLM and BM25, yes.
@@ -236,7 +244,7 @@ Variants are appended after the base options, so earlier option indices and test
 
 ## eval/
 
-**What it does.** The measurement harness that produces `outputs/eval_report.md` and `.json` (report version 3): simulator-vs-rules random-walk agreement, gold tests, udsoncan cross-check, bug detection with a static "why was it missed" analysis, requirement-understanding scoring, coverage and citation validity, byte provenance over every generated test (including every noise run), a noise check, the freeze check and a before/after table. It reports each data set under its own label:
+**What it does.** The measurement harness that produces `outputs/eval_report.md` and `.json` (report version 5 with the Part E provenance keys; the tables below describe the Part C layout, and Part D replaced the headline data set with the fresh v3 sets, see `docs/RESULTS.md`): simulator-vs-rules random-walk agreement, gold tests, udsoncan cross-check, bug detection with a static "why was it missed" analysis, requirement-understanding scoring, coverage and citation validity, byte provenance over every generated test (including every noise run), a noise check, the freeze check and a before/after table. It reports each data set under its own label:
 
 | Data set | Size | Status |
 |---|---|---|
@@ -258,6 +266,9 @@ Variants are appended after the base options, so earlier option indices and test
 - [before_after.py](../uds_assistant/eval/before_after.py): the before/after table from the frozen baseline (`outputs/partC/baseline_before_partC.json`) and the new report
 - [understanding.py](../uds_assistant/eval/understanding.py): scoring against labelled natural requirements
 - [can_check.py](../uds_assistant/eval/can_check.py): `run_udsoncan_sequence`
+- [heldout_v3.py](../uds_assistant/eval/heldout_v3.py), [breakdown.py](../uds_assistant/eval/breakdown.py): Part D v3 trigger predicates and the FP/FN-by-kind and rejection breakdowns
+- [qa_eval.py](../uds_assistant/eval/qa_eval.py): the blind Q&A scorer over `data/qa_eval.csv` (answer accuracy on exact facts, citation correctness and precision, correct not-found); `python -m uds_assistant.eval.qa_eval --modes mock,ollama` writes `outputs/qa/qa_eval.json` and `.md`
+- [run_provenance.py](../uds_assistant/eval/run_provenance.py): Part E run provenance: labels every report section with its run (date and git hash), keeps Part C/D before/after tables only in a History section, and builds the headline cards and success-metric rows without recomputing any metric
 
 **Data in/out.** In: spec, requirements, gold tests, both bug catalogs. Out: JSON and Markdown reports.
 
@@ -289,7 +300,7 @@ Variants are appended after the base options, so earlier option indices and test
 **What it does.** A FastAPI service wrapping the same functions.
 
 **Key code**
-- [app.py](../uds_assistant/api/app.py): `create_app`, endpoints `/health`, `/spec`, `/generate`, `/run`, `/eval`, `/export`, `/bugs`, `/runs`, `/tests/{run_id}/{test_id}/review`
+- [app.py](../uds_assistant/api/app.py): `create_app`, endpoints `/health`, `/spec`, `/generate`, `/ask`, `/run`, `/eval`, `/export`, `/bugs`, `/runs`, `/tests/{run_id}/{test_id}/review`
 - [__main__.py](../uds_assistant/api/__main__.py): `python -m uds_assistant.api`
 
 **Data in/out.** JSON over HTTP; audit trail in `outputs/api_audit.sqlite`.
@@ -301,20 +312,51 @@ Variants are appended after the base options, so earlier option indices and test
 
 ## ui/
 
-**What it does.** A Streamlit page: type a requirement, generate tests, review them (and mark one `human_reviewed`), run them with injected bugs from any of the three catalogs (labelled `[in-sample]`, `[held-out v1, seen]`, `[held-out v2, fresh]`), view the evaluation report, export. The evaluation section understands report versions 2 and 3: for v3 it shows the freeze status, the fresh v2 headline, the noise check, the before/after table (`outputs/partC/before_after.md`), the mock vs ollama comparison and the retrieval comparison, with the v1 rows labelled seen; a v2 report shows its v1 sections and "n/a" for the v2 rows. It calls the pipeline directly (no HTTP hop). Optional: needs `pip install -e ".[ui]"`.
+**What it does.** A five-tab Streamlit UI plus a sidebar (LLM mode, retriever, the governance banner once; an unreachable Ollama or missing Chroma is removed from its radio and the radio disabled, with the reason). Tabs: **Ask** (cited Q&A, confidence badge, citations), **Generate & Review** (empty requirement box, four examples, results table, decoded steps, written vs inferred targets, approve / reject / comment stored in the audit DB), **Run on Simulator** (bug dropdown over the four catalogs or none, "Bug caught by N tests"), **Export** (pytest, CAPL labelled unverified), **Results** (six headline cards with run date and git hash; everything else in collapsed expanders; degrades without a report). It calls the pipeline directly (no HTTP hop). Optional: needs `pip install -e ".[ui]"`.
 
-**Key code**
-- [streamlit_app.py](../uds_assistant/ui/streamlit_app.py): the whole page
+**Key code** (the logic is split out of the page so it can be tested)
+- [streamlit_app.py](../uds_assistant/ui/streamlit_app.py): wires the sidebar and the five tabs only
+- [decode.py](../uds_assistant/ui/decode.py): turns a hex step into a readable line (`2E 20 01 01 -> 7F 2E 33 (securityAccessDenied)`) using protocol constants only
+- [state.py](../uds_assistant/ui/state.py): approve / reject / comment through the audit store
+- [bugs.py](../uds_assistant/ui/bugs.py): the bug dropdown groups (in-sample, held-out v1, v2, "held-out v3, fresh")
+- [examples.py](../uds_assistant/ui/examples.py): the four example requirements (including the natural door-lock one)
+- [env.py](../uds_assistant/ui/env.py): Ollama and Chroma probes, file paths, test hooks (`UDS_UI_AUDIT_DB`, `UDS_EVAL_REPORT`)
+- [results_cards.py](../uds_assistant/ui/results_cards.py): the six headline cards from `outputs/eval_report.json`
+- [results_detail.py](../uds_assistant/ui/results_detail.py): the expander tables (noise checks, freeze hashes, per-requirement tables, history)
 
-**Data in/out.** In: requirement text and clicks. Out: on-screen tables and exports. Uses `outputs/ui_audit.sqlite`.
+**Data in/out.** In: text and clicks. Out: on-screen tables and exports. Uses `outputs/ui_audit.sqlite`.
 
 **Likely questions**
-1. *Was the UI tested live?* It has headless Streamlit `AppTest` tests, including a generate, run and inject-a-bug click-through and synthetic report fixtures for report versions 2 and 3. A human click-through in a browser is the manual checklist in [UI_CHECKLIST.md](UI_CHECKLIST.md).
+1. *Was the UI tested live?* Headless Streamlit `AppTest` tests per tab (`tests/ui`), plus one `needs_model` test with the real model, and a headless `streamlit run` health check in E4. A human click-through in a browser is the manual checklist in [UI_CHECKLIST.md](UI_CHECKLIST.md) and has not been done.
 2. *Does importing the package need Streamlit?* No; nothing else imports `ui/`.
-3. *Can reviewers approve tests there?* Yes, review status is stored in the audit trail.
-4. *What happens when the report is old or only has one mode?* Missing pieces show "n/a" or "not run yet" instead of failing; the environment variables `UDS_EVAL_REPORT` and `UDS_BEFORE_AFTER` point the page at other files (the tests use this).
-5. *Does the UI use the real model?* Only if `LLM_MODE=ollama` is set and the server is running; otherwise it uses the mock (and warns on fallback).
-6. *Why does the page not show v2 numbers when there is no report for them?* It never computes metrics; it only renders `outputs/eval_report.json`. Until that file is a version-3 report, the v2 rows say the report predates Part C.
+3. *Can reviewers approve tests there?* Yes; approve sets `human_reviewed`, reject and comments are decision-log entries in the audit trail (`DECISIONS.md` E4-REVIEW).
+4. *What if the report is old or missing?* The Results tab shows "n/a" or "no report" instead of failing; `UDS_EVAL_REPORT` points it at another file.
+5. *Does the UI use the real model?* Only if Ollama is reachable and selected; otherwise mock.
+6. *Why is a test picked with a selectbox and not by clicking a table row?* AppTest cannot click dataframe rows (E4-SELECT).
+
+## qa/
+
+**What it does.** Cited diagnostic Q&A (the case study's Phase 1 "Knowledge Pilot" deliverable). `answer_question` first tries **deterministic lookups** in the parsed spec (DID, routine, NRC, service, security level, timing); facts are generated from spec objects, never by a model. If no lookup applies it retrieves per layer (`rag.layers.search_layers` over standard / OEM / ECU / project) and keeps only sentences that match the question's content words well enough. The LLM (if any) only rephrases, and its output is verified (every looked-up value must still appear, no invented number or hex value, every quote a substring of its chunk); otherwise the template answer is used and a fallback event is recorded. An unknown entity, or no supported sentence, gives `status="not_found"`.
+
+**Key code**
+- [answer.py](../uds_assistant/qa/answer.py): `answer_question`
+- [lookup.py](../uds_assistant/qa/lookup.py): `FactLookup`
+- [confidence.py](../uds_assistant/qa/confidence.py): `qa_confidence`, a wrapper over `agent/confidence.py`
+- [models.py](../uds_assistant/qa/models.py): `AskRequest`, `AskResponse`, `QACitation`, `Fact`
+- [text.py](../uds_assistant/qa/text.py): content tokens, sentence slicing, quote and token checks
+
+**Data in/out.** In: a question (and optional mode). Out: `{answer, citations[chunk_id, layer, source, quote], confidence, confidence_reason, status, fallback_events, llm_mode}`.
+
+**Likely questions**
+1. *How good is it?* On the 25 blind questions (`data/qa_eval.csv`, written by a restricted subagent): answer accuracy 90.5% (19/21) in mock and ollama, correct not-found 3/4 (Q&A run 2026-10-04, `9e66f7a`). Known misses: QA-018 answered instead of refusing, QA-022 and QA-023 retrieval misses.
+2. *Can it invent an answer?* The design prevents values the sources do not contain, but QA-018 shows the refusal rule can pass on an overlapping sentence.
+3. *Is the OEM layer real?* No, it is a short synthetic guideline, consistent with the synthetic spec.
+
+## scripts/ and docker/
+
+- [scripts/time_generation.py](../scripts/time_generation.py): tool-side wall time per requirement (parse, retrieve, plan, instantiate, validate, explain) for mock and ollama; output `outputs/timing/tool_timing.json`. It measures the tool only; the manual-vs-tool comparison in [TEST_DESIGN_TIME.md](TEST_DESIGN_TIME.md) is pending owner measurement.
+- [scripts/demo.py](../scripts/demo.py): terminal tour (see [DEMO_SCRIPT.md](DEMO_SCRIPT.md)); still uses the Part C headline layout (not updated since).
+- [docker/entrypoint.sh](../docker/entrypoint.sh) with `Dockerfile` and `docker-compose.yml` at the repo root: FastAPI on 8000 plus Streamlit on 8501 (`app`), and the official `ollama` image. Written, not built or run here ([DOCKER.md](DOCKER.md)).
 
 ## config.py
 

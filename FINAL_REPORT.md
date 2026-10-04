@@ -1,20 +1,26 @@
 # FINAL_REPORT.md
 
 Honest status of the UDS Diagnostics & Automated Test Generation Assistant at
-the end of Part D (conformance sweep, service grounding, constrained planner,
-fresh v3 blind evaluation, documentation), which follows Part C (fixes and a
-fresh v2 evaluation), Part B (real-model evaluation), Part A (honest
-evaluation) and the Phase 9 wrap-up. Eval numbers are copied exactly from
+the end of Part E (results consistency, cited Q&A, confidence indicators, OEM
+retrieval layer, Docker files, tabbed UI, compliance matrix), which follows
+Part D (conformance sweep, service grounding, constrained planner, fresh v3
+blind evaluation), Part C (fixes and a fresh v2 evaluation), Part B
+(real-model evaluation), Part A (honest evaluation) and the Phase 9 wrap-up. Eval numbers are copied exactly from
 `outputs/eval_report.md` / `.json` (report version 5), `outputs/partD/before_after.md`,
 `outputs/partD/interpretation.md` and `PROGRESS.md`; test counts come from a
 fresh `python -m pytest -q` run (Python 3.13.6, Windows, git repo at
 `tata_tech`); none are estimated or rounded up.
 
-**Run labels.** Unless a heading or bullet names another run, every evaluation number in this report is from the **Main eval run: 2026-10-04, git `1f0c293`** (recorded with uncommitted phase files; generator bytes verified unchanged since, DECISIONS E32/E33). The diagnostic Q&A run (2026-10-04, git `9e66f7a`) and the tool-side timing run (2026-10-04, git `8357ec0`) are reported only in `docs/RESULTS.md` and `outputs/eval_report.md`. Earlier-run tables (Part C and Part D before/after) are under **History** at the end and are historical. `docs/RESULTS.md` is the one-page summary; this report must not contradict it.
+**Run labels.** Unless a heading or bullet names another run, every evaluation number in this report is from the **Main eval run: 2026-10-04, git `1f0c293`** (recorded with uncommitted phase files; generator bytes verified unchanged since, DECISIONS E32/E33). The diagnostic Q&A run (2026-10-04, git `9e66f7a`) and the tool-side timing run (2026-10-04, git `8357ec0`) are reported in `docs/RESULTS.md`, `outputs/eval_report.md` and the "Part E changes" section below. Earlier-run tables (Part C and Part D before/after) are under **History** at the end and are historical. `docs/RESULTS.md` is the one-page summary; this report must not contradict it.
 
 **Headline (fresh v3 data: written blind after the Part D freeze, nothing tuned
 on it; Main eval run 2026-10-04, git `1f0c293`).**
 
+- **Correctness (LLM-independent):** the simulator and the rules engine agree on
+  5000/5000 seeded random requests, all 60 gold tests pass on the bug-free
+  simulator, and a udsoncan client completes a session/seed-key/read/write
+  sequence over a virtual CAN bus (one happy path). The sweep's 1200 tests also
+  all pass on the clean simulator. These share one author and one contract.
 - **Held-out v3 bug detection by the system's full output (requirement-driven
   tests plus the conformance sweep) is 10/15 (66.7%) with mock and 9/15
   (60.0%) with ollama.** Almost all of it comes from the sweep: the
@@ -40,6 +46,20 @@ on it; Main eval run 2026-10-04, git `1f0c293`).**
 - v1 and v2 results (held-out v1 full output mock 12/12, ollama 11/12; v2 full
   output 9/15 in both modes) are **SEEN**, and the 26-bug in-sample numbers
   (26/26 in both modes) are **tuned on**; none is evidence.
+- **Diagnostic Q&A (Part E; 25 blind questions, 21 answerable and 4
+  unanswerable; Q&A run 2026-10-04, git `9e66f7a`):** answer accuracy 90.5%
+  (19/21) in both mock and ollama, citation correctness 95.2% (20/21) mock and
+  90.5% (19/21) ollama, correct not-found 3/4 in both. Misses: QA-018 (answered
+  instead of refusing), QA-022 and QA-023 (retrieval misses). Twenty-five
+  questions is a small sample: one question is 4 to 5 points.
+- **UI (Part E):** five tabs (Ask, Generate & Review, Run on Simulator,
+  Export, Results) with headless AppTest coverage; never clicked through in a
+  real browser. The natural door-lock requirement did not yield the intended
+  test pair (see Known limitations).
+- **Status of the remaining Part E items:** Docker files are **written, not
+  built here**; the manual-vs-tool test-design-time comparison is **pending
+  owner measurement** (tool side only: mock mean 0.217 s, ollama mean 19.36 s
+  per requirement, timing run `8357ec0`).
 - **The mock stays the default.**
 
 ## ✅ Done and tested
@@ -116,27 +136,38 @@ on it; Main eval run 2026-10-04, git `1f0c293`).**
   seen/tuned-on rows labelled, sweep rows, noise check, before/after table
   (`outputs/partD/before_after.md`), freeze verification, interpretation
   (`outputs/partD/interpretation.md`).
-- **Streamlit UI, headless (Part C layout; not updated in Part D).** The UI renders the freeze status, the fresh v2
-  headline, the noise check, the before/after table, the mock | ollama
-  comparison and the retrieval comparison from `outputs/eval_report.json`
-  (versions 2 and 3), offers bugs from all three catalogs, and shows which LLM
-  backend actually ran. Covered by headless `streamlit.testing.v1.AppTest` runs.
-  This is not a human click-through (see "Written but not fully exercised").
-- **Demo script (Part C layout; not updated in Part D).** `scripts/demo.py` prints the v3 headline (fresh v2 rows
-  first, seen rows labelled), runs any bug id from the three catalogs, and has
-  `--llm ollama` (falls back to the mock with a printed warning) and `--offline`.
-  Its real output is quoted in `docs/DEMO_SCRIPT.md`.
+- **Streamlit UI, headless (rebuilt in Part E, E4).** Five tabs plus a sidebar
+  (Ask, Generate & Review, Run on Simulator, Export, Results); the Results tab
+  shows six headline cards from `outputs/eval_report.json`, each with its run
+  date and git hash, and the detail tables in collapsed expanders. Covered by
+  headless `streamlit.testing.v1.AppTest` runs per tab plus one `needs_model`
+  test (natural requirement in ollama mode, then a v3 bug caught). This is not a
+  human click-through (see "Written but not fully exercised").
+- **Cited diagnostic Q&A (Part E, E3.1).** `qa/` and `POST /ask`; blind
+  evaluation numbers are in the headline above and `docs/RESULTS.md`.
+- **Confidence indicators (Part E, E3.2).** `agent/confidence.py`; every
+  generated test and Q&A answer carries `confidence` and `confidence_reason`;
+  each rule has a unit test.
+- **Four retrieval layers (Part E, E3.3).** standard / OEM / ECU / project as
+  separate collections with layer-tagged citations; the generator uses only the
+  core layers, so generated bytes are unchanged.
+- **Demo script.** `scripts/demo.py` was not updated after Part C: it still
+  prints the v2 rows as "FRESH" and does not show v3, the sweep or Q&A (v2 is
+  seen since Part D). `docs/DEMO_SCRIPT.md` was updated for the tabbed UI and
+  the 7-minute demo path; the script itself was left alone (no new features
+  in Part E5).
 - Four SWS disagreements fixed (D2, D5, D6, D7), verified by the independent
   simulator agreeing on 100% of requests (see Part C changes).
 - Test suite and lint: see "Test counts" below.
 
 ## ⚠️ Written but not fully exercised
 
-- **UI and demo are stale for report version 5.** They were not changed in
-  Part D (no new features). Against the new report they still print the v2
-  rows as "FRESH" and do not show the v3 headline or the sweep; v2 is now
-  seen. Read `outputs/eval_report.md` and `docs/RESULTS.md` for the Part D
-  numbers. The UI and demo tests still pass.
+- **Docker: written, not built here.** `Dockerfile`, `docker-compose.yml`,
+  `.dockerignore`, `docker/entrypoint.sh` and `docs/DOCKER.md` were never built
+  or run (limited network); nothing was pulled. The image does not copy the
+  committed `outputs/` reports, so the Results tab shows "no report" in a fresh
+  container until `run_eval` is run there.
+- **`scripts/demo.py` is stale** (Part C headline layout; see above).
 - **Streamlit UI in a real browser.** Only headless AppTest runs exist.
   Nobody has clicked through generate → review → run → export interactively.
   `docs/UI_CHECKLIST.md` (10 steps) is the manual procedure and has not been
@@ -175,44 +206,49 @@ on it; Main eval run 2026-10-04, git `1f0c293`).**
 - The sweep and the requirement-driven tests do not apply the stimuli behind 5
   of the 15 fresh v3 bugs (6 with ollama). Templates or sweep cases built
   against that list would make v3 seen; a v4 blind set would be needed.
+- **Test design time: manual comparison pending owner measurement.** The protocol is
+  `docs/TEST_DESIGN_TIME.md` and the results table is blank; only tool-side
+  wall time exists.
+- **Q&A misses left as they are:** QA-018, QA-022, QA-023 (no re-run, no tuning
+  against the questions).
 - DoIP, OBD-II, flashing (0x34/0x36/0x37 download), 0x29 authentication,
   real ECUs/vehicles, cloud/paid LLMs, fine-tuning — all explicitly out of
   scope per `SCOPE.md` and not attempted.
 
 ## Test counts
 
-_Run: Part D documentation step, 2026-10-04 (the commit is recorded in `PROGRESS.md` D5b/D6; later Part E counts are in `PROGRESS.md`)._
+_Run: Part E final wrap-up (E5), 2026-10-04, on the tree at the E5 commit's parent (`52fdacc`) plus documentation edits only; no code changed in E5._
 
-Full suite (default, model tests skipped): `python -m pytest -q` → **1331 passed, 14 skipped, 1 failed in 888.33s (0:14:48)**. The failure, `tests/export/test_export.py::test_gold_export_runs_and_passes`, was an environment error: the child pytest process hit `FileNotFoundError` on a temp file of the editor host (`agent-host-git-diff-…` in the user temp directory) while collecting. Re-running `python -m pytest -q tests/export` alone gave **6 passed in 30.18s**. The 14 skips are the `needs_model` tests plus 1 UI test that only applies to an older report version. 1346 tests are collected in total.
-`python -m ruff check .` → **All checks passed!**
+Full suite (default, model tests skipped): `python -m pytest -q` -> **1479 passed, 16 skipped in 787.51s (0:13:07)**. No failures (the known export flake did not occur). The 16 skips are the 15 `needs_model` tests plus 1 UI test that only applies to an older report version; 1495 tests are collected.
+`RUN_MODEL_TESTS=1 python -m pytest -m needs_model -q` (Ollama reachable at `localhost:11434`, `qwen2.5:3b-instruct-q4_K_M`) -> **15 passed, 1480 deselected in 179.44s (0:02:59)**.
+`python -m ruff check .` -> **All checks passed!**
 
-`needs_model` tests were not re-run in this documentation step; the last real-model run was in D1b (llm and agent model tests passed, see `PROGRESS.md`). The Part D evaluation itself ran the real model end to end.
+Earlier Part D run for reference (historical): 1331 passed, 14 skipped, 1 failed in 888.33 s; the failure was the known `tests/export/test_export.py::test_gold_export_runs_and_passes` temp-file flake of the editor host (re-run alone: 6 passed).
 
-Per-directory collection counts (`python -m pytest --collect-only -q`):
+The skips are `needs_model` tests plus tests that only apply to an older report version, skipped by design, not deleted. AUTOSAR SWS tests skip without the local PDF; it was present on the machine that produced these numbers.
+
+Per-directory collection counts (`python -m pytest --collect-only -q`, 1495 collected):
 
 | Directory | Tests |
 |---|---|
 | `tests/rules/` | 276 |
-| `tests/agent/` | 235 |
+| `tests/agent/` | 266 |
 | `tests/simulator/` | 204 |
 | `tests/testgen/` | 201 |
-| `tests/eval/` | 119 |
+| `tests/eval/` | 152 |
 | `tests/llm/` | 83 |
+| `tests/rag/` | 78 |
 | `tests/protocol/` | 78 |
-| `tests/rag/` | 61 |
-| `tests/ui/` | 21 |
-| `tests/api/` | 18 |
+| `tests/ui/` | 58 |
+| `tests/qa/` | 29 |
+| `tests/api/` | 19 |
 | `tests/spec/` | 14 |
 | `tests/runner/` | 11 |
-| `tests/scripts/` | 9 |
+| `tests/scripts/` | 10 |
 | `tests/store/` | 7 |
 | `tests/export/` | 6 |
 | `tests/test_config.py` | 3 |
-| **Total collected** | **1346** |
-
-The skipped tests are the `needs_model` tests, skipped by design, not deleted.
-AUTOSAR SWS tests skip without the local PDF; it was present on the machine
-that produced these numbers.
+| **Total collected** | **1495** |
 
 ## Evaluation numbers (mock and ollama)
 
@@ -590,6 +626,34 @@ before any v3 result existed. Details are in `PROGRESS.md` (Part D) and
   was changed in this step; the only code-side artifacts it adds are the
   regenerated `outputs/` files.
 
+## Part D completion
+
+_Figures: Main eval run 2026-10-04, git `1f0c293` unless named._
+
+Part D was complete at its last commit (`482073e part D (D5b, D6)`); Part E began by verifying that and closing one open question.
+
+- **v3 evaluation run.** `run_eval --mode ollama --noise-runs 3 --before-after`, about 39 minutes (log `outputs/partD/eval_run.log`), report version 5. Results are the headline of this report; before/after is `outputs/partD/before_after.md` (historical, under History below); interpretation `outputs/partD/interpretation.md` (commit `8357ec0 part D (D5b): v3 evaluation run, before/after, interpretation`).
+- **Freeze hashes verified.** At the start of Part E (E0, git `04096ff`) the Part D freeze hashes still matched HEAD: testgen `d990ef45...`, llm `0dad8c41...`, agent `5875c862...`, gold `77874019...`. The freeze applied through D6 only; Part E legitimately changed code (Q&A, confidence, retrieval layers, UI), so the hashes are no longer expected to match HEAD. Generator bytes were verified unchanged in E3.2 (mock output for the 15 seeds identical, 206 tests) and E3.3 (core BM25 scores bit-identical, mock tests unchanged).
+- **Fallback-events investigation (E1).** The report lists 123 Ollama events of the form `explain: <test_id>: missing in LLM reply; used fallback text` (33 to 44 per noise run). Cause: the 3B model returns valid JSON with fewer `explanations` entries than tests (often three). A reproduction over the 15 seed requirements (75 tests, 15 batches) gave 17 events with 0 id mismatches after normalisation, 0 invented ids, 0 invalid JSON or retries, 0 truncations, and `done_reason` `stop` (no token limit hit); replaying one request twice gives the same reply. **Model omissions, not a bug, and no score effect**: explain writes only the prose field `TestCase.explanation`, nothing in `eval/`, `export/` or the oracle reads it, so bytes, byte provenance and every score are independent of how many explanations fell back (what changes is a generic sentence instead of model prose for those tests). No code changed and the evaluation was not re-run, so there is no second run. Full write-up with verbatim events and raw replies: `outputs/partD/interpretation.md`, section "Ollama explain fallback events (Part E investigation)".
+
+## Part E changes
+
+_Commits from `git log --oneline`. Run labels: Main eval 2026-10-04 `1f0c293`; Q&A run 2026-10-04 `9e66f7a`; timing run 2026-10-04 `8357ec0`._
+
+- **E0 orient (`04096ff`).** Findings and plan in `PROGRESS.md`: Part D was already complete; the case-study PDF is not in the repo, so Case 5 items come from the Part E brief, `PROJECT.md`, `SCOPE.md` and the docs.
+- **E1 finish Part D (`8357ec0`, `482073e`).** v3 run, before/after and interpretation; the fallback-events investigation (above).
+- **E3.4 Docker (`ffa813d`).** `Dockerfile` (python:3.13-slim, installs the project, runs FastAPI and Streamlit), `docker-compose.yml` (`app` and `ollama`, model volume, commented GPU block), `.dockerignore`, `docs/DOCKER.md`. **Written, not built here**; nothing was built or pulled.
+- **E3.5 test design time (`cdcdfdf`).** `docs/TEST_DESIGN_TIME.md` (protocol, blank results table), `scripts/time_generation.py`. Tool-side time per requirement (mean of 5 requirement means, 3 repeats): mock 0.217 s, ollama 19.36 s. The manual comparison is **pending owner measurement**.
+- **E3.6 spec provenance (`9445eb0`).** `PROJECT.md` states the ECU spec is hand-authored synthetic data, not extracted from a PDF; the same note is in `docs/RESULTS.md`.
+- **E3.3 OEM layer (`7b5a6dd`, fix `3a8c4e3`).** Four layers standard / OEM / ECU / project; synthetic `data/oem_diagnostic_guidelines.md` in its own collection; layer in chunk metadata and citations. The generator uses only the core layers (`DECISIONS.md` E33-NO-OEM-IN-GEN), so generated output is unchanged.
+- **E3.1 Q&A (`e9a4ca0`).** `qa/`, `POST /ask`, blind eval (`data/qa_eval.csv`, 21 answerable and 4 unanswerable written by a restricted subagent). Run `9e66f7a`: accuracy 90.5% / 90.5% (mock / ollama), citation correctness 95.2% / 90.5%, citation precision 80.6% / 79.3%, correct not-found 75% / 75%, ollama fallback events 13. Misses QA-018, QA-022, QA-023. Two earlier runs (plain-bug fixes in the claim verifier and the scorer) are kept under `outputs/qa/` and logged in `DECISIONS.md` E31-RERUNS.
+- **E3.2 confidence (`9e66f7a`).** Shared rule in `agent/confidence.py` (`DECISIONS.md` E32-*); mock generation for the 15 seeds byte-identical before and after. Distribution on the 15 seeds in mock mode: 135 high / 71 medium / 0 low; `low` is only unit-tested.
+- **E2 one results story (`d3d2fc3`).** Run provenance in `outputs/eval_report.*` (every section labelled with date and git hash), Part C/D before/after tables only under History (labelled historical), one-page `docs/RESULTS.md`, clean Q&A run.
+- **E4 tabbed UI (`52fdacc`).** Five tabs, sidebar with reachability-aware mode selector, split `ui/` modules, AppTest per tab, door-lock sanity check (recorded in `PROGRESS.md`; limitation below).
+- **E5 final wrap-up.** README, PROJECT.md, CODE_TOUR, ARCHITECTURE, this report, `docs/CASE_STUDY_COMPLIANCE.md`; final checks (Test counts).
+
+Per-area headlines are at the top of this report (correctness, bug detection, requirement understanding, Q&A, UI).
+
 ## Deviations from docs
 
 - Python 3.13.6 used instead of the originally documented 3.11 (PROJECT.md now
@@ -641,6 +705,17 @@ _Figures: Main eval run 2026-10-04, git `1f0c293` unless a bullet names another 
   synthetic spec the door-lock DIDs 0x0110/0x0111 are read-only (no write
   session), so a positive write after unlock cannot exist for them. Details:
   PROGRESS.md "Door-lock sanity check". Not tuned on.
+- **Confidence is lightly validated.** On the 15 seed requirements in mock mode
+  the distribution is 135 high / 71 medium / 0 low (206 tests; E3.2 run). `low`
+  and the weak-retrieval signal (best cited BM25 score below 15.0; all seed
+  hits score at least 23) never fire there, so they are covered by unit tests
+  only. The signal weights and the 15.0 threshold were set by reasoning, not
+  fitted, and the report has not measured whether `high` tests are actually
+  more often right than `medium` ones.
+- **Q&A is small and imperfect.** 25 questions (21 answerable); QA-018 shows the
+  refusal rule can answer an unanswerable question when a retrieved sentence
+  overlaps enough; QA-022 and QA-023 are retrieval misses. The OEM layer is
+  synthetic, so Q&A over "OEM" content only shows the mechanism.
 - **Detection on fresh bugs is 9-10/15 with the sweep and 2-4/15 without it.**
   The model does not change what can be found; both modes reach 9/15 through
   the sweep. Five bugs are missed in both modes because no test applies the
@@ -685,7 +760,8 @@ _Figures: Main eval run 2026-10-04, git `1f0c293` unless a bullet names another 
   that no LLM byte reaches a test; it does not show the bytes are right.
 - CAPL export output is an unverified template, never compiled or run in
   CANoe (no license available).
-- The UI has never been clicked through in a real browser.
+- The UI has never been clicked through in a real browser (AppTest only).
+- Docker was never built; the test-design-time comparison was never measured by a human.
 - P2/P2* timing checks for the in-process transport are wall-clock on a
   general-purpose desktop OS and are `timing_warning`s rather than hard failures
   for anything but an explicit per-step `max_response_time_ms`

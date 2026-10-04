@@ -3,369 +3,259 @@
 A local, offline-capable assistant that turns a plain-English UDS (Unified
 Diagnostic Services, ISO 14229-style) requirement into validated, executable
 test cases, runs them against an independent ECU simulator with injectable
-bugs, and reports how many real bugs the generated suite catches.
+bugs, answers cited diagnostic questions, and reports how many bugs the
+generated suite catches.
 
 **The ECU spec is synthetic.** `data/bcm_spec.yaml` describes a fictional Body
-Control Module authored from scratch for this project, in an OEM-spec style.
-No real OEM document and no ISO 14229 text is copied anywhere in this repo —
-see `DECISIONS.md` for every design choice and `AGENT.md` for the working
-rules this project was built under.
+Control Module, hand-authored as structured data in an OEM-spec style (not
+extracted from a PDF; no public OEM spec exists). The OEM guideline
+`data/oem_diagnostic_guidelines.md` is synthetic too. No ISO 14229 text is
+copied anywhere. See `DECISIONS.md` for every design choice and `AGENT.md` for
+the working rules.
 
-**Status.** Part A (honest evaluation), Part B (real-model evaluation) and
-Part C (fixes, then a fresh blind evaluation) are done. The local Qwen2.5-3B
-model (Ollama) and Chroma retrieval (fastembed embeddings) were run for real and
-compared with the deterministic mock. **Headline (fresh v2 data, written blind
-after the Part C freeze):** held-out v2 bug detection is **2/15 (13.3%) for the
-generated suite in both modes** (gold 5/15, union 5/15), so the coverage
-templates added in Part C did not transfer from the seen v1 bugs to fresh ones.
-On 16 fresh natural requirements the model is better than the mock at
-requirement understanding (parsed F1 0.661 vs 0.367, category recall 74.0% vs
-48.0%, precondition recall 77.8% vs 55.6%), but its precision is 0.565 with 30
-false positives (the mock's precision is 1.000, its recall 0.225). The precision
-fix did not work; explain batching did (1.00 LLM call per requirement, mean
-latency 21.37 s vs 30.79 s). The v1 and in-sample numbers are seen or tuned on
-and are not evidence. **Mock stays the default.** Details:
-[`docs/RESULTS.md`](docs/RESULTS.md),
-[`outputs/partC/interpretation.md`](outputs/partC/interpretation.md).
+**Core principle:** the LLM handles language (parsing the requirement, choosing
+templates, phrasing explanations and answers); it never produces a byte that
+reaches a test. Every byte, NRC and timing value comes from the deterministic
+rules engine (the oracle) and the test templates. The system therefore works
+with a 3B local model and fully without a model in **mock mode** (the default).
 
-**Core principle:** the LLM handles language (parsing the requirement,
-choosing which templates/tests apply, writing the human explanation); it never
-produces a byte that reaches a test. Every byte, NRC and timing value comes
-from the deterministic rules engine (the oracle) and the test templates. This
-is why the system works correctly with a 3B local model, and runs completely
-without any model in **mock mode**.
+## Status (Part E, final)
 
-## Quick setup
+One headline per area. All numbers come from `docs/RESULTS.md`, which states
+the run (date and git hash) behind each section; the honest summary is
+[`FINAL_REPORT.md`](FINAL_REPORT.md).
 
-```bash
-python -m pip install -e .
-# optional, for the Streamlit UI:
-python -m pip install -e ".[ui]"
-```
-
-This installs the pinned pure-Python dependencies from `pyproject.toml`:
-`pydantic`, `pyyaml`, `udsoncan`, `can-isotp`, `python-can`, `rank-bm25`,
-`fastapi`, `httpx`, `langgraph`. Everything above works fully offline with no
-model and no GPU.
-
-The two heavier, optional features (a real local LLM via Ollama, semantic
-retrieval via ChromaDB + fastembed embeddings) need extra packages and a model
-download. They are documented step by step in
-**[`MODEL_SETUP.md`](MODEL_SETUP.md)**; both have been run and evaluated (see
-Evaluation), but neither is required for anything else in this README.
-
-## Runtime switches
-
-Environment variables, read by `uds_assistant/config.py` (first three) and
-`uds_assistant/llm/client.py` / `uds_assistant/rag/` (the rest):
-
-| Variable | Values | Default | Effect |
-|---|---|---|---|
-| `LLM_MODE` | `mock`, `ollama` | `mock` | `mock` = deterministic keyword/rule stand-in LLM, no network. `ollama` = local Qwen2.5-3B via Ollama; falls back to `mock` with a warning if unreachable (check the report's "LLM mode used" line and the fallback events). |
-| `RETRIEVER` | `bm25`, `chroma` | `bm25` | `bm25` = lexical retrieval, no model. `chroma` = ChromaDB with `BAAI/bge-small-en-v1.5` embeddings; falls back to `bm25` with a warning if the packages are missing. Chroma store: `outputs/chroma` (git-ignored). |
-| `EMBEDDER` | `fastembed`, `sentence-transformers` | `fastembed` | Embedding backend for `RETRIEVER=chroma`. `fastembed` runs the model as ONNX on the CPU (no torch). `sentence-transformers` is an optional path that is not installed here and was not run. Model cache: `~/.cache/uds_assistant/fastembed` (`FASTEMBED_CACHE_PATH` overrides). |
-| `OLLAMA_HOST` | URL | `http://localhost:11434` | Ollama server. |
-| `OLLAMA_MODEL` | model tag | `qwen2.5:3b-instruct-q4_K_M` | Model used in ollama mode. |
-| `OLLAMA_NUM_CTX` | integer | `4096` | Context window sent to Ollama. 4096 fits a 4 GB GPU and is the setting that was evaluated. The prompt-budgeting and truncation detection are sized from it. |
-| `OLLAMA_KEEP_ALIVE` | duration | `10m` | How long Ollama keeps the model loaded between calls. |
-
-An invalid value for `LLM_MODE`, `RETRIEVER` or `EMBEDDER` falls back to its
-default and prints a warning instead of crashing. Ollama server-side settings
-for a 4 GB GPU (flash attention, q8_0 KV cache) are in `MODEL_SETUP.md` 2b.
-
-Examples (bash; PowerShell users use `$env:NAME = "value"`):
-
-```bash
-RETRIEVER=chroma EMBEDDER=fastembed python -m uds_assistant.api   # semantic retrieval
-LLM_MODE=ollama streamlit run uds_assistant/ui/streamlit_app.py   # real local model in the UI
-python scripts/demo.py --llm ollama                               # demo with the real model (falls back to mock with a warning)
-```
-
-## Running the tests
-
-```bash
-python -m pytest -q
-```
-
-Current result on this machine (Python 3.13.6, Windows, default run):
-**1167 passed, 14 skipped in 303.53s (0:05:03)**. The 14 skips are the 13 `needs_model` tests plus 1 UI test that only applies to an old version 2 report. The `needs_model` tests are skipped
-automatically unless `RUN_MODEL_TESTS=1`. To run them (needs Ollama running with
-the model pulled, and fastembed + chromadb installed; see `MODEL_SETUP.md`; they
-use the GPU and take a few minutes):
-
-```bash
-RUN_MODEL_TESTS=1 python -m pytest -m needs_model -v      # bash
-```
-
-```powershell
-$env:RUN_MODEL_TESTS = "1"; python -m pytest -m needs_model -v   # PowerShell
-```
-
-Result of the `needs_model` run (real Ollama server and Chroma/fastembed, after
-the Part C evaluation): **13 passed, 1168 deselected in 123.61s (0:02:03)**.
-`RUN_MODEL_TESTS=1 pytest` (everything, model tests included) also works.
-
-Tests mirror the package layout under `tests/` (one subdirectory per package:
-`protocol/`, `rules/`, `simulator/`, `testgen/`, `rag/`, `llm/`, `agent/`,
-`runner/`, `eval/`, `export/`, `store/`, `api/`, `ui/`, `spec/`).
-
-## Evaluation
-
-```bash
-python -m uds_assistant.eval.run_eval --mode mock      # fast, offline
-python -m uds_assistant.eval.run_eval --mode ollama --noise-runs 3 --before-after   # about 31 minutes, uses the GPU; also runs mock
-```
-
-`--mode ollama` runs the mock in the same invocation (`--no-mock-compare`
-turns that off), so both columns come from the same inputs, templates and
-retriever. `--noise-runs N` repeats the natural-v2 run N times in ollama mode
-(run 1 feeds the tables; the report lists every run with mean and range; the
-mock runs once plus a second run that must be identical). `--before-after`
-writes `outputs/partC/before_after.md` from the frozen pre-Part C baseline.
-`--rerender` rebuilds the report from stored JSON without recomputing anything.
-It exits with code 2 if any generated test fails the byte-provenance check.
-Regenerates `outputs/eval_report.json` and `outputs/eval_report.md` (report
-version 3): the fresh v2 rows first, then simulator/rules agreement, gold on the
-clean simulator, udsoncan virtual-CAN sequence, coverage, citation validity, the
-seen (v1) and in-sample rows labelled as such, the noise check, retrieval
-comparison and freeze verification. Add `--skip-can` to skip the udsoncan
-virtual-CAN check (fast runs only).
-
-**Headline (report version 3, both modes, one invocation).**
-
-| Metric | mock | ollama |
+| Area | Headline | Run |
 |---|---|---|
-| **Held-out v2 bug detection, FRESH (15 bugs): generated / gold / union** | 2/15 / 5/15 / 5/15 | 2/15 / 5/15 / 5/15 |
-| **Natural v2, FRESH (n=16): parsed P / R / F1** | 1.000 / 0.225 / 0.367 | 0.565 / 0.796 / 0.661 |
-| Natural v2, FRESH: parsed exact | 0/16 | 4/16 |
-| Natural v2, FRESH: category recall / precondition recall (run 1) | 48.0% / 55.6% | 74.0% / 77.8% |
-| Natural v2, ollama 3-run mean (range): category / precondition recall | - | 75.3% (74.0%-76.0%) / 82.7% (77.8%-85.2%) |
-| Natural v2, FRESH: parsed false positives | 0 | 30 (25 services, 5 DIDs) |
-| Planner choices rejected (35 old requirements / v2) | 0 / 0 | 15 / 12 |
-| Mean wall-clock per requirement (35 old requirements) | 0.27 s | 21.37 s |
-| Byte provenance (all generated tests, all runs) | 511/511 | 418/418 |
-| SEEN: held-out v1 generated (12 bugs) | 10/12 | 5/12 |
-| In-sample (tuned on): generated (26 bugs) | 25/26 | 19/26 |
+| Correctness (LLM-independent) | simulator vs rules engine 5000/5000; gold 60/60 on the clean simulator; udsoncan virtual-CAN sequence PASS (one happy path) | Main eval 2026-10-04, `1f0c293` |
+| Bug detection (fresh v3, 15 bugs) | full output (generated + conformance sweep) **10/15 mock, 9/15 ollama**; requirement-driven tests alone 4/15 and 2/15; the sweep alone 9/15 | Main eval 2026-10-04, `1f0c293` |
+| Requirement understanding (natural v3, n=16) | ollama better than mock: parsed F1 0.609 vs 0.407, category recall 70.0% vs 42.0%; ollama precision only 0.596 (19 false positives) | Main eval 2026-10-04, `1f0c293` |
+| Cited Q&A (25 blind questions) | answer accuracy 90.5% (19/21) in both modes; correct not-found 3/4; known misses QA-018, QA-022, QA-023 | Q&A run 2026-10-04, `9e66f7a` |
+| UI | five-tab Streamlit UI, headless-tested; never clicked through in a real browser | E4 |
 
-Reading it honestly: the generated suite catches only 2 of 15 fresh bugs in
-both modes (11 misses have no generated test applying the stimulus, 2 apply it
-but cannot see the bug); the model helps requirement understanding on fresh
-phrasing but invents targets (mostly services, which the grounding check does
-not cover), so the precision fix did not work; rejected planner choices rose and
-normalisation fired 0 times; explain batching cut latency from 30.79 s to
-21.37 s. The v1 held-out numbers are SEEN (the Part C templates were designed
-against those misses) and the in-sample numbers are tuned on: neither is
-evidence of improvement. Caveats: n=15 and n=16, one model, a synthetic spec,
-bugs written by an LLM, three ollama noise runs, five SWS disagreements still
-open. Retrieval: neither BM25 nor Chroma is clearly better on 19 queries (test
-split hit@3 63.6% for both), so BM25 stays the default. See
-`outputs/eval_report.md` for all numbers, [`docs/RESULTS.md`](docs/RESULTS.md)
-for the walkthrough (including the before/after table, the noise check and the
-list of missed bugs), [`outputs/partC/before_after.md`](outputs/partC/before_after.md),
-[`outputs/partC/interpretation.md`](outputs/partC/interpretation.md) and
-`FINAL_REPORT.md` for the honest summary and caveats.
+Not done or not measured: Docker is **written, not built here**; the manual
+vs tool test-design-time comparison is **pending owner measurement**; CAPL
+exports never ran in CANoe; no real ECU; one small model; samples are small
+(15 bugs, 16 requirements, 25 questions). The natural door-lock requirement did
+not yield the intended test pair (FINAL_REPORT, Known limitations).
+[`docs/CASE_STUDY_COMPLIANCE.md`](docs/CASE_STUDY_COMPLIANCE.md) maps every
+case-study item to done / partial / out of scope with evidence.
 
-Quick tour of the whole system: `python scripts/demo.py` (about 2 seconds, mock,
-offline; see [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)). Useful flags:
-`--req REQ-010`, `--bug <id>` (any bug id from the in-sample, held-out v1 and
-held-out v2 catalogs), `--text "..."`, `--offline` (load pre-generated tests),
-`--full-eval` (mock-only re-run into a temp folder, about 65 s) and
-`--llm ollama`.
+## Quick start (local)
 
-The demo also has an ollama segment: `python scripts/demo.py --llm ollama`
-(about 21 s per requirement in the recorded run; falls back to the mock with a
-printed warning if Ollama is not reachable). The demo script has a pre-recorded
-fallback for when Ollama is slow or down.
+```bash
+python -m pip install -e ".[ui]"      # pure-Python deps + Streamlit; no model, no GPU
+python scripts/demo.py                # about 2 s, mock, offline terminal tour
+streamlit run uds_assistant/ui/streamlit_app.py   # the UI
+python -m uds_assistant.api           # FastAPI on http://localhost:8000 (docs at /docs)
+```
+
+Python 3.13 was used to build and test (code stays 3.11-syntax-compatible).
+Dependencies are in `pyproject.toml`; `uvicorn` is needed by the API. A real
+local LLM (Ollama) and semantic retrieval (Chroma + fastembed) are optional;
+step-by-step in [`MODEL_SETUP.md`](MODEL_SETUP.md).
+
+## Quick start (Docker)
+
+Written, **not built or run in this environment** (limited network), so treat
+it as untested. Two services: `app` (FastAPI on 8000 and Streamlit on 8501,
+started by `docker/entrypoint.sh`) and `ollama` (the official image, port 11434).
+
+```bash
+docker compose up -d --build
+docker compose exec ollama ollama pull qwen2.5:3b-instruct-q4_K_M
+```
+
+- UI http://localhost:8501; API http://localhost:8000 (`/docs`, `/health`).
+- Default `LLM_MODE=mock` needs no model. After the pull: `LLM_MODE=ollama docker compose up -d`
+  (or put it in a `.env` file). The app reaches Ollama at `http://ollama:11434`
+  and falls back to the mock with a warning if it is unreachable.
+- `RETRIEVER=chroma` works in the image (chromadb and fastembed installed; the
+  embedding model downloads on first use and needs network access).
+- `outputs/` is a volume (`app_outputs`), models are in `ollama_data`. The image
+  does not copy the committed `outputs/` reports, so the Results tab shows
+  "no report" until `run_eval` is run inside the container.
+- NVIDIA GPU: install the NVIDIA Container Toolkit, then uncomment the
+  `deploy.resources.reservations.devices` block under `ollama` in
+  `docker-compose.yml`. CPU works but is slow.
+
+## The UI (five tabs)
+
+`streamlit run uds_assistant/ui/streamlit_app.py`. The sidebar selects the LLM
+mode and retriever (an unavailable Ollama or Chroma is removed and the radio
+disabled, with the reason) and shows the governance banner once ("Synthetic ECU
+spec. Human review required before any real-hardware execution.").
+
+| Tab | What it does |
+|---|---|
+| **Ask** | question box, answer, confidence badge (high / medium / low plus reason), expandable citations (layer, source, quote); "not found in the approved sources" when the evidence does not support an answer |
+| **Generate & Review** | empty requirement box with a "load example" dropdown (4 examples incl. a natural-language door-lock one); results table (id, category, confidence, review status); selecting a test shows decoded steps (hex request to expected response with a readable line, for example `2E 20 01 01 -> 7F 2E 33 (securityAccessDenied)`), citations, explanation, and which targets were written in the text vs inferred; approve / reject / comment stored in the audit DB |
+| **Run on Simulator** | pick a bug (in-sample, held-out v1, v2, v3) or none; run selected or approved tests; pass/fail table with the first failing step decoded; "Bug caught by N tests" or "Bug not caught" |
+| **Export** | download the pytest file and the CAPL template (labelled unverified) |
+| **Results** | six headline cards from `outputs/eval_report.json`, each with run date and git hash; noise checks, freeze hashes, per-requirement tables and history are in collapsed expanders; degrades gracefully without a report |
+
+Logic lives in `uds_assistant/ui/` modules; `streamlit_app.py` only wires the
+tabs. Headless-tested with AppTest (`tests/ui`); manual click-through:
+[`docs/UI_CHECKLIST.md`](docs/UI_CHECKLIST.md); 7-minute demo path:
+[`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md). The UI calls the pipeline directly
+(no HTTP) and keeps its own audit DB (`outputs/ui_audit.sqlite`).
 
 ## API
 
 ```bash
-python -m uds_assistant.api
-# --host, --port, --reload also accepted
+python -m uds_assistant.api       # --host, --port, --reload also accepted
 ```
-
-Runs the FastAPI service with uvicorn (`uds_assistant/api/app.py:create_app()`,
-served as `uds_assistant.api.app:app`). Endpoints:
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/health` | liveness/config check |
 | GET | `/spec` | the loaded ECU spec summary |
-| POST | `/generate` | run the agent pipeline on a requirement → generated tests |
+| POST | `/generate` | run the agent pipeline on a requirement; tests carry `confidence` and `confidence_reason`, plus written/inferred target provenance |
+| POST | `/ask` | cited diagnostic Q&A: body `{question, mode?}`; returns `{answer, citations[{chunk_id, layer, source, quote}], confidence, confidence_reason, status (answered / not_found), fallback_events, llm_mode}` |
 | POST | `/run` | execute tests (by `run_id` or inline) on the simulator |
-| POST | `/eval` | run the evaluation pipeline (writes to a temp dir by default, not `outputs/`) |
+| POST | `/eval` | run the evaluation pipeline (temp dir by default, not `outputs/`) |
 | POST | `/export` | render pytest/udsoncan or CAPL exports |
 | GET | `/bugs` | the injectable bug catalog |
 | GET | `/runs` | audit trail of past runs |
-| POST | `/tests/{run_id}/{test_id}/review` | mark a generated test reviewed/accepted/rejected |
+| POST | `/tests/{run_id}/{test_id}/review` | mark a generated test reviewed (needs `run_id` and `test_id`; `DECISIONS.md` `[API-REVIEW-PATH]`) |
 
-(The review endpoint takes `run_id` *and* `test_id`, not just a test id — see
-`DECISIONS.md` `[API-REVIEW-PATH]` for why, this is a deliberate deviation
-from a flatter path.)
+Q&A answers come only from retrieved chunks and spec lookups. Deterministic
+facts (session, security level, length, read/write access of a DID or routine,
+NRC meanings, timing) are looked up from the parsed spec and the LLM only
+phrases them; its phrasing is verified and replaced by the template answer if
+a value is missing or invented. Unknown entities and weak evidence give
+`not_found` rather than a guess.
 
-## UI
+## Runtime switches
+
+Environment variables (`uds_assistant/config.py`, `llm/client.py`, `rag/`):
+
+| Variable | Values | Default | Effect |
+|---|---|---|---|
+| `LLM_MODE` | `mock`, `ollama` | `mock` | `mock` = deterministic stand-in, no network. `ollama` = local Qwen2.5-3B; falls back to `mock` with a warning if unreachable. |
+| `RETRIEVER` | `bm25`, `chroma` | `bm25` | `chroma` = ChromaDB + `BAAI/bge-small-en-v1.5`; falls back to `bm25` if the packages are missing. Store: `outputs/chroma` (git-ignored). |
+| `EMBEDDER` | `fastembed`, `sentence-transformers` | `fastembed` | Backend for `RETRIEVER=chroma`; `sentence-transformers` was never run here. |
+| `OLLAMA_HOST` | URL | `http://localhost:11434` | Ollama server. |
+| `OLLAMA_MODEL` | tag | `qwen2.5:3b-instruct-q4_K_M` | Model in ollama mode. |
+| `OLLAMA_NUM_CTX` | integer | `4096` | Context window (fits a 4 GB GPU; the evaluated setting). |
+| `OLLAMA_KEEP_ALIVE` | duration | `10m` | How long Ollama keeps the model loaded. |
+| `UDS_EVAL_REPORT`, `UDS_UI_AUDIT_DB` | paths | repo defaults | Point the UI at another report or audit DB (used by tests). |
+
+An invalid value for `LLM_MODE`, `RETRIEVER` or `EMBEDDER` falls back to its
+default with a warning. Examples: `LLM_MODE=ollama streamlit run uds_assistant/ui/streamlit_app.py`,
+`RETRIEVER=chroma python -m uds_assistant.api`.
+
+## Running the tests, eval and timing
 
 ```bash
-streamlit run uds_assistant/ui/streamlit_app.py
+python -m ruff check .
+python -m pytest -q                                     # full suite, about 15 minutes
+RUN_MODEL_TESTS=1 python -m pytest -m needs_model -q    # needs Ollama + model (PowerShell: $env:RUN_MODEL_TESTS = "1"; ...)
+python -m uds_assistant.eval.run_eval --mode mock       # fast, offline report
+python -m uds_assistant.eval.run_eval --mode ollama --noise-runs 3 --before-after   # about 39 minutes, uses the GPU; also runs mock
+python -m uds_assistant.eval.qa_eval --modes mock,ollama                            # blind Q&A eval (data/qa_eval.csv)
+python scripts/time_generation.py --modes mock,ollama --repeats 3                   # tool-side generation time
 ```
 
-A five-tab demo UI over the same pipeline: **Ask** (cited Q&A with confidence badge and citations), **Generate & Review** (empty requirement box with 4 examples, decoded steps, written/inferred targets, approve/reject/comment stored in the audit DB), **Run on Simulator** (one bug from the in-sample / held-out v1 / v2 / v3 catalogs or none, "Bug caught by N tests"), **Export** (pytest, CAPL marked unverified) and **Results** (six headline cards from `outputs/eval_report.json`, each with run date and git hash, details in collapsed expanders). The sidebar selects the LLM mode and retriever (an unavailable Ollama or Chroma option is removed and the radio disabled, with the reason) and shows the governance banner once. The logic lives in `uds_assistant/ui/` modules (`decode`, `state`, `bugs`, `examples`, `results_cards`, `results_detail`, `env`); `streamlit_app.py` only wires the tabs. Headless-tested with AppTest (`tests/ui`); the manual click-through is [`docs/UI_CHECKLIST.md`](docs/UI_CHECKLIST.md) and the 7-minute demo path is in [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md). It calls `agent.run_pipeline` / `runner.run_suite` / `export.render_*` directly
-rather than over HTTP, with its own audit trail (`outputs/ui_audit.sqlite`).
+Test counts and the run they come from are in `FINAL_REPORT.md` ("Test
+counts"). The `needs_model` tests are skipped unless `RUN_MODEL_TESTS=1`.
+`run_eval` writes `outputs/eval_report.{json,md}` (every section labelled with
+its run; Part C/D before/after tables only under History); `--rerender`
+rebuilds the report from stored JSON without recomputing; `--skip-can` skips
+the virtual-CAN check; it exits with code 2 if any generated test fails the
+byte-provenance check. Test-design-time protocol:
+[`docs/TEST_DESIGN_TIME.md`](docs/TEST_DESIGN_TIME.md).
 
 ## Exports
 
-Generated (or gold) test suites can be rendered to:
+- **Python / pytest / udsoncan** (`export/pytest_export.py`): one test per
+  `TestCase`; runs in-process, or on a virtual-CAN ISO-TP bus with
+  `UDS_EXPORT_TRANSPORT=can` (tests with a time-advance step are skipped there).
+- **CAPL** (`export/capl_export.py`): labelled `UNVERIFIED TEMPLATE`, never
+  compiled or run in CANoe (no license).
 
-- **Python / pytest / udsoncan** (`uds_assistant/export/pytest_export.py`) —
-  one test function per `TestCase`; runs in-process by default, or against a
-  virtual-CAN ISO-TP bus via `UDS_EXPORT_TRANSPORT=can` (tests with a
-  time-advance step are skipped in CAN mode — see Known limitations in
-  `FINAL_REPORT.md`).
-- **CAPL** (`uds_assistant/export/capl_export.py`) — explicitly labeled
-  `UNVERIFIED TEMPLATE — not compiled or run in CANoe` (no CANoe license
-  available).
+## Architecture
+
+```
+ Requirement (plain English) + ECU spec (data/bcm_spec.yaml, synthetic)
+        |
+        v
+ +--------------------- agent/ pipeline (LLM = language only) -------------------+
+ | parse -> retrieve -> plan -> instantiate -> validate -> explain -> annotate    |
+ | (LLM)    (rag/,      (LLM)   (testgen/      (schema, byte   (LLM)   (confidence|
+ |          core layers          templates;     provenance,             + written/ |
+ |          only)                rules engine   oracle, cites)          inferred)  |
+ +--------------------------------------------------------------------------------+
+        |                                           ^ rag/ layers: standard | ecu | project
+        v
+ TestCase objects (bytes from templates + rules engine, citations, confidence)
+        |
+   +----+-----------------------+----------------------------+
+   v                            v                            v
+ runner/ -> simulator/      eval/ metrics, report        export/ pytest, CAPL
+ (clean + one bug at        (outputs/eval_report.*,      store/ SQLite audit trail
+  a time; never imports      run provenance)
+  rules/)
+
+ Question --> qa/ : spec lookup (deterministic) + rag/ search_layers over
+              standard | OEM | ECU | project --> verified phrasing --> cited answer
+              or not_found, with confidence        (POST /ask, UI Ask tab)
+
+ api/ FastAPI (/generate /ask /run /eval /export ...)   ui/ Streamlit (5 tabs)
+ docker/ + Dockerfile + docker-compose.yml (app + ollama; written, not built)
+```
+
+Triangulation (does the oracle deserve trust?): the rules engine and the
+simulator are two independently written implementations (the simulator never
+imports `uds_assistant.rules`, enforced by `tests/simulator/test_independence.py`)
+that must agree on randomized requests; 60 hand-authored gold tests must pass on
+the clean simulator; request bytes are cross-checked against `udsoncan`, which
+also drives a full session over a virtual CAN bus. These share one author and one
+contract, so a shared misreading is invisible; see `FINAL_REPORT.md`. Full diagram:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Repository layout
 
 ```
 uds_assistant/
-  protocol/   SIDs, NRC table, codec (encode/decode), seed/key security math, request builders
+  protocol/   SIDs, NRC table, codec, seed/key math, request builders
   spec/       Pydantic ECU-spec schema + loader (data/bcm_spec.yaml)
-  rules/      The oracle: (spec, state, request) -> exact response + reason trace
-              rules/nrc_order.py = the single NRC-evaluation-order function
-  simulator/  Independent ECU implementation (does not import rules/), bug catalog,
-              in-process + virtual-CAN/ISO-TP transports
-  testgen/    TestCase model, 27 parameterized templates (set v3), gold-test execution
-  rag/        BM25 (offline) + Chroma/fastembed retrieval, retrieval comparison, citations
-  llm/        Pluggable LLM: mock (deterministic) and ollama (local Qwen2.5-3B); all prompts in llm/prompts.py (frozen at B3 revision 8)
-  agent/      LangGraph pipeline (+ plain-Python fallback) over shared node functions
-  runner/     Executes test suites on the simulator, records pass/fail + timing
-  eval/       Metrics + report generation (outputs/eval_report.{json,md}), byte-provenance check
+  rules/      The oracle; rules/nrc_order.py = the single NRC-order function
+  simulator/  Independent ECU (does not import rules/), bug catalog, in-process + virtual-CAN transports
+  testgen/    TestCase model, 27 templates, conformance sweep (1200 tests), gold execution
+  rag/        BM25 + Chroma/fastembed retrieval; four layers (standard/oem/ecu/project), layer-tagged citations
+  llm/        mock (deterministic) and ollama (Qwen2.5-3B); all prompts in llm/prompts.py
+  agent/      pipeline (LangGraph + plain fallback), grounding, confidence rules, annotate
+  qa/         cited diagnostic Q&A (lookup, answer, confidence, models)
+  runner/     runs suites on the simulator, pass/fail + timing
+  eval/       metrics, report, blind Q&A scorer, run provenance, freeze check
   export/     pytest/udsoncan and CAPL exporters
-  store/      SQLite audit trail (runs, tests, decisions, results)
+  store/      SQLite audit trail
   api/        FastAPI service
-  ui/         Streamlit engineering UI
-data/
-  bcm_spec.yaml           synthetic BCM ECU spec
-  requirements_seed.csv   15 seed requirements
-  gold/gold_tests.yaml    60 hand-authored gold tests
-  bugs/bug_catalog.yaml   26 injectable simulator bugs (in-sample)
-  bugs/heldout_catalog.yaml     12 held-out v1 bugs (SEEN)
-  bugs/heldout_v2_catalog.yaml  15 held-out v2 bugs (FRESH, written blind after the Part C freeze)
-  requirements_natural.csv      20 natural v1 requirements (8 dev / 12 test, SEEN)
-  requirements_natural_v2.csv   16 natural v2 requirements (split test2, FRESH)
-  sources/                hand-written UDS reference notes (no ISO text copied)
-docs/
-  behaviour_contract.md   plain-language ECU behaviour spec the simulator is built from
-outputs/
-  eval_report.{json,md}            current evaluation report: mock and ollama side by side (report version 3, template set v3)
-  partC/before_after.md            before/after Part C table
-  partC/interpretation.md          written interpretation of the Part C results
-  partC/baseline_before_partC.json frozen pre-Part C baseline
-  partC/mock_equivalence.json      evidence that C1 left the mock output unchanged
-  partC/eval_run.log               log of the real C5b run
-  eval_interpretation.md           Part B interpretation (historical)
-  ollama_smoke.json                early 5-requirement real-model smoke run (B2, before the plan-context fix)
-  prompt_tuning/                   dev-split-only prompt tuning revisions (B3)
-  eval_report_baseline_v1.{json,md} evaluation report from template set v1, for before/after
-tests/      mirrors uds_assistant/ package-for-package
+  ui/         Streamlit tabs + split logic modules
+data/         spec, requirements (seed, natural v1-v3), gold tests, bug catalogs, qa_eval.csv, OEM guideline, sources/
+docs/         ARCHITECTURE, CODE_TOUR, RESULTS, CASE_STUDY_COMPLIANCE, DOCKER, TEST_DESIGN_TIME, UI_CHECKLIST, DEMO_SCRIPT, ...
+scripts/      demo.py, time_generation.py, gen_gold.py, tune_dev.py, ollama_smoke.py
+docker/       entrypoint.sh (plus Dockerfile and docker-compose.yml at the root)
+outputs/      eval_report.{json,md}, qa/, timing/, partC/, partD/
+tests/        mirrors uds_assistant/ package-for-package
 ```
 
-## Architecture
+## Governance
 
-```
-  Requirement (plain English, data/requirements_seed.csv)
-  + ECU diagnostic spec (data/bcm_spec.yaml)
-            |
-            v
-    +-------------------------------------------------------------+
-    |                    agent/ pipeline (LLM = language only)     |
-    |                                                               |
-    |   parse --> retrieve --> plan --> instantiate --> validate -->explain
-    |   (LLM)     (rag/)       (LLM)    (testgen/        (byte-      (LLM)
-    |                                    templates.py,   provenance
-    |                                    rules engine     re-check)
-    |                                    called inline)
-    +-------------------------------------------------------------+
-            |
-            v
-     Structured TestCase objects (bytes from templates/rules engine, with citations)
-            |
-      +-----+--------------------------------+
-      |                                       |
-      v                                       v
-  runner/ executes on simulator/        eval/ computes metrics against TWO
-  (bug-free AND once per injected bug)  independent ground truths:
-      |                                       |
-      v                                       v
-  pass/fail + timing per test      (a) rules/ oracle  (b) data/gold/ hand-written tests
-      |                                       |
-      +-------------------+-------------------+
-                           v
-              "triangulation": rules engine (oracle) <--agreement test--> simulator
-                               generated suite        <--overlap/prefix--> gold suite
-                           |
-                           v
-            outputs/eval_report.{json,md}: coverage, validity, accuracy,
-            template reuse, citation validity, bug-detection rate
-                           |
-                           v
-            export/: pytest+udsoncan scripts (run on virtual CAN or in-process)
-                      CAPL templates (unverified, no CANoe)
-                           |
-                           v
-            store/: SQLite audit trail   api/ FastAPI   ui/ Streamlit
-```
-
-**Why triangulation, not volume** (see `PROJECT.md` §6): the rules engine and
-the simulator are two *independently written* implementations of the same ECU
-behaviour (the simulator never imports `uds_assistant.rules` — enforced by an
-AST check in `tests/simulator/test_independence.py`) and a hypothesis-based
-property test (`tests/simulator/test_agreement.py`) checks they agree
-byte-for-byte on randomized request sequences. Separately, 60 gold tests were
-hand-authored from `docs/behaviour_contract.md` (not generated) and must pass
-on the bug-free simulator. Request bytes are also cross-checked against
-`udsoncan`'s own encoding wherever it defines the same constants
-(`tests/protocol/test_udsoncan_crosscheck.py`), and a `udsoncan` client runs a
-full session over a virtual CAN / ISO-TP bus
-(`tests/simulator/test_transport.py::test_udsoncan_full_sequence`). See
-`FINAL_REPORT.md` for exactly which of these checks are independent versus
-circular by construction.
-
-## Governance notes
-
-- Every non-obvious design choice and every deviation from `PROJECT.md` /
-  `SCOPE.md` is logged in `DECISIONS.md`, one line per decision, tagged
-  (e.g. `[R-ORDER]`, `[S-INDEP]`, `[EVAL-TPL-V2]`) so a specific NRC rule or
-  test can point at the reasoning behind it.
-- Each check in `rules/nrc_order.py` cites a `DECISIONS.md` tag. Where the
-  AUTOSAR CP R24-11 Dcm SWS actually states the same behaviour, it also cites
-  the `SWS_Dcm_xxxxx` ID (38 distinct IDs, each verified against the local PDF
-  by `tests/rules/test_sws_citations.py`). The PDF is git-ignored, so keep a
-  local copy in `data/sources/`; without it, those tests are skipped. There
-  were 9 known disagreements with the SWS, listed in
-  `docs/SWS_DISAGREEMENTS.md`; D2, D5, D6 and D7 were fixed in Part C and
-  D1, D3, D4, D8 and D9 are still open.
-- No ISO 14229 text is copied anywhere; protocol notes in
-  `data/sources/uds_reference_notes.md` are written from scratch.
-- The LLM (mock or Ollama) never emits bytes that reach a test — see "Core
-  principle" above and `DECISIONS.md [L-NO-BYTES]`.
+- Every non-obvious design choice and deviation is logged in `DECISIONS.md`, one tagged line each.
+- Each check in `rules/nrc_order.py` cites a `DECISIONS.md` tag or an AUTOSAR CP R24-11 Dcm SWS ID (38 distinct IDs verified against a local PDF that is git-ignored; those tests skip without it). 9 disagreements with the SWS are listed in `docs/SWS_DISAGREEMENTS.md`: D2, D5, D6, D7 fixed, D1, D3, D4, D8, D9 open.
+- Standard, OEM, ECU and project knowledge live in separate retrieval layers; the generator uses only the standard, ECU and project layers (`DECISIONS.md` E33-NO-OEM-IN-GEN), Q&A uses all four.
+- Generated tests need human review before any real-hardware execution; the UI says so and records review decisions in the audit DB.
+- Everything runs locally; no data leaves the machine.
 
 ## Further reading
 
-- [`PROJECT.md`](PROJECT.md) — what this project is and why
-- [`SCOPE.md`](SCOPE.md) — in/out of scope, tonight's offline-build scope and success criteria
-- [`AGENT.md`](AGENT.md) — the working rules this repo was built under
-- [`PROGRESS.md`](PROGRESS.md) — phase-by-phase build log
-- [`DECISIONS.md`](DECISIONS.md) — every non-obvious decision and deviation
-- [`MODEL_SETUP.md`](MODEL_SETUP.md) — exact steps to enable Ollama + ChromaDB/fastembed (both verified by running them in Part B)
-- [`docs/CODE_TOUR.md`](docs/CODE_TOUR.md) — guided tour of the code
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — architecture
-- [`docs/RESULTS.md`](docs/RESULTS.md) — results walkthrough, including the mock vs ollama comparison
-- [`outputs/partC/interpretation.md`](outputs/partC/interpretation.md) — Part C interpretation: what improved, what did not, and why (Part B: [`outputs/eval_interpretation.md`](outputs/eval_interpretation.md))
-- [`outputs/partC/before_after.md`](outputs/partC/before_after.md) — before/after Part C table with comparability notes
-- [`docs/UI_CHECKLIST.md`](docs/UI_CHECKLIST.md) — manual click-through checklist for the Streamlit UI (per-tab checklist)
-- [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) — demo script (`python scripts/demo.py`), with an optional ollama segment and a recorded fallback
-- [`docs/SWS_DISAGREEMENTS.md`](docs/SWS_DISAGREEMENTS.md) — rules engine vs AUTOSAR Dcm SWS (D1–D9: D2, D5, D6, D7 fixed in Part C; D1, D3, D4, D8, D9 open)
-- [`docs/RECONCILIATION.md`](docs/RECONCILIATION.md) — search for an older doc set (none found)
-- [`FINAL_REPORT.md`](FINAL_REPORT.md) — honest done/untested/not-done breakdown, Part A, B and C changes, test counts, eval numbers, limitations, next steps
+- [`PROJECT.md`](PROJECT.md) (what and why, final status), [`SCOPE.md`](SCOPE.md), [`AGENT.md`](AGENT.md)
+- [`FINAL_REPORT.md`](FINAL_REPORT.md): honest done / partial / not done, Part D completion, Part E changes, test counts
+- [`docs/RESULTS.md`](docs/RESULTS.md): one-page results; [`outputs/eval_report.md`](outputs/eval_report.md): full report
+- [`docs/CASE_STUDY_COMPLIANCE.md`](docs/CASE_STUDY_COMPLIANCE.md): case-study item to evidence matrix
+- [`docs/CODE_TOUR.md`](docs/CODE_TOUR.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/DOCKER.md`](docs/DOCKER.md)
+- [`docs/TEST_DESIGN_TIME.md`](docs/TEST_DESIGN_TIME.md), [`docs/UI_CHECKLIST.md`](docs/UI_CHECKLIST.md), [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)
+- [`PROGRESS.md`](PROGRESS.md) (phase log), [`DECISIONS.md`](DECISIONS.md), [`MODEL_SETUP.md`](MODEL_SETUP.md)
+- Historical: [`outputs/partC/`](outputs/partC/), [`outputs/partD/before_after.md`](outputs/partD/before_after.md), [`outputs/partD/interpretation.md`](outputs/partD/interpretation.md), [`docs/SWS_DISAGREEMENTS.md`](docs/SWS_DISAGREEMENTS.md)

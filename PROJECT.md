@@ -4,23 +4,27 @@
 
 ---
 
-## Status (as of Part C)
+## Status (as of Part E, final)
 
-The original design below is implemented and evaluated in both `mock` and `ollama` modes. Part C fixed what Part B found, then measured on fresh blind data whether the fixes worked. Numbers here are copied from `outputs/eval_report.md` / `.json` (report version 3), `outputs/partC/before_after.md` and `PROGRESS.md`; `FINAL_REPORT.md` is the honest summary and `docs/RESULTS.md` the walkthrough.
+The design below is implemented and evaluated in both `mock` and `ollama` modes. Part D added a requirement-independent conformance sweep, service grounding and a constrained planner, and measured on fresh v3 blind data. Part E made the results one consistent story, added cited Q&A, confidence indicators, a separate OEM retrieval layer, Docker files and a five-tab UI. Numbers here are copied from `docs/RESULTS.md` (which states the run behind each section) and `outputs/eval_report.json`; `FINAL_REPORT.md` is the honest summary and `docs/CASE_STUDY_COMPLIANCE.md` maps every case-study item to evidence.
 
-- **Headline (fresh v2 data, written blind after the Part C freeze):**
-  - **Held-out v2 bug detection is 2/15 (13.3%) for the generated suite in both modes**; gold 5/15 (33.3%), union 5/15 (33.3%). 11 of the 13 misses have no generated test applying the stimulus; 2 apply it but cannot see the bug.
-  - **Natural v2 requirement understanding (n=16): ollama is better than mock.** Parsed F1 0.661 vs 0.367 (P/R 0.565/0.796 vs 1.000/0.225), category recall 74.0% vs 48.0%, precondition recall 77.8% vs 55.6% (ollama run 1; 3-run mean category recall 75.3%, range 74.0%-76.0%; precondition recall mean 82.7%, range 77.8%-85.2%). Ollama has 30 false positives (25 services, 5 DIDs); the mock has none but finds under a quarter of the targets.
-  - **The precision fix did not work** (the grounding check does not cover services). Template-id normalisation fired 0 times and rejected planner choices rose (15 on the 35 old requirements, 10 before; 12 on v2). **Explain batching worked:** 1.00 LLM call per requirement (4.51 before), mean latency 21.37 s (30.79 s before).
-- **SEEN and tuned-on numbers are not evidence.** Held-out v1 (12 bugs) is *seen*: the Part C templates were designed against its misses (mock generated 3/12 before, 10/12 after; ollama 3/12 before, 5/12 after). The in-sample 26-bug numbers are *tuned on* (mock 25/26, ollama 19/26).
-- **Mock and ollama modes: both evaluated** (one invocation, same inputs, templates and retriever, plus a 3-run ollama noise check). Ollama = `qwen2.5:3b-instruct-q4_K_M` via Ollama 0.35.1 on an RTX 3050 Laptop GPU (4 GB), `num_ctx` 4096, temperature 0. The whole evaluation took about 31 minutes (1854.37 s). **Default stays `mock`** (reproducible, offline, fast); whether to prefer ollama for parsing is a trade of recall against precision, not a clear win.
-- **Templates: 27 (template set v3).** v1 had 14; 9 generic v2 templates were added in Phase 7 after inspecting in-sample misses; Part C added 4 generic templates and variants of 3 more (cap 32), designed from the static list of stimuli the held-out v1 misses needed. So v1 held-out results are seen, and only the v2 sets measure the templates fairly.
-- **Freeze policy.** From the end of C3 until the v2 data was written and measured, nothing in templates, prompts, planner or gold tests changed. Recorded hashes (in `PROGRESS.md`, "Part C freeze"): commit `5a36eb432ed5aa05fb4a8ccb6776e8232a43d309`, `uds_assistant/testgen` tree `a4b6491fc2d01421c4cff10143aabd3c75017df1`, `uds_assistant/llm` tree `95ebf497e3e31a4d6d1377ca960b15e94e5cad66`, `uds_assistant/agent` tree `9696c352234501d72ac54c18af5189317482321d`, `uds_assistant/llm/prompts.py` blob `c0c6d5a6f0b64790beb13bf0179a6ef7877f31f7`, `data/gold` tree `778740195a3dc923ae2f6a34fd4b78e11d87b024`. Every evaluation run re-checks them; all matched and were clean. The check proves the frozen paths did not change, not that the v2 data was chosen blind (that rests on the recorded prompts).
-- **AUTOSAR SWS: 4 fixed, 5 open.** The rules engine cites 38 distinct AUTOSAR CP R24-11 Dcm SWS IDs. D2, D5, D6 and D7 were fixed in Part C (rules engine, behaviour contract, independent simulator, one hand-updated gold test; simulator and engine agree on 100% of requests on two seeds). **D1, D3, D4, D8 and D9 remain open** (`docs/SWS_DISAGREEMENTS.md`). The SWS PDF is git-ignored and not redistributed; SWS tests skip without a local copy.
-- **Chroma retrieval with fastembed embeddings (`BAAI/bge-small-en-v1.5`, ONNX, CPU): done and compared with BM25** on 19 queries. Neither is clearly better (test split hit@3 63.6% for both; hit@1 BM25 27.3% vs Chroma 18.2%), so the default stays BM25.
-- **Known untested or open:** UI never clicked through in a real browser (`docs/UI_CHECKLIST.md` is the manual procedure); `EMBEDDER=sentence-transformers` never run; only one small model tried; CAPL exports never run in CANoe; no real ECU; synthetic spec; small samples (15 bugs, 16 requirements).
+- **Correctness (LLM-independent; Main eval 2026-10-04, `1f0c293`):** simulator vs rules engine 5000/5000, gold tests 60/60 on the bug-free simulator, udsoncan virtual-CAN sequence PASS (one happy path), 1200/1200 sweep tests pass on the clean simulator.
+- **Bug detection (fresh v3, 15 bugs written blind after the Part D freeze; same run):** full output (requirement-driven tests plus the sweep) **10/15 mock, 9/15 ollama**. Requirement-driven tests alone 4/15 and 2/15; the sweep alone 9/15; gold 3/15. Five bugs are missed in both modes (no test applies the stimulus).
+- **Requirement understanding (natural v3, n=16; same run):** ollama is better than mock (parsed F1 0.609 vs 0.407, category recall 70.0% vs 42.0%, precondition recall 89.7% vs 48.3%) but its precision is 0.596 with 19 false positives; mock precision 0.857, recall 0.267.
+- **Cited Q&A (25 blind questions; Q&A run 2026-10-04, `9e66f7a`):** answer accuracy 90.5% (19/21) in both modes, correct not-found 3/4, citation correctness 95.2% mock / 90.5% ollama. Known misses: QA-018 (answered instead of refusing), QA-022 and QA-023 (retrieval misses).
+- **Confidence:** high / medium / low plus a one-line reason on every Q&A answer and generated test (rules in `DECISIONS.md` E32-*). Mock distribution on the 15 seeds: 135 high, 71 medium, 0 low; the `low` level is only unit-tested.
+- **UI:** five tabs (Ask, Generate & Review, Run on Simulator, Export, Results), headless-tested; never clicked through in a real browser.
+- **Docker:** `Dockerfile`, `docker-compose.yml` (app + ollama), `.dockerignore`, `docs/DOCKER.md`: **written, not built here** (limited network).
+- **Test design time:** protocol and tool-side timing done (mock mean 0.217 s, ollama 19.36 s per requirement, timing run `8357ec0`); the manual comparison is **pending owner measurement**.
+- **Known limitations:** synthetic spec and simulator by the same team; one 3B model; small samples (one item moves a score by 4 to 7 points); CAPL never run in CANoe; no real ECU or hardware; SWS D1, D3, D4, D8, D9 open; the natural door-lock requirement did not produce the intended test pair.
+
+### Components (final)
+
+Protocol core, ECU spec, rules engine (oracle), independent simulator with 68 injectable bugs (26 in-sample, 12 + 15 + 15 held-out v1 to v3), 27 templates plus the 1200-test conformance sweep, 60 gold tests, retrieval with **four layers** (standard / OEM / ECU / project, layer-tagged citations; the generator uses only standard, ECU and project, Q&A uses all four), mock and ollama LLM layer, agent pipeline with **confidence annotation**, runner, evaluation with run provenance, pytest and CAPL exports, SQLite audit store, FastAPI (including `POST /ask`), **cited Q&A** (`qa/`), **five-tab Streamlit UI**, **Docker files**.
+
+- **Freeze policy.** The Part C and Part D freezes (hash tables in `PROGRESS.md` and `FINAL_REPORT.md`) applied through D6 only. Part E legitimately changed code (Q&A, confidence, retrieval layers, UI); generator bytes were verified unchanged in E3.2 and E3.3 (mock output for the 15 seeds identical, 206 tests).
 - **Python 3.13** (3.13.6) is what the project was built and tested on; code is kept 3.11-syntax-compatible.
-- More: `docs/RECONCILIATION.md` (no older doc set found), `docs/CODE_TOUR.md`, `docs/ARCHITECTURE.md`, `docs/RESULTS.md`, `docs/DEMO_SCRIPT.md`, `docs/UI_CHECKLIST.md`, `outputs/partC/interpretation.md`, `outputs/partC/before_after.md`.
+- More: `docs/RECONCILIATION.md`, `docs/CODE_TOUR.md`, `docs/ARCHITECTURE.md`, `docs/RESULTS.md`, `docs/CASE_STUDY_COMPLIANCE.md`, `docs/DEMO_SCRIPT.md`, `docs/UI_CHECKLIST.md`, `docs/DOCKER.md`, `docs/TEST_DESIGN_TIME.md`, `outputs/partD/interpretation.md`.
 
 ---
 
@@ -77,7 +81,10 @@ Because of this, the system stays correct with a small 3B local model, and it ru
 | 12 | **Evaluation** (`eval/`) | Metrics and report |
 | 13 | **Exports** (`export/`) | pytest/udsoncan scripts, CAPL templates |
 | 14 | **Store** (`store/`) | SQLite audit trail: runs, tests, decisions, results |
-| 15 | **API / UI** (`api/`, `ui/`) | FastAPI service, Streamlit engineering UI |
+| 15 | **API / UI** (`api/`, `ui/`) | FastAPI service (`/generate`, `/ask`, `/run`, ...), five-tab Streamlit UI |
+| 16 | **Q&A** (`qa/`) | Cited diagnostic answers: deterministic spec lookup + layered retrieval + verified LLM phrasing, `not_found` when unsupported |
+| 17 | **Confidence** (`agent/confidence.py`, `agent/annotate.py`) | high / medium / low plus reason for generated tests and Q&A answers |
+| 18 | **Docker** (`Dockerfile`, `docker-compose.yml`, `docker/`) | App + Ollama services; written, not built here |
 
 ## 5. Protocol scope (MVP)
 
@@ -125,6 +132,8 @@ The ECU spec is **synthetic, in a realistic OEM style**, and this is stated open
 
 ## 7. Evaluation metrics
 
+> **Historical (Part C, report version 3, git `942f438`).** The table below is the Part C report, kept for the record. The current results (Part D/E: fresh v3 sets, conformance sweep, Q&A) are in `docs/RESULTS.md`, each section labelled with its run.
+
 The original metric list (request validity, expected-response accuracy, coverage, template reuse, citation validity, bug detection, gold baseline) is retained in `outputs/eval_report.md`, but several of them were circular or in-sample, so the headline is a table whose first two rows are fresh. Numbers are exactly those in `outputs/eval_report.md` (report version 3; modes `mock` and `ollama`, one invocation).
 
 | Metric | mock | ollama |
@@ -170,7 +179,7 @@ Each LLM-dependent metric is reported separately for `mock` and `ollama` modes. 
 
 | Phase | Name | Content |
 |---|---|---|
-| 1 | Knowledge Pilot | Protocol core, spec, retrieval with citations |
+| 1 | Knowledge Pilot | Protocol core, spec, retrieval with citations; cited Q&A (`POST /ask`, Part E) |
 | 2 | Test Generation | Rules engine, templates, gold set, agent pipeline |
 | 3 | Automation | Simulator, runner, bug injection, exports, evaluation |
-| 4 | Scale | Real LLM evaluation (done, Part B), ChromaDB embeddings (done, Part B), UI, multi-ECU specs, coverage analytics |
+| 4 | Scale | Real LLM evaluation (done, Part B), ChromaDB embeddings (done, Part B), tabbed UI (Part E), Docker files (written, not built). Multi-ECU specs: not done (one synthetic BCM). Coverage analytics: oracle-observable coverage only (sweep), not code coverage |
