@@ -917,3 +917,10 @@ The validation output, the count of requirements containing hex IDs, which are a
 - E4: tabbed Streamlit UI + AppTest tests + door-lock sanity check.
 - E5: README/PROJECT/CODE_TOUR/ARCHITECTURE/FINAL_REPORT updates, `docs/CASE_STUDY_COMPLIANCE.md`, final checks.
 - Work is delegated to Sonnet subagents; parallel agents do not commit, the coordinator commits.
+
+## E1 — done (2026-10-04)
+
+- **Finding:** the 123 Ollama `explain: ... missing in LLM reply` events are the 3B model returning valid JSON with fewer `explanations` entries than tests (often three). Repro on all 15 seed requirements: 75 tests, 15 batches, 17 events; 0 id mismatches after normalisation, 0 invented ids, 0 invalid JSON or retries, 0 truncations, `done_reason` `stop` (no token limit hit). Replaying one request twice gives the same reply.
+- **Not a plain bug, so no code change and no re-run.** Explain output is prose in `TestCase.explanation` only; nothing in `eval/`, `export/` or the oracle reads it, so bytes and scores are unaffected.
+- Written up in `outputs/partD/interpretation.md` (section "Ollama explain fallback events (Part E investigation)"), re-rendered into `outputs/eval_report.md/json` with `--rerender` (no metric recomputed).
+- Tests: no code changed, so pytest and ruff were not re-run for E1.

@@ -514,3 +514,4 @@ Both agents were launched after the Part D freeze. Their exact prompts are recor
   - Natural v3: parsed exact 1/16; parsed P/R/F1 0.857 / 0.267 / 0.407; exercised F1 0.342; category recall 0.42; precondition recall 0.483; 7 requirements produced nothing.
   - Five v3 bugs have no test that applies their stimulus: `session_switch_keeps_pending_seed`, `lockout_expiry_resets_attempt_count`, `nrc_order_subfunction_before_length`, `read_did_speed_not_clamped`, `dtc_read_reports_masked_status`.
 - **[PD5-LABELS]** The UI and `scripts/demo.py` still label the v2 results as "fresh". That needs a label update in D6, because v2 is now seen.
+- E1: explain fallback events are model omissions (valid JSON, fewer entries), not an id-matching, limit or schema bug; no code change, no re-run, because fixing it would be prompt tuning. Reason: decision rule fixes plain bugs only.

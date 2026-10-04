@@ -182,6 +182,43 @@ All numbers come from one run of `python -m uds_assistant.eval.run_eval --mode o
 2. Service precision on fresh phrasing: the model still adds `0x10`/`0x27` where the text does not state them, and still misses `0x3E` in some requirements.
 3. Test a larger model or context. Only one 3B model on a 4 GB GPU was tried.
 
+
+## Ollama explain fallback events (Part E investigation)
+
+Investigated 2026-10-04 at git `ffa813d` (code under `uds_assistant/agent` and `uds_assistant/llm` unchanged since the Part D freeze). The report lists 123 `explain: <test_id>: missing in LLM reply; used fallback text` events for the Ollama run, and 33–44 per run in the natural-v3 noise table (44, 33, 36).
+
+**Where it comes from.** `explain` in `uds_assistant/agent/nodes.py` sends one batched request per requirement (several only if the prompt would not fit `num_ctx` 4096) and asks for `{"explanations": [{"test_id": ..., "explanation": ...}]}`. A returned entry is used only if its `test_id` is exactly one of the batch ids. Any test with no usable entry gets `fallback_explanation` and the event above. The request carries no `num_predict`; the JSON schema is the plain `ExplanationBatch` model, so the model may return any number of entries (no required length or id list).
+
+**Cause: the 3B model omits entries. It is a model limitation, not a code bug.** I re-ran all 15 seed requirements in ollama mode (`qwen2.5:3b-instruct-q4_K_M`, `num_ctx` 4096, temperature 0, seed 0) and recorded every raw explain reply next to the expected ids:
+
+| Check | Result |
+|---|---|
+| Tests explained in the repro | 75 tests, 15 batches (one per requirement) |
+| Fallback events | 17 |
+| Missing ids that match a returned id after case / punctuation normalisation (an id-matching bug would show here) | 0 |
+| Returned ids that are not in the batch (made-up or altered ids) | 0 |
+| Replies that failed JSON or schema validation, retries, batch failures | 0 |
+| Prompt truncation events | 0 (`prompt_eval_count` 1553–1584 of 4096) |
+| Cut by a token limit | none: `done_reason` is `stop` in the replayed requests (`eval_count` 247 and 887, no `num_predict`) |
+| Cause of every one of the 17 events | the model returned valid JSON that simply has fewer entries than tests |
+
+Cases per requirement (returned / expected): REQ-001 3/5, REQ-002 6/8, REQ-003 3/4, REQ-004 3/4, REQ-007 2/4, REQ-008 3/8, REQ-010 2/3, REQ-012 3/4, REQ-013 3/5. The other six requirements got every entry. The model often stops at three entries; it does not take the first three (in one REQ-008 reply it explained tests 3, 4 and 5 of 6 and skipped 1, 2 and 6). Replaying the exact same request twice gives the exact same reply, so it is the model's decision, not noise in the transport. The repro set differs from the evaluation run (17 events over 75 tests here, 123 over the full run) because the planner's choices vary between Ollama runs; the cause is the same.
+
+**Verbatim events from the report** (`outputs/eval_report.md`, section "Fallback-to-mock and truncation events"):
+
+- REQ-001: `explain: req_001__tpl_read_badlen_f190_01: missing in LLM reply; used fallback text`
+- REQ-001: `explain: req_001__tpl_write_readonly_f190: missing in LLM reply; used fallback text`
+- REQ-008: `explain: req_008__tpl_read_did_positive_0100_01: missing in LLM reply; used fallback text`
+- REQ-008: `explain: req_008__tpl_write_secured_0100: missing in LLM reply; used fallback text`
+- REQ-009: `explain: req_009__tpl_condition_not_met_did_0150: missing in LLM reply; used fallback text`
+- REQ-009: `explain: req_009__tpl_nrc_priority_2e_01: missing in LLM reply; used fallback text`
+
+**Raw replies that explain them** (reproduction, REQ-001 with 5 tests): the reply held exactly three entries, with ids `req_001__tpl_read_did_positive_f190_01`, `..._f190_02` and `..._f190_03`. The expected ids were those three plus `req_001__tpl_read_badlen_f190_01` and `req_001__tpl_write_readonly_f190`, so the two events above are the two ids the reply never mentions. REQ-008 reply (6 tests): entries for `req_008__tpl_write_oor_0100`, `req_008__tpl_read_multi_0100_f190_01` and `req_008__tpl_write_retained_s3_0100` only; `req_008__tpl_read_did_positive_0100_01`, `req_008__tpl_write_secured_0100` and `req_008__tpl_write_retained_reset_0100` were never mentioned, which gives the three REQ-008 events. In the same session a REQ-009 reply with all 8 entries (887 tokens) was returned for another planner outcome, so the model can do the whole list; it just does not reliably do so.
+
+**Fixed? No.** The decision rule was to fix only a plain bug (id matching, wrong limit, miscounting, a schema that fails to require ids the code intends to require). None applies: ids are matched correctly, nothing is cut by a limit, the events are counted once per missing test, and the code deliberately accepts an incomplete reply (docstring: "A test the reply omits ... gets `fallback_explanation` and a trace entry"). Making the model return every entry would mean prompt tuning or constrained-decoding changes, which were out of scope. No code was changed and the evaluation was not re-run, so there is no second run; the numbers in this report stand as measured (run at git `1f0c293`, report generated 2026-10-04T08:15:23Z).
+
+**Effect on bytes and scores: none (checked in code).** `explain` only writes the prose field `TestCase.explanation` (and `review_status`) through `model_copy(update=...)`; test steps are not touched. A grep over `uds_assistant/` shows nothing in `eval/`, `export/` or the oracle reads `explanation`; the only consumers are the UI and the model definition. The fallback text is built from the test title, category and template description, and bytes only come from templates plus the rules engine. The bug-detection and natural-set scores, byte provenance and the exported tests are therefore independent of how many explanations fell back. What the fallback does change is the quality of the prose a human reviewer sees: for those tests it is a generic template sentence instead of a model-written one.
+
 _Written after reading the measured numbers in this report (source `outputs/partD/interpretation.md`); no number was edited by hand._
 
 ## Noise check — natural v3 (FRESH), run-to-run variation
