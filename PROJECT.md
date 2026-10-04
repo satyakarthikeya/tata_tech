@@ -70,7 +70,7 @@ Because of this, the system stays correct with a small 3B local model, and it ru
 | 5 | **Test model and templates** (`testgen/`) | `TestCase` schema, 27 reusable parameterized templates (originally planned 8–12; v1 14 + v2 9 + v3 4, frozen at the Part C freeze) |
 | 6 | **Gold set** (`data/gold/`) | 60 hand-authored tests that must pass on the bug-free simulator |
 | 7 | **Bug catalog** (`data/bugs/`) | 26 in-sample injectable faults (`bug_catalog.yaml`) + 12 held-out v1 faults (`heldout_catalog.yaml`, seen) + 15 held-out v2 faults (`heldout_v2_catalog.yaml`, fresh) |
-| 8 | **Retrieval** (`rag/`) | Layered collections (standard / ecu_spec / project), citations. Backends: BM25 (offline) and ChromaDB + embeddings |
+| 8 | **Retrieval** (`rag/`) | Layered collections (standard / oem / ecu / project), citations. Backends: BM25 (offline) and ChromaDB + embeddings |
 | 9 | **LLM layer** (`llm/`) | Pluggable: `mock` (deterministic), `ollama` (local Qwen2.5-3B Q4_K_M) |
 | 10 | **Agent** (`agent/`) | LangGraph pipeline, with a plain-Python fallback using the same node functions |
 | 11 | **Runner** (`runner/`) | Executes tests on the simulator, records pass/fail and timing |
@@ -120,6 +120,8 @@ All data is small and self-authored. Correctness comes from **triangulation**, n
 4. The simulator and the rules engine are written independently and must agree on 100% of randomized requests.
 
 The ECU spec is **synthetic, in a realistic OEM style**, and this is stated openly in all reports. ISO 14229 text is never copied.
+
+**Spec provenance.** `data/bcm_spec.yaml` is hand-authored structured data (synthetic, OEM-style). It was **not** extracted from a PDF or any real OEM document. Real OEM diagnostic specifications (ODX/CDD files, diagnostic requirement documents) are confidential and none are publicly available, so the project writes its own spec in the shape such documents have. PDF/ODX extraction is therefore out of scope; the parser in `uds_assistant/spec/` loads and validates this YAML. The OEM guideline `data/oem_diagnostic_guidelines.md` is likewise synthetic and marked as such.
 
 ## 7. Evaluation metrics
 
