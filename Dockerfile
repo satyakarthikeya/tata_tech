@@ -5,9 +5,6 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    LLM_MODE=mock \
-    RETRIEVER=bm25 \
-    EMBEDDER=fastembed \
     OLLAMA_HOST=http://ollama:11434 \
     OLLAMA_MODEL=qwen2.5:3b-instruct-q4_K_M \
     FASTEMBED_CACHE_PATH=/app/.cache/fastembed
