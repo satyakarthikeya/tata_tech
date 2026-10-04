@@ -900,3 +900,20 @@ The validation output, the count of requirements containing hex IDs, which are a
 - **Checks:** ruff clean. Full pytest 1331 passed, 14 skipped, 1 failed in 888 s. The failure (`tests/export/test_export.py::test_gold_export_runs_and_passes`) was a temp file of the editor host vanishing during the child pytest's collection; `tests/export` alone passes (6 passed).
 - **Known gap, left alone (no new features):** `scripts/demo.py` and the Streamlit UI still render the Part C layout, so they label v2 as "FRESH" and do not show v3 or the sweep. Recorded in `FINAL_REPORT.md`.
 - No file under `uds_assistant/`, `data/`, `tests/` or `scripts/` was changed in D5b/D6.
+
+## Part E — E0 orient (2026-10-04)
+
+- `git status`: clean tracked tree; untracked only `FINAL_PART_E.md`, `FIX_PART_C.md` (prompt files) and `uds_assistant.egg-info/`. No line-ending churn.
+- **Where Part D stopped:** the prompt assumed the last commit was D5a, but HEAD is `482073e part D (D5b, D6)`. The v3 run (mock + ollama, 3 noise runs), `outputs/partD/before_after.md`, `outputs/partD/interpretation.md`, `docs/RESULTS.md` and `FINAL_REPORT.md` updates already exist. Part D is complete.
+- **Freeze hashes re-checked at HEAD:** testgen d990ef45, llm 0dad8c41, agent 5875c862, gold 77874019 — all match the Part D freeze table.
+- **Fallback events:** the current report lists 123 Ollama fallback events, all of the form `explain: <test_id>: missing in LLM reply; used fallback text`. Still to be explained (E1).
+- Ollama reachable at localhost:11434 with `qwen2.5:3b-instruct-q4_K_M`.
+- The case-study PDF is not in the repo (only the AUTOSAR Dcm SWS PDF); Case 5 items are taken from the Part E prompt and existing docs.
+
+### Part E plan
+- E1: no v3 re-run needed (already done at frozen hashes). Investigate the explain fallback events; fix only if a plain bug, then re-run once and report both runs.
+- E2: label every report/UI/docs section with its run (date + git hash); move Part C/D before/after into "History"; rewrite `docs/RESULTS.md` as a one-page summary.
+- E3.1–E3.6: Q&A with citations, confidence indicators, OEM layer, Docker (not built), test-design-time protocol + tool-side timing, spec provenance note.
+- E4: tabbed Streamlit UI + AppTest tests + door-lock sanity check.
+- E5: README/PROJECT/CODE_TOUR/ARCHITECTURE/FINAL_REPORT updates, `docs/CASE_STUDY_COMPLIANCE.md`, final checks.
+- Work is delegated to Sonnet subagents; parallel agents do not commit, the coordinator commits.
