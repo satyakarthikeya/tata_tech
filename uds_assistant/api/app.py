@@ -23,6 +23,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from uds_assistant.agent import TargetEvidence, run_pipeline
+from uds_assistant.api import web
+from uds_assistant.api.web import RunView, run_view
 from uds_assistant.eval.coverage import coverage_markdown, coverage_report
 from uds_assistant.export import render_capl, render_pytest
 from uds_assistant.llm.client import ollama_base_url, ollama_reachable
@@ -85,6 +87,7 @@ class RunRequest(BaseModel):
 
 
 class RunResponse(BaseModel):
+    view: RunView | None = None
     run_id: int | None
     bugs: list[str]
     total: int
@@ -273,7 +276,9 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
             raise HTTPException(status_code=422, detail=f"unknown bug id(s): {unknown}")
         store = app.state.store if req.run_id is not None else None
         suite = run_suite(tests, app.state.spec, set(req.bugs), store=store, run_id=req.run_id)
+        clean = run_suite(tests, app.state.spec, set()) if req.bugs else None
         return RunResponse(
+            view=run_view(tests, suite, clean, app.state.spec),
             run_id=req.run_id,
             bugs=suite.bugs,
             total=suite.total,
@@ -342,6 +347,7 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return next(t for t in store.get_tests(run_id) if t.id == test_id)
 
+    web.install(app)
     return app
 
 
