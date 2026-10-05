@@ -108,6 +108,8 @@ def _sidebar() -> dict[str, object]:
         sb.success(ollama_text)
     else:
         sb.error(ollama_text)
+    if not env.ollama_is_local():
+        sb.markdown(f":red[**{env.REMOTE_OLLAMA_WARNING}**]")
     sb.warning(GOVERNANCE_BANNER)
     db_path = env.audit_db_path()
     sb.caption(f"Audit trail: {db_path.name}")

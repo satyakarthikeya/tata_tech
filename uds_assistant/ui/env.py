@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from uds_assistant.llm.client import ollama_base_url, ollama_reachable
 from uds_assistant.llm.factory import START_OLLAMA_HINT
@@ -18,6 +19,19 @@ def ollama_status() -> tuple[bool, str]:
     if ollama_reachable(base, timeout_s=PROBE_TIMEOUT_S):
         return True, f"Ollama reachable at {base}"
     return False, f"Ollama not reachable at {base}. {START_OLLAMA_HINT}."
+
+
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
+REMOTE_OLLAMA_WARNING = (
+    "OLLAMA_HOST is not localhost: requirements, questions and retrieved text would LEAVE THIS "
+    "MACHINE. Use a local Ollama for any confidential data."
+)
+
+
+def ollama_is_local(base_url: str | None = None) -> bool:
+    """True when the configured Ollama host is this machine (``localhost`` / loopback)."""
+    host = urlparse(base_url or ollama_base_url()).hostname or ""
+    return host.lower() in LOCAL_HOSTS
 
 
 def audit_db_path() -> Path:
