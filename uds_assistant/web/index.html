@@ -1,1 +1,38 @@
-<!doctype html><title>stub</title>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UDS Assistant</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232457c5'/%3E%3Cpath d='M4 5h8M4 8h8M4 11h5' stroke='white' stroke-width='1.6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div id="remote-bar" class="bar bar-red hidden" role="alert"><div class="wrap"></div></div>
+  <div class="wrap head">
+    <h1>UDS Diagnostics &amp; Automated Test Generation Assistant</h1>
+    <div class="sub" id="banner-text">Loading configuration...</div>
+    <div class="chips" id="chips" aria-label="System status"></div>
+  </div>
+  <div id="ollama-bar" class="bar bar-red hidden" role="alert"><div class="wrap"></div></div>
+  <div class="wrap">
+    <nav class="tabs" aria-label="Sections">
+      <a href="#ask" data-tab="ask">Ask</a>
+      <a href="#generate" data-tab="generate">Generate &amp; Review</a>
+      <a href="#run" data-tab="run">Run &amp; Export</a>
+      <a href="#results" data-tab="results">Results</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <section id="tab-ask" data-panel="ask"></section>
+  <section id="tab-generate" data-panel="generate" class="hidden"></section>
+  <section id="tab-run" data-panel="run" class="hidden"></section>
+  <section id="tab-results" data-panel="results" class="hidden"></section>
+</main>
+<div id="toasts" aria-live="polite"></div>
+<div class="footer" role="note">FOR SIMULATOR OR APPROVED LAB BENCH ONLY. NEVER RUN AGAINST A PRODUCTION VEHICLE.</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

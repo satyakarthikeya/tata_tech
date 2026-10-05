@@ -19,3 +19,5 @@ tests
 data/sources/*.pdf
 data/sources/.cache
 .cache
+outputs/exports/demo_*
+outputs/ui_audit.sqlite

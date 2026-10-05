@@ -1,0 +1,22 @@
+# Use the Ollama (and GPU) already running on this machine:
+#   docker compose -f docker-compose.host-ollama.yml up --build   ->  http://localhost:8000
+# Ollama must listen where containers can reach it. On Windows/macOS Docker Desktop,
+# host.docker.internal works with the default Ollama install.
+services:
+  app:
+    build: .
+    environment:
+      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-4096}
+      OLLAMA_TRUSTED_HOSTS: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - app_outputs:/app/outputs
+    restart: unless-stopped
+
+volumes:
+  app_outputs:

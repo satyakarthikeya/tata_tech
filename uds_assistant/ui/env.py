@@ -29,9 +29,11 @@ REMOTE_OLLAMA_WARNING = (
 
 
 def ollama_is_local(base_url: str | None = None) -> bool:
-    """True when the configured Ollama host is this machine (``localhost`` / loopback)."""
-    host = urlparse(base_url or ollama_base_url()).hostname or ""
-    return host.lower() in LOCAL_HOSTS
+    """True when the Ollama host is this machine: loopback, or listed in ``OLLAMA_TRUSTED_HOSTS``
+    (the compose service name / ``host.docker.internal``, which are this machine from a container)."""
+    host = (urlparse(base_url or ollama_base_url()).hostname or "").lower()
+    trusted = {h.strip().lower() for h in os.environ.get("OLLAMA_TRUSTED_HOSTS", "").split(",")}
+    return host in LOCAL_HOSTS or host in (trusted - {""})
 
 
 def audit_db_path() -> Path:

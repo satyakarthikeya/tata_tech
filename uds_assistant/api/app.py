@@ -125,6 +125,8 @@ class ValidateRequest(BaseModel):
     session: int = 0x01
     unlocked_level: int | None = None
     vehicle_speed_kph: int = Field(default=0, ge=0)
+    actual_response_hex: str | None = None
+    """Optional observed ECU response (frames separated by ``|``) to compare with the prediction."""
 
 
 class ReviewRequest(BaseModel):
@@ -315,6 +317,7 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
             unlocked_level=req.unlocked_level,
             vehicle_speed_kph=req.vehicle_speed_kph,
             retriever=retriever(),
+            actual_response=req.actual_response_hex,
         )
 
     # ------------------------------------------------------------------------------ coverage

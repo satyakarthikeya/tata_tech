@@ -1,85 +1,102 @@
 # Case Study 5 compliance matrix
 
-Every case-study capability and expected output **by name**, mapped to the exact file, function or UI element, with a
-strict status and one line of evidence. Numbers are not copied here: they live in [RESULTS.md](RESULTS.md) (the
-evaluation of the run it names), so this file cannot drift from them.
+Source: *Automotive Engineering AI: Standard Project Case Study Document*, v1.0, Case Study 5 "UDS Diagnostics and
+Automated Test Generation Assistant" (sections 3 and 6 to 13). Each item below is quoted from that section by name and
+mapped to the exact file, function or UI element, with a strict status and one line of evidence. Numbers live in
+[RESULTS.md](RESULTS.md) (the evaluation of the run it names), so this file cannot drift from them.
 
-**Source of the lists. Read this first.** The case-study PDF is not in the repository. The seven capabilities and six
-expected outputs below are this project's own reconstruction of the brief (capability 3, validating a user-supplied
-request, is the owner's wording); **check the names against the PDF**. The status column describes what the repo does
-whatever the PDF words differently.
+**Status.** *met* = built and run, with the evidence stated (it may carry a caveat). *partial* = built, but measured by
+a proxy, only on synthetic data, unverified outside the repository, or with a known gap. *not done* = not built.
 
-**Status.** *met* = built and run, with the evidence stated (it may carry a caveat). *partial* = built but measured only
-by a proxy, only on synthetic data, unverified outside the repository, or with a known gap. *not done* = not built.
+**Overall.** The software chain the case study describes (cited Q&A, request validation, test generation with
+preconditions and pass criteria, positive and negative coverage, pytest export, comparison and reporting, coverage report,
+review gate) is built and measured **on a synthetic ECU**. What it does not do: read real specification documents (PDF,
+ODX), take existing tests or automation templates as input, isolate projects or users, or touch a real ECU, CANoe or a
+human stopwatch.
 
-## A. The seven capabilities
+## A. Section 6, Functional Capabilities (7)
 
-| # | Capability | Where (file / function / UI element) | Status | One line of evidence |
+| # | Capability (PDF wording) | Where | Status | Evidence |
 |---|---|---|---|---|
-| 1 | Understand a plain-English diagnostic requirement | `agent/nodes.py: parse`, `agent/grounding.py`; Generate & Review tab | partial | Natural v3 blind set (RESULTS section 6): target precision is the weak point of the 3B model; preconditions are now also scored from the real field. |
-| 2 | Retrieve knowledge from the standard, OEM, ECU and project sources with citations | `rag/chroma.py` (four physical collections), `rag/layers.py`, `rag/citations.py` | partial | Every citation resolves to a real chunk (RESULTS section 2); the OEM guideline and ECU spec are synthetic, PDF / ODX / CDD ingestion is not done. |
-| 3 | Validate a user-supplied request: decode it and predict the ECU response | `qa/check_request.py: check_request`, `POST /validate`, "Check a raw request" box in the Ask tab | met | Decodes service / subfunction / DID / routine, runs the rules engine, returns valid-or-not, expected bytes or NRC with the engine's reason and citations; exercised through the API and Streamlit AppTest. Synthetic BCM only; the box does not take an ECU response to compare against. |
-| 4 | Generate positive, negative, session, security and timing tests | `testgen/templates*.py` (27 templates), `testgen/conformance.py`, `agent/pipeline.py: run_pipeline` | met | Bytes come only from templates and the rules engine; RESULTS sections 2 to 5. |
-| 5 | Predict expected results deterministically and validate every test | `rules/engine.py: evaluate`, `agent/nodes.py: validate`, `simulator/` (independent), `eval/agreement.py` | partial | Triangulated (simulator vs rules engine, gold tests, udsoncan on a virtual bus), but one author wrote the engine, simulator and gold set from one contract. |
-| 6 | Answer diagnostic questions with citations and refuse when unsupported | `qa/answer.py: answer_question`, `POST /ask`, Ask tab | met | 25 blind questions with answer accuracy, citation correctness and correct "not found" (RESULTS section 7). |
-| 7 | Run on a simulator with injected bugs, export, and measure coverage and defect detection | `runner/suite.py`, `export/pytest_export.py`, `export/capl_export.py`, `eval/coverage.py: coverage_report`, Run & Export tab | partial | Simulator only (no real ECU, HIL or CANoe); defect detection on a blind 15-bug set; coverage is spec-item coverage, not code coverage. |
+| 1 | Natural language diagnostic knowledge search | `qa/answer.py: answer_question`, `POST /ask`, Ask tab | met | 25 blind questions: answer accuracy, citation correctness and correct "not found" in RESULTS section 7. Searches four layers; refuses when unsupported. |
+| 2 | Service, subfunction, DID, RID, NRC, session, and security guidance | `qa/lookup.py` (deterministic facts for DID, routine, NRC, service, security level, timing), `qa/check_request.py` (decodes service / subfunction / DID / RID) | partial | Facts are generated from the spec, not by the model. Subfunction guidance comes from the raw-request decoder and the standard notes; no Q&A question set targets subfunctions specifically. |
+| 3 | Request structure validation | `qa/check_request.py: check_request`, `POST /validate`, "Check a raw request" box in the Ask tab | met | Reports structurally valid or not (unknown service, subfunction or bad length), the expected bytes or NRC with the rules engine's own reason, and citations. Synthetic BCM only. |
+| 4 | Test case generation with preconditions and pass/fail criteria | `testgen/model.py: TestCase`, `testgen/criteria.py`, Generate & Review tab | met | `preconditions` and `pass_criteria` are derived deterministically for generated tests, the sweep and the gold set; shown per test, in the pytest docstring and CAPL comments. They describe the test: timing is enforced only where a step sets `max_response_time_ms`. |
+| 5 | Positive and negative coverage generation | `testgen/templates*.py` (27 templates), `testgen/conformance.py`, `eval/coverage.py` | met | Positive, negative, session, security and timing tests (RESULTS section 3); spec items still without a generated test are listed by the coverage report. |
+| 6 | Automation template export | `export/pytest_export.py: render_pytest`, `export/capl_export.py: render_capl`, Run & Export tab | partial | pytest was run (in-process and over a virtual CAN bus). The CAPL file is an **unverified template**, never compiled or run in CANoe. |
+| 7 | Response comparison and reporting | `runner/suite.py` (exact-byte comparison per step, first failing step, timing), Run & Export tab, `check_request(actual_response=...)` / "Observed ECU response" field | partial | Compares expected bytes with the simulator's response, and a user-typed ECU response with the prediction (match or mismatch). It cannot read a response from a real ECU or CANoe log. |
 
-## B. The six expected outputs
+## B. Section 8, Expected Outputs (7)
 
-| # | Expected output | Where | Status | One line of evidence |
+| # | Output (PDF wording) | Where | Status | Evidence |
 |---|---|---|---|---|
-| 1 | Structured test cases: preconditions, steps, expected responses, pass criteria, citations | `testgen/model.py: TestCase` (`preconditions`, `pass_criteria`), `testgen/criteria.py`, Generate & Review tab | met | Preconditions and pass criteria are derived deterministically by replaying the steps through the rules engine, for generated tests, the sweep and the gold set; shown per test in the UI, in the pytest docstring and the CAPL comments. They describe the test: timing is enforced only where a step sets `max_response_time_ms`. |
-| 2 | Executable Python / pytest scripts | `export/pytest_export.py: render_pytest`, Run & Export tab, `outputs/exports/generated_tests_test.py` | met | The exported file was run (pass count in `outputs/END_TO_END_CHECK.md`); it refuses to run unless the CAN interface is `virtual` or `UDS_ALLOW_LAB_BENCH=1`. |
-| 3 | CAPL test scripts | `export/capl_export.py: render_capl`, `outputs/exports/generated_tests.can` | partial | An **unverified template**, never compiled or run in CANoe; simulator-only set-up steps are "not generated by this template" notes for the bench engineer. |
-| 4 | Coverage report | `eval/coverage.py: coverage_report`, Run & Export tab table and Markdown download, `POST /coverage`, `outputs/exports/coverage_report.md`, coverage section of `outputs/eval_report.md` | met | Per service, DID, routine, NRC, session and security level: tests touching it, a positive / negative split, and the items with zero tests. Spec items only; the NRC list is the set the rules engine can emit. |
-| 5 | Cited explanations and answers | `explain` node (`agent/nodes.py`), `qa/answer.py`, citations on every test | met | Citations are checked against real chunks and quotes against chunk text; existence is checked, not that the text justifies the test. |
-| 6 | Evaluation report and audit trail with expert review | `eval/run_eval.py`, `outputs/eval_report.md`, `store/audit.py`, `testgen/review_gate.py`, `ui/state.py` | partial | Eight-section report plus a SQLite trail of runs and review decisions. The review is an app-level gate (approved tests only for run and export by default; bulk approve and a demo-only override exist); the manual-time comparison is **not done** (left for the owner, [TEST_DESIGN_TIME.md](TEST_DESIGN_TIME.md)). |
+| 1 | Diagnostic guidance with citations | Ask tab, `POST /ask`; citations on every test | met | Citations are checked against real chunks and quotes against chunk text; existence is checked, not that the text justifies the claim. |
+| 2 | Validated request template | `testgen/templates.py` (27 templates build requests from `protocol/builders.py`), `POST /validate` | met | Every request in a test is built by a template and re-validated against the rules engine (`agent/nodes.py: validate`). |
+| 3 | Expected positive response | `rules/engine.py: evaluate` | met | Every expected positive response is computed by the rules engine; agreement with the independent simulator is measured (RESULTS section 1). |
+| 4 | Negative-response scenarios | negative, session and security templates; NRC coverage in the coverage report | met | NRC order is one function with cited checks; the report shows which NRCs have tests. |
+| 5 | Structured test case | `testgen/model.py: TestCase` | met | Id, title, requirement ids, category, preconditions, steps, pass criteria, citations, review status, explanation, confidence. |
+| 6 | Automation script template | pytest and CAPL exports (as capability 6) | partial | pytest met; CAPL unverified. |
+| 7 | Coverage report | `eval/coverage.py: coverage_report`, Run & Export table and Markdown download, `POST /coverage`, `outputs/exports/coverage_report.md`, section of `eval_report.md` | met | Per service, DID, routine, NRC, session and security level: tests touching it, positive / negative split, items with zero tests. Spec-item coverage, not code coverage; the NRC list is the set the rules engine can emit. |
 
-## C. Not done, stated plainly
+## C. Section 7, High-Level Workflow (7 steps)
 
-- Real ECU, HIL rig, CANoe, multiple ECUs and real OEM specs (PDF / ODX / CDD extraction): not done (out of scope, confidential data).
-- CAPL compiled or run in CANoe: not done. Docker image build: not done (files written only). Real-browser click-through: not done (headless Streamlit `AppTest` only). See `outputs/END_TO_END_CHECK.md`.
-- Manual test-design time baseline: not done (owner to fill). Confidence thresholds validated against correctness: not done.
-- The review gate is not a technical lock: a reviewer can bulk-approve everything, the override exists, and calling `render_pytest` / `run_suite` directly from Python is not gated.
+| # | Step (PDF wording) | Where | Status | Evidence |
+|---|---|---|---|---|
+| 1 | Ingest authorized UDS, OEM, ECU, and project specifications | `rag/ingest.py` | partial | Ingests own-words UDS notes, a synthetic OEM guideline, the ECU spec YAML, and requirements plus the behaviour contract. No PDF, ODX or CDD ingestion. |
+| 2 | Extract services, parameters, preconditions, and response rules | `spec/schema.py`, `data/bcm_spec.yaml` | partial | The spec is **hand-structured** YAML, not extracted from documents; the rules are written code. |
+| 3 | Store embedded chunks in project-specific local collections | `rag/chroma.py` | partial | Four physical Chroma collections (standard, OEM, ECU, project layers), local. One project only: no per-project or per-user isolation. |
+| 4 | Accept a diagnostic requirement or engineer query | Generate & Review tab, Ask tab, `POST /generate`, `POST /ask` | met | Plain English in, run recorded in the audit DB. |
+| 5 | Retrieve relevant evidence and apply deterministic validation rules | `agent/nodes.py` (`retrieve`, `validate`), `rules/` | met | Retrieval then rules-engine validation; the model never writes bytes. |
+| 6 | Generate a structured test case and optional automation template | `agent/pipeline.py: run_pipeline`, exports | met | End to end on a local 3B model, about 20 s per requirement. |
+| 7 | Require engineer review before controlled execution | `testgen/review_gate.py`, Generate & Review review panel, Run & Export | met | Run and export use approved tests only by default (UI and API); bulk approve and a demo-only override exist and are labelled. An app-level gate, not a technical lock. |
 
-## D. Detail: pipeline
+## D. Section 11, Indicative Success Metrics (5)
 
-| Step | Status | Evidence and honest note |
+| Metric (PDF wording) | Status | Evidence |
 |---|---|---|
-| Ingest specs (standard, OEM, ECU, project) into ChromaDB + BGE embeddings | partial | `uds_assistant/rag/ingest.py`, `chroma.py`; four collections. The ECU spec and OEM guideline are **synthetic** hand-authored data; PDF/ODX extraction is out of scope (real OEM specs are confidential). |
-| Retrieve evidence with citations | done | `rag/layers.py`, `rag/citations.py`; every citation is checked against a real chunk (RESULTS section 2). Existence is checked, not that the text justifies the test. |
-| LLM (Ollama) parses the requirement and plans tests | done | `agent/nodes.py` (`parse`, `plan`), `llm/`; model `qwen2.5:3b-instruct-q4_K_M`. One small model; precision of target identification is the weak point (RESULTS section 6). |
-| Rules engine validates and builds the exact bytes | done | `rules/` (one NRC-order function, each check cited), `testgen/templates*.py`, `agent/nodes.py` (`validate`). The LLM schemas have no byte fields. |
-| Structured test case with preconditions, steps, pass criteria, citations | done | `testgen/model.py`, `testgen/criteria.py` (deterministic preconditions and pass criteria); confidence with a reason on every generated test (`agent/confidence.py`). |
-| Engineer review | partial | Approve / reject / comment in the Generate & Review tab, stored in the SQLite audit trail (`ui/state.py`, `store/audit.py`). The review is a gate in the app: the Run & Export tab and the API (`/run`, `/export`) use **approved tests only** by default and show a clear message when none are approved (`testgen/review_gate.py`). 'Bulk approve all validated tests' needs an explicit click and writes one review-log entry per test. An 'Include unreviewed tests (demo only)' override exists, OFF by default; `scripts/demo.py` and the evaluation pass it explicitly. The gate does not cover the Python API of `render_pytest` / `run_suite` called directly, and a reviewer can approve everything in bulk. |
-| Export to Python (pytest) and CAPL | partial | `export/pytest_export.py`: the exported file was run (pass count in `outputs/END_TO_END_CHECK.md`). `export/capl_export.py` is an **unverified template**, never compiled or run in CANoe. |
-| Run on an ECU simulator and report | done | `simulator/` (independent of `rules/`, 68 injectable bug hooks), `runner/suite.py`, Run & Export tab. Simulator only: no real ECU, HIL rig or CANoe. |
-| Cited diagnostic Q&A | done | `qa/`, `POST /ask`, Ask tab; refuses with "not found" when the sources do not support an answer (RESULTS section 7). |
+| Test design time: average time to create reviewed diagnostic test cases | partial | Tool time per requirement is measured (RESULTS section 8). The **manual baseline and review time are not done**: they need a person with a stopwatch ([TEST_DESIGN_TIME.md](TEST_DESIGN_TIME.md)). |
+| Generation accuracy: accepted request and response structures | partial | RESULTS section 2: well-formed requests and clean-pass rate, both near 100% **by construction** (the oracle builds the bytes). The independent evidence is section 1 (simulator vs rules engine, gold tests, udsoncan on a virtual bus), by one author from one contract. |
+| Coverage improvement: positive, negative, session, security, timing | partial | `python scripts/coverage_baseline.py`: the 60 hand-written gold tests touch 42 of 46 spec items (3 DIDs and NRC 0x14 untouched); the 1200-test conformance sweep touches 46 of 46. The seed-requirement generated tests touch fewer items than the gold set (RESULTS coverage section). The baseline is hand-written by the same author, not an independent team's existing tests. |
+| Reuse rate: share of generated tests based on approved templates | partial | RESULTS section 4; 100% by construction, so it shows catalog breadth, not saved effort. |
+| Defect detection: confirmed ECU issues found through generated cases | partial | RESULTS section 5 on a blind 15-bug set written without seeing templates or code. These are **injected simulator bugs**, not confirmed issues in a real ECU; missed bugs are listed. |
 
-## E. Detail: success metrics of the case study (RESULTS sections 2 to 8)
+## E. Section 12, Key Risks and Controls (4)
 
-| Metric | Status | Evidence and honest note |
+| Risk | Recommended control (PDF) | Status | Evidence |
+|---|---|---|---|
+| Incorrect diagnostic message generation | Apply deterministic protocol rules and expert review | met | Rules engine builds every byte; review gate on run and export. Caveat: if the oracle is wrong, tests are wrong; it is triangulated, not independently certified. |
+| Misinterpretation of OEM-specific behavior | Separate standard, OEM, ECU, and project collections | met | Four physical collections; generation does not search OEM (OEM text must not silently change protocol-derived bytes), Q&A searches all four. The OEM content is synthetic. |
+| Unsafe execution sequence | Execute only in approved test environments with safeguards | met | "FOR SIMULATOR OR APPROVED LAB BENCH ONLY" banners; the exported pytest refuses a non-virtual CAN interface unless `UDS_ALLOW_LAB_BENCH=1`. No real vehicle or bench was used. |
+| Standards licensing violation | Use authorized source documents and access controls | partial | Own-words notes only; the AUTOSAR SWS PDF is git-ignored and not shipped. No access control or user accounts. |
+
+## F. Section 3, Scope, and Section 8, Inputs
+
+| Item | Status | Evidence |
 |---|---|---|
-| Generation accuracy | partial | Section 2: well-formed requests and clean-pass rate. Both are 100% largely **by construction** (the bytes come from the oracle); the independent evidence is section 1 (simulator vs rules engine, gold tests, udsoncan). Same author and contract for engine, simulator and gold. |
-| Coverage | partial | Section 3: tests per type and requirements covered. Oracle-observable coverage only, not code coverage. |
-| Reuse rate | partial | Section 4: share of tests built from the 27 approved templates; **100% by construction**, so it shows catalog breadth, not saved effort. |
-| Defect detection | done | Section 5 on the blind v3 bug set (15 bugs written without seeing templates or code, never tuned on): generated tests alone, the conformance sweep alone and both; missed bugs are listed. Small set, synthetic simulator. |
-| Requirement understanding | done | Section 6 on 16 blind natural requirements: target F1, category recall, precondition recall. Small sample (one item moves a score by several points). |
-| Q&A quality | done | Section 7 on 25 blind questions: answer accuracy, citation correctness, correct "not found". |
-| Test design time | partial | Section 8: tool time per requirement is measured; the **manual-time comparison is left for the owner** ([TEST_DESIGN_TIME.md](TEST_DESIGN_TIME.md)). Review time is not included. |
+| In scope: approved standard and OEM knowledge retrieval | met | Ask tab, four layers, citations. |
+| In scope: UDS service and parameter guidance; request-message construction | met | `qa/lookup.py`, `protocol/builders.py`, `POST /validate`. |
+| In scope: positive and negative test generation; expected-response validation | met | Capabilities 4 and 5. |
+| In scope: export to Python, CANoe, CAPL, or approved frameworks | partial | pytest (python-can + udsoncan virtual bus) met; CAPL unverified; no other framework. |
+| Out of scope: execution against production vehicles without controls | respected | Simulator and virtual CAN only; guard and banners. |
+| Out of scope: use of unauthorized standards content | respected | See the licensing row above. |
+| Out of scope: unreviewed automatic acceptance of ECU behavior | respected | Expected values come from the rules engine, never from observing an ECU; review gate. |
+| Input: authorized UDS, OEM, ECU specifications | partial | Synthetic stand-ins (see workflow steps 1 and 2). |
+| Input: requirements | met | Plain-English requirements; 15 seed and 16 blind natural ones. |
+| Input: **existing tests** and **automation templates** | **not done** | The gold tests are our own; the app does not ingest a user's existing test suite or their automation templates. |
 
-## F. Detail: objectives, risks and governance
+## G. Not done, stated plainly
 
-| Item | Status | Evidence and honest note |
-|---|---|---|
-| Cut the effort of writing diagnostic tests | partial | Generation works end to end (`scripts/demo.py`); the effort saving itself is unmeasured until the manual time is filled in. |
-| Better coverage, especially negative and edge cases | partial | Negative, session, security and timing tests plus the 1200-test conformance sweep; gaps remain (missed bugs in section 5). |
-| Runs locally, no data leaves the machine | done | Ollama and ChromaDB run locally; no cloud API anywhere. Ollama is **required** (no offline stand-in). |
-| LLM hallucination producing wrong test bytes | done | The LLM never produces bytes; byte provenance is checked on every test ([ARCHITECTURE.md](ARCHITECTURE.md)). This shows provenance, not that the oracle is right. |
-| Wrong expected results from a wrong oracle | partial | Triangulation (section 1 of RESULTS); five known AUTOSAR SWS disagreements are documented in the archive tag and in `rules/nrc_order.py` comments. |
-| Mixing standard, OEM, ECU and project knowledge | done | Four physical Chroma collections with the layer on every chunk and citation; generation does not search OEM, Q&A searches all four. |
-| Unsafe use of generated tests on real hardware | partial | "FOR SIMULATOR OR APPROVED LAB BENCH ONLY" banner on the pytest and CAPL exports, the pytest virtual-CAN guard (`UDS_ALLOW_LAB_BENCH=1` to override), banner, approved-only default for run and export (UI and API), no hardware used. The gate is an app-level default with a labelled override, not a technical lock. |
-| Over-trust in answers | partial | Citations, "not found" refusal and confidence badges; confidence thresholds were not validated against correctness. |
-| Audit trail of runs and decisions | done | `store/audit.py` (SQLite). |
-| Real ECU, CANoe, multiple ECUs, past test cases as input | out of scope | One synthetic Body Control Module; only a virtual CAN bus was used. |
-| Docker packaging | partial | `Dockerfile`, `docker-compose.yml` (app + ollama): **written, not built here**. |
+- Ingesting real specification documents (PDF, ODX, CDD) and extracting rules from them; the spec is hand-structured YAML.
+- Taking a user's existing tests or automation templates as input.
+- Project isolation, authentication and role-based access (the common architecture lists them; this pilot has no login by design).
+- Graph / traceability store (Neo4j); traceability here is requirement ids and citations in the SQLite audit trail.
+- A real ECU, HIL rig, CANoe, multiple ECUs; CAPL compiled or run in CANoe; reading real ECU responses for comparison.
+- The manual test-design-time baseline; confirmation of defects on a real ECU; validation of the confidence thresholds.
+- Docker: the single-container build and run were tested with the host's Ollama and GPU; the all-in-one stack that also runs Ollama in a container was not run to completion (see `outputs/END_TO_END_CHECK.md`).
+- A real-browser click-through by a person (the web UI was driven in headless Edge, the Streamlit UI through `AppTest`).
+
+## H. Interface note
+
+The case study names Streamlit as the reference interface and allows a Flask web UI. This repository now serves a plain
+HTML / JavaScript front end from FastAPI (`uds_assistant/web/`, no build step, no CDN) and keeps the earlier Streamlit app
+(`uds_assistant/ui/streamlit_app.py`) working.

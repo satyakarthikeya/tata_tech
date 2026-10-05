@@ -19,17 +19,29 @@ never produces a byte. Every byte, NRC and timing value comes from the determini
 ## Run
 
 ```bash
-streamlit run uds_assistant/ui/streamlit_app.py     # the UI (http://localhost:8501)
-python -m uds_assistant.api                         # the API (http://localhost:8000/docs)
+python -m uds_assistant.api                         # web UI + API: http://localhost:8000 (API docs at /docs)
 python -m uds_assistant.eval.run_eval               # evaluation -> outputs/eval_report.md
 python scripts/demo.py                              # terminal demo: requirement -> tests -> bug caught -> export
+streamlit run uds_assistant/ui/streamlit_app.py     # the earlier Streamlit UI (still works)
 ```
+
+**Docker (recommended for a demo).** Needs Docker Desktop (or Docker with the NVIDIA Container Toolkit for the GPU).
+
+```bash
+# Ollama already on this machine (uses your GPU): one container for the app
+docker compose -f docker-compose.host-ollama.yml up --build      # http://localhost:8000
+# Everything in containers, Ollama on the NVIDIA GPU (first start pulls about 2 GB of model)
+docker compose up --build                                        # http://localhost:8000
+```
+
+The BGE embedding model is baked into the image; the app needs no internet at run time. The web UI is plain HTML and
+JavaScript served by FastAPI (`uds_assistant/web/`, no build step).
 
 ## The four tabs
 
 | Tab | What it does |
 |---|---|
-| **Ask** | question -> cited answer with a confidence badge; "not found" when the sources do not support an answer. Also a **Check a raw request** box: hex request + session + security state -> decoded, structurally valid or not, expected bytes or NRC with the reason, citations (`POST /validate`) |
+| **Ask** | question -> cited answer with a confidence badge; "not found" when the sources do not support an answer. Also a **Check a raw request** box: hex request + session + security state (+ optionally an observed ECU response to compare) -> decoded, structurally valid or not, expected bytes or NRC with the reason, match / mismatch, citations (`POST /validate`) |
 | **Generate & Review** | requirement -> tests table -> preconditions, pass criteria, decoded steps, citations, approve / reject / comment / bulk approve (stored in the audit DB) |
 | **Run & Export** | approved tests only (a demo-only override exists, OFF by default) -> pick a bug (or none) -> run on the simulator -> pass/fail ("Bug caught by N tests") -> coverage table against the spec (uncovered items highlighted, Markdown download, `POST /coverage`) -> download pytest / CAPL |
 | **Results** | the eight evaluation sections as cards from `outputs/eval_report.json` |
@@ -60,7 +72,7 @@ ECU + bugs), `testgen/` (templates, conformance sweep), `rag/`, `llm/`, `agent/`
 
 Settings (all optional environment variables): `OLLAMA_HOST` (default `http://localhost:11434`),
 `OLLAMA_MODEL`, `OLLAMA_NUM_CTX` (4096), `OLLAMA_KEEP_ALIVE`, `FASTEMBED_CACHE_PATH`.
-Docker (`Dockerfile`, `docker-compose.yml`: app + ollama) is written but was not built here.
+Docker: the single-container build and run were tested with the host's Ollama; the all-in-one compose with Ollama in a container is written but was not run to completion (see `outputs/END_TO_END_CHECK.md`).
 
 ## Responsible AI
 

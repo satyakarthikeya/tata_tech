@@ -15,7 +15,12 @@ import re
 from pydantic import BaseModel, Field
 
 from uds_assistant.protocol.constants import Nrc
-from uds_assistant.protocol.describe import describe_request, nrc_name, spaced_hex
+from uds_assistant.protocol.describe import (
+    decode_responses,
+    describe_request,
+    nrc_name,
+    spaced_hex,
+)
 from uds_assistant.rag.model import Chunk, LayeredCitation, Retriever
 from uds_assistant.rules.engine import evaluate
 from uds_assistant.rules.request import parse_request
@@ -46,6 +51,9 @@ class RequestCheck(BaseModel):
     reason: str = ""
     trace: list[str] = Field(default_factory=list)
     citations: list[LayeredCitation] = Field(default_factory=list)
+    comparison: str | None = None
+    """``match`` / ``mismatch`` when an actual ECU response was supplied, else ``None``."""
+    comparison_detail: str = ""
 
 
 def parse_hex(text: str) -> bytes:
@@ -96,6 +104,21 @@ def _deterministic_chunk_ids(spec: EcuSpec, raw: bytes, session: int, nrc: int |
     return list(dict.fromkeys(ids))
 
 
+def _compare(actual: str | None, expected: list[str]) -> tuple[str | None, str]:
+    """Compare an observed ECU response (frames separated by ``|``) with the predicted bytes."""
+    if actual is None or not actual.strip():
+        return None, ""
+    try:
+        frames = [parse_hex(part).hex() for part in actual.split("|") if part.strip()]
+    except ValueError as exc:
+        return "mismatch", f"The observed response is not valid hex: {exc}."
+    want = decode_responses(expected)
+    got = decode_responses(frames)
+    if frames == expected:
+        return "match", f"The observed response equals the predicted one: {got}."
+    return "mismatch", f"Predicted {want}; observed {got}."
+
+
 def check_request(
     spec: EcuSpec,
     chunks: list[Chunk],
@@ -105,6 +128,7 @@ def check_request(
     unlocked_level: int | None = None,
     vehicle_speed_kph: int = 0,
     retriever: Retriever | None = None,
+    actual_response: str | None = None,
 ) -> RequestCheck:
     """Decode ``request`` (hex text), evaluate it in the given ECU state, and cite the evidence."""
     state_info: dict[str, int | None] = {
@@ -172,8 +196,11 @@ def check_request(
         for hit in retriever.search(query, k=2, collections=["project"]):
             if hit.chunk.ref not in seen:
                 cites.append(_citation(hit.chunk))
+    comparison, detail = _compare(actual_response, responses)
     return RequestCheck(
         request_hex=raw.hex(),
+        comparison=comparison,
+        comparison_detail=detail,
         structurally_valid=structural,
         decoded=decoded,
         state=state_info,
