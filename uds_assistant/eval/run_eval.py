@@ -110,7 +110,7 @@ def run_evaluation(
     if requirement_ids is not None:
         requirements = [r for r in requirements if r["id"] in set(requirement_ids)]
     natural = u.load_natural_requirements(root / "data" / "requirements_natural_v3.csv")
-    gold = load_tests(root / "data" / "gold" / "gold_tests.yaml")
+    gold = load_tests(root / "data" / "gold" / "gold_tests.yaml", spec)
     v3_catalog = load_bug_catalog(HELDOUT_V3_BUG_CATALOG_PATH)
     pipe: dict[str, Any] = {"spec": spec, "llm": llm, "retriever": retriever}
 
@@ -205,6 +205,7 @@ def run_evaluation(
             "target_f1": understanding["targets_parsed"]["f1"],
             "category_recall": understanding["categories"]["micro_recall"],
             "precondition_recall": understanding["preconditions"]["micro_recall"],
+            "precondition_recall_field": understanding["preconditions_field"]["micro_recall"],
             "per_requirement": rows,
         },
         "qa": {k: qa[k] for k in (
@@ -271,7 +272,9 @@ def render_markdown(r: dict[str, Any]) -> str:
         ("6", "Target identification F1 (precision / recall)",
          f"{_pct(un['target_f1'])} ({_pct(un['target_precision'])} / {_pct(un['target_recall'])})"),
         ("6", "Category recall", _pct(un["category_recall"])),
-        ("6", "Precondition recall", _pct(un["precondition_recall"])),
+        ("6", "Precondition recall (derived from steps)", _pct(un["precondition_recall"])),
+        ("6", "Precondition recall (real `preconditions` field)",
+         _pct(un["precondition_recall_field"])),
         ("7", "Answer accuracy",
          f"{qa['answer_accuracy_n']}/{qa['n_answerable']} = {_pct(qa['answer_accuracy'])}"),
         ("7", "Citation correctness",
@@ -291,7 +294,8 @@ def render_markdown(r: dict[str, Any]) -> str:
         "caught when a test that passes on the clean simulator fails with the bug injected; the",
         "blind v3 set was written without seeing templates or code. (6) Natural v3: "
         + f"{un['requirements']} blind requirements; preconditions are derived from the generated",
-        "steps. (7) Blind questions in `data/qa_eval.csv`. (8) Tool time includes the local 3B",
+        "steps and, separately, read from each test's `preconditions` field. (7) Blind questions",
+        "in `data/qa_eval.csv`. (8) Tool time includes the local 3B",
         "model on this machine.",
     ])
     banner = (

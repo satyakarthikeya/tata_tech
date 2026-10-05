@@ -1,4 +1,4 @@
-"""Human-readable decoding of UDS request/response hex for the UI.
+"""Human-readable decoding of UDS request/response hex for the UI and exports.
 
 Uses only :mod:`uds_assistant.protocol.constants` (service names, NRC names, the positive-response
 offset). It deliberately does not import the rules engine: a decoded line says what the bytes

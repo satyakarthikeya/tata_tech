@@ -64,6 +64,7 @@ from uds_assistant.protocol.security import compute_key
 from uds_assistant.rules.engine import RuleResult, evaluate
 from uds_assistant.rules.state import DEFAULT_SESSION_ID, EcuState, dtc_code_to_int
 from uds_assistant.spec.schema import DidDef, EcuSpec, RoutineDef, SecurityLevelDef
+from uds_assistant.testgen.criteria import annotate_test
 from uds_assistant.testgen.model import Citation, SendStep, TestCase
 from uds_assistant.testgen.templates import TEMPLATES, Template, _Builder, validate_test
 
@@ -1016,7 +1017,7 @@ def _instantiate_with(spec: EcuSpec, cats: _Catalogs, p: ConformanceParams) -> T
     _apply_probes(b)
     cites = [Citation(source="behaviour_contract", ref=ref)
              for ref in dict.fromkeys((*stim.citations, SEC_POWER_ON))]
-    return TestCase(
+    case = TestCase(
         id=case_id_for(setup.id, stim.id),
         title=f"Conformance: {stim.description} [{setup.description}]",
         category=_category(setup, stim, result.responses),  # type: ignore[arg-type]
@@ -1031,6 +1032,7 @@ def _instantiate_with(spec: EcuSpec, cats: _Catalogs, p: ConformanceParams) -> T
         ),
         origin="generated",
     )
+    return annotate_test(spec, case)
 
 
 def conformance_instantiate(spec: EcuSpec, p: ConformanceParams) -> TestCase:

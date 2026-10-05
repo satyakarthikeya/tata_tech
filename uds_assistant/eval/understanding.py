@@ -10,6 +10,7 @@ recall). Every function here is pure.
 from __future__ import annotations
 
 import csv
+import re
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -135,6 +136,41 @@ def exercised_targets(tests: Iterable[TestCase]) -> set[Ident]:
     return out
 
 
+_SESSION_FROM_FIELD = {"0x01": "default_session", "0x02": "programming_session",
+                       "0x03": "extended_session"}
+
+
+def field_preconditions(test: TestCase) -> set[str]:
+    """Vocabulary tokens read from the real ``TestCase.preconditions`` strings.
+
+    Parses the deterministic strings written by :mod:`uds_assistant.testgen.criteria`
+    ("ECU in extended session (0x03)", "Security level 0x01 unlocked", ...). "NOT unlocked"
+    does not count as an established precondition.
+    """
+    out: set[str] = set()
+    for text in test.preconditions:
+        low = text.lower()
+        m = re.search(r"session \((0x[0-9a-f]{2})\)", low)
+        if low.startswith("ecu in") and m and m.group(1) in _SESSION_FROM_FIELD:
+            out.add(_SESSION_FROM_FIELD[m.group(1)])
+        m = re.match(r"security level (0x[0-9a-f]+) unlocked", low)
+        if m:
+            out.add(f"security_level_{int(m.group(1), 16)}")
+        if "in lockout delay" in low or "failed key attempt" in low:
+            out.add("lockout_active")
+        if low.startswith("routine") and "already started" in low:
+            out.add("routine_started")
+        if low.startswith("dtc") and "injected" in low:
+            out.add("dtc_status_set")
+        if "vehicle moving" in low:
+            out.add("vehicle_moving")
+        if low.startswith("vehicle stationary"):
+            out.add("vehicle_stationary")
+        if "nvm write fault" in low:
+            out.add("nvm_fault")
+    return out
+
+
 def established_preconditions(spec: EcuSpec, test: TestCase) -> set[str]:
     """Preconditions a test establishes, derived from its steps (:data:`PRECONDITION_MAPPING`)."""
     tr = trace_test(spec, test)
@@ -243,8 +279,10 @@ def score_requirement(
     label = req.target_set
     produced_categories = sorted({t.category for t in tests})
     established: set[str] = set()
+    from_field: set[str] = set()
     for t in tests:
         established |= established_preconditions(spec, t)
+        from_field |= field_preconditions(t)
     p_targets = parsed_targets(parsed)
     reasons = []
     if status != "completed":
@@ -266,6 +304,8 @@ def score_requirement(
         "produced_categories": produced_categories,
         "preconditions": recall_fraction(req.required_preconditions, established),
         "established_preconditions": sorted(established),
+        "preconditions_field": recall_fraction(req.required_preconditions, from_field),
+        "field_preconditions": sorted(from_field),
         "fallback": bool(reasons),
         "fallback_reasons": reasons,
     }
@@ -284,7 +324,7 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "tp": tp, "fp": fp, "fn": fn,
             **prf(tp, fp, fn),
         }
-    for key in ("categories", "preconditions"):
+    for key in ("categories", "preconditions", "preconditions_field"):
         scored = [r[key] for r in rows if r[key]["required"]]
         req_total = sum(s["required"] for s in scored)
         hit_total = sum(s["hit"] for s in scored)

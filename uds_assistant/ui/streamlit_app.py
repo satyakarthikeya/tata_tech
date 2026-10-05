@@ -26,6 +26,7 @@ import streamlit as st
 from uds_assistant.agent import run_pipeline
 from uds_assistant.export import CAPL_BANNER, render_capl, render_pytest
 from uds_assistant.llm.factory import START_OLLAMA_HINT, get_llm
+from uds_assistant.protocol.describe import decode_responses, decode_step, spaced_hex
 from uds_assistant.qa import answer_question
 from uds_assistant.qa.lookup import FactLookup
 from uds_assistant.rag.factory import get_retriever
@@ -35,7 +36,6 @@ from uds_assistant.spec.schema import load_spec
 from uds_assistant.store.audit import AuditStore
 from uds_assistant.ui import env, state
 from uds_assistant.ui.bugs import NO_BUG, bug_options
-from uds_assistant.ui.decode import decode_responses, decode_step, spaced_hex
 from uds_assistant.ui.examples import ASK_EXAMPLES, requirement_examples
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -289,6 +289,11 @@ def _generate_tab(ctx: dict[str, object]) -> None:
     sel = next(t for t in tests if t.id == selected_id)
     st.markdown(f"#### {sel.title}")
     _confidence_badge(sel.confidence, sel.confidence_reason)
+    st.markdown("**Preconditions**")
+    for pre in sel.preconditions or ["(none recorded)"]:
+        st.markdown(f"- {pre}")
+    st.markdown("**Pass criteria**")
+    st.write(sel.pass_criteria or "(none recorded)")
     st.markdown("**Steps** (hex request → expected response, decoded)")
     _show_steps(sel, _did_names(ctx["spec"]))
     st.markdown("**Targets**")

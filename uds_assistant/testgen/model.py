@@ -124,6 +124,9 @@ class TestCase(BaseModel):
     """None for hand-authored gold tests; a template id in :mod:`.templates` otherwise."""
     parameters: dict[str, object] = Field(default_factory=dict)
     preconditions: list[str] = Field(default_factory=list)
+    """ECU state needed before the action under test (filled by :mod:`.criteria`)."""
+    pass_criteria: str = ""
+    """What the test must observe, from expected bytes and timing (:mod:`.criteria`)."""
     steps: list[TestStep]
     citations: list[Citation] = Field(default_factory=list)
     review_status: ReviewStatus = "draft"
@@ -145,14 +148,23 @@ def _to_plain(obj: object) -> object:
     return obj
 
 
-def load_tests(path: str | Path) -> list[TestCase]:
-    """Load a list of :class:`TestCase` from a YAML or JSON file."""
+def load_tests(path: str | Path, spec: object | None = None) -> list[TestCase]:
+    """Load a list of :class:`TestCase` from a YAML or JSON file.
+
+    With ``spec`` (an ``EcuSpec``), empty ``preconditions`` / ``pass_criteria`` are filled
+    deterministically (see :mod:`.criteria`); values written in the file are kept.
+    """
     p = Path(path)
     text = p.read_text(encoding="utf-8")
     raw = json.loads(text) if p.suffix == ".json" else yaml.safe_load(text)
     if raw is None:
         return []
-    return [TestCase.model_validate(item) for item in raw]
+    tests = [TestCase.model_validate(item) for item in raw]
+    if spec is not None:
+        from uds_assistant.testgen.criteria import annotate_tests
+
+        tests = annotate_tests(spec, tests)  # type: ignore[arg-type]
+    return tests
 
 
 def dump_tests(tests: list[TestCase], path: str | Path) -> None:

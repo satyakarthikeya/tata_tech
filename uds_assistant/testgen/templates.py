@@ -34,6 +34,7 @@ from uds_assistant.rules.state import dtc_code_to_int, with_dtc_status
 from uds_assistant.spec.schema import DidDef, EcuSpec
 from uds_assistant.testgen import templates_v2 as v2
 from uds_assistant.testgen import templates_v3 as v3
+from uds_assistant.testgen.criteria import annotate_test
 from uds_assistant.testgen.model import (
     AdvanceTimeStep,
     Citation,
@@ -795,7 +796,7 @@ class Template:
     def instantiate(self, spec: EcuSpec, params: BaseModel | dict) -> TestCase:
         """Build a concrete :class:`TestCase` for ``params`` against ``spec``."""
         model = params if isinstance(params, self.params_model) else self.params_model.model_validate(params)
-        return self.instantiate_fn(spec, model)
+        return annotate_test(spec, self.instantiate_fn(spec, model))
 
 
 TEMPLATE_SET_VERSION = "v3"

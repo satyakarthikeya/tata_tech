@@ -40,7 +40,7 @@ question    -> qa/answer.py -> cited answer or not_found
 | `export/` | `pytest_export.py` (raw-byte pytest file), `capl_export.py` (unverified CAPL template) | `pytest_export.py` |
 | `store/` | SQLite audit trail: runs, tests, decisions, results | `audit.py` |
 | `api/` | FastAPI app: `/health /spec /generate /ask /run /export /bugs /runs` and the review endpoint | `app.py` |
-| `ui/` | `streamlit_app.py` wires four tabs; `decode.py`, `state.py`, `bugs.py`, `examples.py`, `env.py` hold the logic | `streamlit_app.py` |
+| `ui/` | `streamlit_app.py` wires four tabs; `state.py`, `bugs.py`, `examples.py`, `env.py` hold the logic | `streamlit_app.py` |
 | `eval/` | `run_eval.py` the one evaluation command; `metrics.py`, `understanding.py`, `qa_eval.py`, `agreement.py`, `can_check.py`, `trace.py` | `run_eval.py` |
 
 `scripts/demo.py` is the terminal demo. `data/` holds the spec, the seed requirements (15), the blind natural v3
