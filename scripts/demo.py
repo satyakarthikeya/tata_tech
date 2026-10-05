@@ -33,6 +33,7 @@ from uds_assistant.runner import run_suite, run_test
 from uds_assistant.simulator import ALL_BUG_IDS, HELDOUT_V3_BUG_CATALOG_PATH, load_bug_catalog
 from uds_assistant.spec.schema import load_spec
 from uds_assistant.testgen import TestCase
+from uds_assistant.testgen.review_gate import select_for_run
 
 DEFAULT_BUG = "accepts_any_key"
 
@@ -110,7 +111,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{req_id}: {req_text}")
     retriever = get_retriever(chunks=build_corpus(ROOT), persist_dir=ROOT / "outputs" / "chroma")
     result = run_pipeline(req_text, req_id, spec, llm, retriever)
-    tests = result.tests
+    # Demo only: nobody reviews the tests here, so the review gate is bypassed explicitly.
+    tests = select_for_run(result.tests, include_unreviewed=True)
     print(f"model={llm.model} plan attempts={result.plan_attempts} dropped={len(result.dropped)}")
     if result.parsed is not None:
         print(f"Parsed: {result.parsed}")

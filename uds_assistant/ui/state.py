@@ -25,6 +25,16 @@ def reject(store: AuditStore, run_id: int, test_id: str, comment: str = "") -> N
     store.record_decision(run_id, REVIEW_NODE, _msg(test_id, "rejected", comment))
 
 
+def bulk_approve_validated(
+    store: AuditStore, run_id: int, tests: list[TestCase], comment: str = "bulk approve"
+) -> list[str]:
+    """Approve every ``validated`` test, one review-log entry each; returns the approved ids."""
+    ids = [t.id for t in tests if t.review_status == "validated"]
+    for test_id in ids:
+        approve(store, run_id, test_id, comment)
+    return ids
+
+
 def add_comment(store: AuditStore, run_id: int, test_id: str, comment: str) -> None:
     """Log a free-text review comment for a test."""
     store.record_decision(run_id, REVIEW_NODE, _msg(test_id, "comment", comment))

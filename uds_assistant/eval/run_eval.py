@@ -40,6 +40,7 @@ from uds_assistant.simulator import HELDOUT_V3_BUG_CATALOG_PATH, load_bug_catalo
 from uds_assistant.spec.schema import load_spec
 from uds_assistant.testgen.conformance import build_conformance_suite
 from uds_assistant.testgen.model import TestCase, load_tests
+from uds_assistant.testgen.review_gate import select_for_run
 from uds_assistant.testgen.templates import TEMPLATE_SET_VERSION
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -127,7 +128,10 @@ def run_evaluation(
         res, wall = _timed_pipeline(req["text"], req["id"], "seed", **pipe)
         results.append(res)
         walls.append(wall)
-    generated: list[TestCase] = [t for r in results for t in r.tests]
+    # The evaluation measures every generated test; nobody reviews them here, so the review gate
+    # is bypassed explicitly (it applies to the UI and API, not to measurement).
+    generated: list[TestCase] = select_for_run(
+        [t for r in results for t in r.tests], include_unreviewed=True)
     clean = run_suite(generated, spec)
     validity = m.request_validity(spec, generated)
     cov = m.coverage(generated, [r["id"] for r in requirements])

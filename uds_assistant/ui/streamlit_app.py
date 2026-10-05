@@ -36,6 +36,7 @@ from uds_assistant.rag.ingest import build_corpus
 from uds_assistant.runner import run_suite
 from uds_assistant.spec.schema import load_spec
 from uds_assistant.store.audit import AuditStore
+from uds_assistant.testgen.review_gate import NO_APPROVED_MESSAGE
 from uds_assistant.ui import env, state
 from uds_assistant.ui.bugs import NO_BUG, bug_options
 from uds_assistant.ui.examples import ASK_EXAMPLES, requirement_examples
@@ -45,7 +46,8 @@ GOVERNANCE_BANNER = "Synthetic ECU spec — human review required before real-ha
 NOT_FOUND_TEXT = "Not found in the approved sources."
 CONF_COLOR = {"high": "green", "medium": "orange", "low": "red"}
 PICK = "(pick an example)"
-SCOPES = ("all tests", "approved tests", "selected test")
+SCOPES = ("Approved tests only", "Selected test")
+OVERRIDE_LABEL = "Include unreviewed tests (demo only, bypasses expert review)"
 OLLAMA_MISSING = f"{START_OLLAMA_HINT}."
 
 
@@ -209,6 +211,19 @@ def _review_cb(ctx: dict[str, object], action: str) -> None:
     st.session_state.flash = ("success", f"{past} {test_id}. Stored in the audit DB.")
 
 
+def _bulk_approve_cb(ctx: dict[str, object]) -> None:
+    store, run_id = ctx["store"], st.session_state.get("run_id")
+    if run_id is None:
+        return
+    ids = state.bulk_approve_validated(store, run_id, st.session_state.get("tests") or [])
+    _reload_tests(ctx)
+    st.session_state.flash = (
+        ("success", f"Bulk approved {len(ids)} validated test(s); one review-log entry each.")
+        if ids
+        else ("info", "No validated tests to approve.")
+    )
+
+
 def _chips(prov: list) -> None:
     if not prov:
         st.caption("No target provenance recorded for this test.")
@@ -313,6 +328,12 @@ def _generate_tab(ctx: dict[str, object]) -> None:
     cols[0].button("Approve", on_click=_review_cb, args=(ctx, "approve"))
     cols[1].button("Reject", on_click=_review_cb, args=(ctx, "reject"))
     cols[2].button("Add comment", on_click=_review_cb, args=(ctx, "comment"))
+    st.button(
+        "Bulk approve all validated tests",
+        on_click=_bulk_approve_cb,
+        args=(ctx,),
+        help="Approves every test whose status is 'validated'. Only runs when you click it.",
+    )
     flash = st.session_state.get("flash")
     if flash:
         getattr(st, flash[0])(flash[1])
@@ -324,13 +345,17 @@ def _generate_tab(ctx: dict[str, object]) -> None:
 # ------------------------------------------------------------------------------------ Run tab
 
 
+def _include_unreviewed() -> bool:
+    return bool(st.session_state.get("include_unreviewed"))
+
+
 def _scope_tests(scope: str) -> list:
+    """Tests in the run scope: approved only, unless the demo-only override is on."""
     tests = st.session_state.get("tests") or []
-    if scope == "selected test":
-        return [t for t in tests if t.id == st.session_state.get("selected_test")]
-    if scope == "approved tests":
-        return state.approved_tests(tests)
-    return list(tests)
+    pool = list(tests) if _include_unreviewed() else state.approved_tests(tests)
+    if scope == "Selected test":
+        return [t for t in pool if t.id == st.session_state.get("selected_test")]
+    return pool
 
 
 def _failure_panel(test, result, did_names: dict[int, str]) -> None:
@@ -355,19 +380,29 @@ def _run_tab(ctx: dict[str, object]) -> None:
     if not tests:
         st.info("Generate tests first on the Generate & Review tab.")
         return
+    st.checkbox(
+        OVERRIDE_LABEL,
+        key="include_unreviewed",
+        help="OFF by default. Runs and exports then use ONLY tests a human approved.",
+    )
+    n_ok = len(state.approved_tests(tests))
+    if _include_unreviewed():
+        st.warning("Demo override ON: unreviewed tests are included in the run and the export.")
+    else:
+        st.caption(f"{n_ok} of {len(tests)} test(s) approved; only approved tests are run and exported.")
     options = bug_options()
     labels = {o.label: o for o in options}
     choice = st.selectbox("Inject a bug", [NO_BUG, *labels], key="bug_choice")
     if choice in labels:
         st.caption(labels[choice].description)
-    scope = st.radio("Run", SCOPES, horizontal=True, key="run_scope")
+    scope = st.radio("Run scope", SCOPES, horizontal=True, key="run_scope")
     if st.button("Run on simulator", type="primary"):
         chosen = _scope_tests(scope)
         if not chosen:
             st.warning(
-                "No approved tests yet: approve some on the Generate & Review tab."
-                if scope == "approved tests"
-                else "No tests to run."
+                NO_APPROVED_MESSAGE
+                if not _include_unreviewed() and n_ok == 0
+                else "Nothing in this scope (select an approved test on Generate & Review)."
             )
         else:
             bug_id = labels[choice].id if choice in labels else None
@@ -434,12 +469,12 @@ def _export_tab(spec: object) -> None:
     if not tests:
         st.info("Generate tests first on the Generate & Review tab.")
         return
-    approved_only = st.checkbox("Approved tests only", key="export_approved")
-    chosen = state.approved_tests(tests) if approved_only else tests
+    chosen = list(tests) if _include_unreviewed() else state.approved_tests(tests)
     if not chosen:
-        st.warning("No approved tests to export.")
+        st.warning(NO_APPROVED_MESSAGE)
         return
-    st.caption(f"{len(chosen)} test(s) in the export.")
+    scope_text = "all tests (demo override)" if _include_unreviewed() else "approved tests only"
+    st.caption(f"{len(chosen)} test(s) in the export: {scope_text}.")
     col1, col2 = st.columns(2)
     col1.download_button(
         "Download pytest file",

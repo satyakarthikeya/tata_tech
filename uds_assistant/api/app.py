@@ -37,6 +37,7 @@ from uds_assistant.simulator import load_bug_catalog
 from uds_assistant.spec.schema import load_spec
 from uds_assistant.store.audit import AuditStore, RunRecord
 from uds_assistant.testgen.model import ReviewStatus, TestCase
+from uds_assistant.testgen.review_gate import NoApprovedTestsError, select_for_run
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GOVERNANCE_BANNER = "Generated tests require human review before execution on real hardware"
@@ -78,6 +79,8 @@ class RunRequest(BaseModel):
     run_id: int | None = None
     tests: list[TestCase] | None = None
     bugs: list[str] = Field(default_factory=list)
+    include_unreviewed: bool = False
+    """Default False: only human-approved tests run. True is a demo-only override."""
 
 
 class RunResponse(BaseModel):
@@ -93,6 +96,8 @@ class ExportRequest(BaseModel):
     run_id: int | None = None
     tests: list[TestCase] | None = None
     format: Literal["pytest", "capl"]
+    include_unreviewed: bool = False
+    """Default False: only human-approved tests are exported. True is a demo-only override."""
 
 
 class ExportResponse(BaseModel):
@@ -150,6 +155,13 @@ def _resolve_tests(app: FastAPI, run_id: int | None, tests: list[TestCase] | Non
             raise HTTPException(status_code=404, detail=f"run {run_id} has no tests")
         return found
     raise HTTPException(status_code=400, detail="provide either 'run_id' or 'tests'")
+
+
+def _approved(tests: list[TestCase], include_unreviewed: bool) -> list[TestCase]:
+    try:
+        return select_for_run(tests, include_unreviewed=include_unreviewed)
+    except NoApprovedTestsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 # --------------------------------------------------------------------------------- factory
@@ -246,7 +258,7 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
 
     @app.post("/run", response_model=RunResponse)
     def run(req: RunRequest) -> RunResponse:
-        tests = _resolve_tests(app, req.run_id, req.tests)
+        tests = _approved(_resolve_tests(app, req.run_id, req.tests), req.include_unreviewed)
         known = set(app.state.bug_catalog.ids)
         unknown = [b for b in req.bugs if b not in known]
         if unknown:
@@ -265,7 +277,7 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
 
     @app.post("/export", response_model=ExportResponse)
     def export(req: ExportRequest) -> ExportResponse:
-        tests = _resolve_tests(app, req.run_id, req.tests)
+        tests = _approved(_resolve_tests(app, req.run_id, req.tests), req.include_unreviewed)
         if req.format == "pytest":
             filename = "generated_tests_test.py"
             content = render_pytest(tests, filename=filename)
