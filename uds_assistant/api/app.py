@@ -23,6 +23,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from uds_assistant.agent import TargetEvidence, run_pipeline
+from uds_assistant.eval.coverage import coverage_markdown, coverage_report
 from uds_assistant.export import render_capl, render_pytest
 from uds_assistant.llm.client import ollama_base_url, ollama_reachable
 from uds_assistant.llm.factory import START_OLLAMA_HINT, OllamaUnavailableError, get_llm
@@ -98,6 +99,16 @@ class ExportResponse(BaseModel):
     format: Literal["pytest", "capl"]
     filename: str
     content: str
+
+
+class CoverageRequest(BaseModel):
+    run_id: int | None = None
+    tests: list[TestCase] | None = None
+
+
+class CoverageResponse(BaseModel):
+    report: dict[str, Any]
+    markdown: str
 
 
 class ReviewRequest(BaseModel):
@@ -262,6 +273,15 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
             filename = "generated_tests.can"
             content = render_capl(tests)
         return ExportResponse(format=req.format, filename=filename, content=content)
+
+    # ------------------------------------------------------------------------------ coverage
+
+    @app.post("/coverage", response_model=CoverageResponse)
+    def coverage(req: CoverageRequest) -> CoverageResponse:
+        """Coverage of the given tests (all of them, no review filter) against the spec."""
+        tests = _resolve_tests(app, req.run_id, req.tests)
+        report = coverage_report(tests, app.state.spec)
+        return CoverageResponse(report=report, markdown=coverage_markdown(report))
 
     # -------------------------------------------------------------------------- bugs / runs
 

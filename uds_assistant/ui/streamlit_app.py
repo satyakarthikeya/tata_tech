@@ -21,9 +21,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 from uds_assistant.agent import run_pipeline
+from uds_assistant.eval.coverage import coverage_markdown, coverage_report, coverage_rows
 from uds_assistant.export import CAPL_BANNER, render_capl, render_pytest
 from uds_assistant.llm.factory import START_OLLAMA_HINT, get_llm
 from uds_assistant.protocol.describe import decode_responses, decode_step, spaced_hex
@@ -426,7 +428,7 @@ def _run_tab(ctx: dict[str, object]) -> None:
 # --------------------------------------------------------------------------------- Export tab
 
 
-def _export_tab() -> None:
+def _export_tab(spec: object) -> None:
     st.subheader("Export")
     tests = st.session_state.get("tests") or []
     if not tests:
@@ -452,6 +454,40 @@ def _export_tab() -> None:
         mime="text/plain",
     )
     st.caption(CAPL_BANNER)
+    _coverage_section(chosen, spec)
+
+
+def _coverage_section(chosen: list, spec: object) -> None:
+    """Coverage of the export-scope tests against the spec; zero-test items highlighted."""
+    st.markdown("#### Coverage of these tests against the spec")
+    report = coverage_report(chosen, spec)  # type: ignore[arg-type]
+    markdown = coverage_markdown(report)
+    out = REPO_ROOT / "outputs" / "exports" / "coverage_report.md"
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(markdown, encoding="utf-8")
+    except OSError:
+        pass
+    unc = sum(len(v) for v in report["uncovered"].values())
+    cats = ", ".join(f"{k} {v}" for k, v in report["by_category"].items())
+    st.caption(f"{report['tests']} tests ({cats}). Spec items with zero tests: {unc}.")
+    frame = pd.DataFrame(coverage_rows(report))
+    st.dataframe(
+        frame.style.apply(
+            lambda row: ["background-color: #ffd6d6; color: #7a0000"] * len(row)
+            if row["status"] == "UNCOVERED"
+            else [""] * len(row),
+            axis=1,
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+    st.download_button(
+        "Download coverage report (Markdown)",
+        markdown,
+        file_name="coverage_report.md",
+        mime="text/markdown",
+    )
 
 
 # -------------------------------------------------------------------------------- Results tab
@@ -527,7 +563,7 @@ def main() -> None:
     with tabs[2]:
         _run_tab(ctx)
         st.divider()
-        _export_tab()
+        _export_tab(ctx["spec"])
     with tabs[3]:
         _results_tab()
 

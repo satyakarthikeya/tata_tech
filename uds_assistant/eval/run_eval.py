@@ -29,6 +29,7 @@ from uds_assistant.eval import metrics as m
 from uds_assistant.eval import understanding as u
 from uds_assistant.eval.agreement import DEFAULT_REQUESTS, simulator_rules_agreement
 from uds_assistant.eval.can_check import run_udsoncan_sequence
+from uds_assistant.eval.coverage import coverage_markdown, coverage_report
 from uds_assistant.eval.qa_eval import load_questions, run_qa
 from uds_assistant.export import render_capl, render_pytest
 from uds_assistant.llm.factory import OllamaUnavailableError, get_llm
@@ -155,10 +156,17 @@ def run_evaluation(
     qa = run_qa(load_questions(root / "data" / "qa_eval.csv"),
                 spec=spec, chunks=corpus, retriever=retriever, llm=llm)
 
+    gen_cov = coverage_report(generated, spec)
+    sweep_cov = coverage_report(sweep, spec)
+
     # exports (the pytest file is run by scripts/demo.py and the end-to-end check) -------------
     (out / "exports" / "generated_tests_test.py").write_text(
         render_pytest(generated, filename="generated_tests_test.py"), encoding="utf-8")
     (out / "exports" / "generated_tests.can").write_text(render_capl(generated), encoding="utf-8")
+
+    (out / "exports" / "coverage_report.md").write_text(
+        coverage_markdown(gen_cov, "# Coverage report (generated tests, seed requirements)"),
+        encoding="utf-8")
 
     report: dict[str, Any] = {
         "report_version": REPORT_VERSION,
@@ -189,6 +197,7 @@ def run_evaluation(
             "requirements": cov["requirements"],
             "requirements_with_tests": cov["requirements_with_tests"],
         },
+        "spec_coverage": {"generated": _cov_summary(gen_cov), "sweep": _cov_summary(sweep_cov)},
         "reuse": {"tests": reuse["tests"], "from_templates": reuse["template_instantiations"],
                   "rate": reuse["rate"], "templates_registered": reuse["templates_registered"]},
         "defect_detection": {
@@ -229,6 +238,14 @@ def run_evaluation(
     if out == (root / "outputs").resolve():
         (root / "docs" / "RESULTS.md").write_text(md, encoding="utf-8")
     return report
+
+
+def _cov_summary(cov: dict[str, Any]) -> dict[str, Any]:
+    """Per kind: items in the spec, items touched, and the zero-test items."""
+    return {"tests": cov["tests"], "kinds": {
+        kind: {"items": len(rows), "touched": sum(1 for r in rows if r["tests"]),
+               "zero_tests": cov["uncovered"][kind]}
+        for kind, rows in cov["items"].items()}}
 
 
 def _pct(x: float | None) -> str:
@@ -302,6 +319,14 @@ def render_markdown(r: dict[str, Any]) -> str:
         "Synthetic ECU spec. Every number is measured in this run. "
         "The LLM never produces bytes; the rules engine builds them."
     )
+    sc = r["spec_coverage"]
+
+    def _cov_line(label: str, c: dict[str, Any]) -> str:
+        parts = [f"{k.replace('_', ' ')} {v['touched']}/{v['items']}" for k, v in c["kinds"].items()]
+        return f"- {label} ({c['tests']} tests): " + "; ".join(parts) + "."
+
+    zero = [f"{k.replace('_', ' ')}: {', '.join(v['zero_tests'])}"
+            for k, v in sc["generated"]["kinds"].items() if v["zero_tests"]]
     lines = [
         "# Evaluation report",
         "",
@@ -314,6 +339,13 @@ def render_markdown(r: dict[str, Any]) -> str:
         *[f"| {n} | {metric} | {value} |" for n, metric, value in rows],
         "",
         f"**Missed blind-set bugs ({len(dd['missed'])}):** {missed}.",
+        "",
+        "## Spec coverage (`coverage_report`, items touched / items in `data/bcm_spec.yaml`)",
+        "",
+        _cov_line("Generated tests (seed requirements)", sc["generated"]),
+        _cov_line("Conformance sweep", sc["sweep"]),
+        "- Zero tests in the generated set: " + ("; ".join(zero) or "none") + ".",
+        "- Full per-item table with positive/negative split: `outputs/exports/coverage_report.md`.",
         "",
         notes,
         "",
