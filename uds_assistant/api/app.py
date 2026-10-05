@@ -28,6 +28,7 @@ from uds_assistant.export import render_capl, render_pytest
 from uds_assistant.llm.client import ollama_base_url, ollama_reachable
 from uds_assistant.llm.factory import START_OLLAMA_HINT, OllamaUnavailableError, get_llm
 from uds_assistant.qa import AskRequest, AskResponse, answer_question
+from uds_assistant.qa.check_request import RequestCheck, check_request
 from uds_assistant.qa.lookup import FactLookup
 from uds_assistant.rag.factory import get_retriever
 from uds_assistant.rag.ingest import build_corpus
@@ -114,6 +115,13 @@ class CoverageRequest(BaseModel):
 class CoverageResponse(BaseModel):
     report: dict[str, Any]
     markdown: str
+
+
+class ValidateRequest(BaseModel):
+    request_hex: str = Field(min_length=1)
+    session: int = 0x01
+    unlocked_level: int | None = None
+    vehicle_speed_kph: int = Field(default=0, ge=0)
 
 
 class ReviewRequest(BaseModel):
@@ -285,6 +293,24 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
             filename = "generated_tests.can"
             content = render_capl(tests)
         return ExportResponse(format=req.format, filename=filename, content=content)
+
+    # ------------------------------------------------------------------------------ validate
+
+    @app.post("/validate", response_model=RequestCheck)
+    def validate(req: ValidateRequest) -> RequestCheck:
+        """Decode a raw request, predict the response with the rules engine, and cite sources.
+
+        Needs the embedding model for citations but not Ollama; no bytes come from a model.
+        """
+        return check_request(
+            app.state.spec,
+            app.state.corpus,
+            req.request_hex,
+            session=req.session,
+            unlocked_level=req.unlocked_level,
+            vehicle_speed_kph=req.vehicle_speed_kph,
+            retriever=retriever(),
+        )
 
     # ------------------------------------------------------------------------------ coverage
 

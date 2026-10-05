@@ -30,6 +30,7 @@ from uds_assistant.export import CAPL_BANNER, render_capl, render_pytest
 from uds_assistant.llm.factory import START_OLLAMA_HINT, get_llm
 from uds_assistant.protocol.describe import decode_responses, decode_step, spaced_hex
 from uds_assistant.qa import answer_question
+from uds_assistant.qa.check_request import check_request
 from uds_assistant.qa.lookup import FactLookup
 from uds_assistant.rag.factory import get_retriever
 from uds_assistant.rag.ingest import build_corpus
@@ -47,6 +48,7 @@ NOT_FOUND_TEXT = "Not found in the approved sources."
 CONF_COLOR = {"high": "green", "medium": "orange", "low": "red"}
 PICK = "(pick an example)"
 SCOPES = ("Approved tests only", "Selected test")
+NL = chr(10)
 OVERRIDE_LABEL = "Include unreviewed tests (demo only, bypasses expert review)"
 OLLAMA_MISSING = f"{START_OLLAMA_HINT}."
 
@@ -139,7 +141,66 @@ def _confidence_badge(level: str | None, reason: str) -> None:
     st.markdown(f":{CONF_COLOR.get(level, 'gray')}-badge[confidence: {level}] {reason}")
 
 
+def _check_box(ctx: dict[str, object]) -> None:
+    """Capability 3: decode a raw request and predict the ECU's response with the rules engine."""
+    spec = ctx["spec"]
+    with st.expander("Check a raw request", expanded=False):
+        st.caption(
+            "Enter a UDS request in hex and the ECU state. The app decodes it and runs it through "
+            "the same rules engine that builds the test bytes (no LLM)."
+        )
+        st.text_input("Request (hex)", key="chk_hex", placeholder="e.g. 2E 01 00 11")
+        c1, c2, c3 = st.columns(3)
+        sessions = {f"{s.name} ({s.id:#04x})": s.id for s in spec.sessions}  # type: ignore[attr-defined]
+        levels = {"none unlocked": None} | {
+            f"level {lv.level:#04x} ({lv.name})": lv.level
+            for lv in spec.security_levels  # type: ignore[attr-defined]
+        }
+        sess_label = c1.selectbox("Active session", list(sessions), key="chk_session")
+        lvl_label = c2.selectbox("Unlocked security level", list(levels), key="chk_level")
+        speed = c3.number_input("Vehicle speed (km/h)", min_value=0, max_value=300, key="chk_speed")
+        if st.button("Check request", key="chk_go"):
+            st.session_state.chk_result = check_request(
+                spec,  # type: ignore[arg-type]
+                ctx["corpus"],  # type: ignore[arg-type]
+                st.session_state.get("chk_hex", ""),
+                session=sessions[sess_label],
+                unlocked_level=levels[lvl_label],
+                vehicle_speed_kph=int(speed),
+                retriever=_retriever(),
+            )
+        res = st.session_state.get("chk_result")
+        if res is None:
+            return
+        if res.outcome == "invalid":
+            st.error(res.reason)
+            return
+        st.markdown(f"**Decoded:** {res.decoded}")
+        if res.structurally_valid:
+            st.success("Structurally valid request.")
+        else:
+            st.error("Structurally INVALID request (unknown service, subfunction or bad length).")
+        if res.outcome == "negative":
+            st.warning(f"Expected: {res.expected_text}")
+        else:
+            st.info(f"Expected: {res.expected_text}")
+        st.markdown(f"**Reason:** {res.reason}")
+        with st.expander("Rules-engine trace"):
+            st.code(NL.join(res.trace), language="text")
+        if res.citations:
+            st.markdown("**Citations**")
+            for c in res.citations:
+                st.markdown(f"**{c.layer}** · `{c.source}` · `{c.ref}`")
+                st.markdown(f"> {c.quote}")
+
+
 def _ask_tab(ctx: dict[str, object]) -> None:
+    _ask_question(ctx)
+    st.divider()
+    _check_box(ctx)
+
+
+def _ask_question(ctx: dict[str, object]) -> None:
     st.subheader("Ask a diagnostic question")
     st.caption("Answers come only from the approved sources (standard, OEM, ECU spec, project).")
     st.selectbox(
