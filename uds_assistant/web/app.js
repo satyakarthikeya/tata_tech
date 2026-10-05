@@ -551,88 +551,20 @@ function bars(obj) {
     el("div", { class: "track" }, el("div", { class: "fill", style: "width:" + (n / max * 100) + "%" })), el("span", { class: "mono" }, n))));
 }
 
-/* ---------- RESULTS tab ---------- */
-async function loadReport() {
-  const root = $("#tab-results");
-  if (S.report) return;
-  clear(root).append(el("div", { class: "card" }, loadingBox("Loading evaluation report..."), skeleton(5)));
-  try {
-    const r = await api("/report");
-    let md = ""; try { md = await api("/report.md"); } catch { md = "(Markdown report unavailable.)"; }
-    S.report = { r, md }; renderReport();
-  } catch (e) {
-    clear(root).append(el("div", { class: "card empty" }, el("h3", {}, e.status === 404 ? "No evaluation report yet" : "Could not load the report"), e.message));
-    if (e.status !== 404) failToast(e);
-  }
-}
-function card(title, hint, ...kids) { return el("div", { class: "card" }, el("h2", {}, title), hint ? el("p", { class: "hint" }, hint) : null, ...kids); }
-function metricGrid(items) { return el("div", { class: "metrics" }, items.map(([v, k, tone]) => m(v, k, tone || ""))); }
-const rateTone = (x) => (x >= 0.9 ? "good" : x >= 0.6 ? "mid" : "bad");
-const frac = (a, b) => (a ?? "n/a") + "/" + (b ?? "n/a");
-
-function renderReport() {
-  const { r, md } = S.report; const root = clear($("#tab-results"));
-  const g = r.generation_accuracy || {}, c = r.coverage || {}, ru = r.reuse || {}, d = r.defect_detection || {}, u = r.understanding || {}, q = r.qa || {}, t = r.test_design_time || {}, cr = r.correctness || {}, sc = r.spec_coverage || {};
-  root.append(el("div", { class: "card" }, el("h2", {}, "Evaluation results"),
-    el("div", { class: "row", style: "margin-top:6px" }, [["Run", r.timestamp], ["Git", r.git], ["Model", r.llm && r.llm.model], ["Runtime", r.runtime_seconds !== undefined ? r.runtime_seconds + " s" : null]]
-      .map(([k, v]) => el("span", { class: "chip" }, k + " ", el("b", {}, v ?? "n/a")))),
-    el("p", { class: "hint", style: "margin-top:8px" }, "Measured by python -m uds_assistant.eval.run_eval on the synthetic ECU spec; nothing on this page is typed in by hand.")));
-  root.append(card("Generation accuracy", "Are the generated tests well-formed, runnable and cited?", metricGrid([
-    [pct(g.valid_request_rate), "valid request rate (" + frac(g.well_formed_steps, g.send_steps) + " steps)", rateTone(g.valid_request_rate)],
-    [pct(g.clean_pass_rate), "clean-simulator pass rate (" + frac(g.clean_pass, g.tests) + ")", rateTone(g.clean_pass_rate)],
-    [g.citations_valid + "/" + g.citations, "citations valid", g.citations_valid === g.citations ? "good" : "mid"], [g.tests, "tests generated"]])));
-  root.append(card("Coverage and reuse", null, metricGrid([
-    [frac(c.requirements_with_tests, c.requirements), "requirements with tests", c.requirements_with_tests === c.requirements ? "good" : "mid"],
-    [pct(ru.rate), "generated from vetted templates (" + frac(ru.from_templates, ru.tests) + ")"], [ru.templates_registered, "templates registered"]]),
-    c.category_totals ? el("div", { class: "sect" }, sectionLabel("Tests by category"), bars(c.category_totals)) : null));
-  const gd = d.generated_tests || {}, sw = d.sweep || {};
-  root.append(card("Defect detection", "Held-out bug catalogue, written blind and not tuned on.", metricGrid([
-    [frac(d.caught, d.bugs), "bugs caught (generated + sweep)", rateTone((d.caught || 0) / (d.bugs || 1))],
-    [frac(gd.detected, gd.bugs), "caught by " + (d.generated_tests_count ?? "?") + " generated tests"], [frac(sw.detected, sw.bugs), "caught by " + (d.sweep_tests_count ?? "?") + " sweep tests"]]),
-    (d.missed || []).length ? el("div", { class: "sect" }, sectionLabel("Missed bugs (" + d.missed.length + ")"), el("div", { class: "tbl-wrap" }, el("table", {}, el("thead", {}, el("tr", {}, ["Bug", "Title", "Category"].map((h) => el("th", {}, h)))),
-      el("tbody", {}, d.missed.map((x) => el("tr", {}, el("td", { class: "mono" }, x.bug_id), el("td", {}, x.title), el("td", {}, x.category))))))) : null));
-  root.append(card("Requirement understanding", "How well the model's targets and categories match a hand-labelled gold set.", metricGrid([
-    [pct(u.target_f1), "target F1", rateTone(u.target_f1)], [pct(u.target_precision), "target precision"], [pct(u.target_recall), "target recall"],
-    [pct(u.category_recall), "category recall", rateTone(u.category_recall)], [pct(u.precondition_recall), "precondition recall", rateTone(u.precondition_recall)],
-    [pct(u.precondition_recall_field), "precondition recall (field-level)"]])));
-  root.append(card("Question answering", null, metricGrid([
-    [pct(q.answer_accuracy), "answer accuracy (n=" + q.answer_accuracy_n + " of " + q.n_answerable + " answerable)", rateTone(q.answer_accuracy)],
-    [pct(q.citation_correctness), "citation correctness", rateTone(q.citation_correctness)],
-    [frac(q.correct_not_found_n, q.n_unanswerable), "unanswerable correctly 'not found'"]])));
-  root.append(card("Test design time", null, metricGrid([
-    [(t.tool_seconds_per_requirement_mean ?? "n/a") + " s", "tool mean per requirement"], [(t.tool_seconds_per_requirement_median ?? "n/a") + " s", "median"], [(t.tool_seconds_per_requirement_max ?? "n/a") + " s", "max"], [t.requirements_timed, "requirements timed"]]),
-    note("info", "Manual comparison: ", el("b", {}, "owner to fill"), ". The time an engineer needs by hand has not been measured and is not claimed here (see docs/TEST_DESIGN_TIME.md).")));
-  const sr = cr.simulator_rules_agreement || {}, gc = cr.gold_clean || {}, uv = cr.udsoncan_virtual_can || {};
-  root.append(card("Correctness of the simulator", null, metricGrid([
-    [frac(sr.agreed, sr.requests), "simulator vs rules engine agreement", sr.agreed === sr.requests ? "good" : "bad"], [frac(gc.passed, gc.total), "gold tests pass on clean simulator", gc.passed === gc.total ? "good" : "bad"],
-    [uv.status ?? "n/a", "udsoncan virtual-CAN check", uv.status === "pass" ? "good" : "mid"]])));
-  const specCard = card("Spec coverage", "Items of each kind touched by at least one test.");
-  [["generated", "Generated tests"], ["sweep", "Exhaustive sweep"]].forEach(([k, lab]) => {
-    const s = sc[k]; if (!s) return;
-    specCard.append(el("div", { class: "sect" }, el("h3", {}, lab, " ", el("span", { class: "kv" }, s.tests + " tests")), el("div", { class: "tbl-wrap" }, el("table", {},
-      el("thead", {}, el("tr", {}, el("th", {}, "Kind"), el("th", { class: "num" }, "Items"), el("th", { class: "num" }, "Touched"), el("th", {}, "With zero tests"))),
-      el("tbody", {}, Object.entries(s.kinds).map(([kind, v]) => el("tr", { class: v.zero_tests.length ? "zero" : "" }, el("td", {}, kind), el("td", { class: "num" }, v.items), el("td", { class: "num" }, v.touched),
-        el("td", { class: "mono" }, v.zero_tests.join(", ") || "none"))))))));
-  });
-  root.append(specCard);
-  root.append(el("div", { class: "card" }, el("details", { class: "plain" }, el("summary", {}, "View full report (Markdown)"), el("pre", { class: "md" }, md))));
-}
-
 /* ---------- routing & boot ---------- */
-const TABS = ["ask", "generate", "run", "results"];
+const TABS = ["ask", "generate", "run"];
 function route() {
   const name = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "ask";
   document.querySelectorAll("[data-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== name));
   document.querySelectorAll("nav.tabs a").forEach((a) => { if (a.dataset.tab === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   if (!S.examples) return;
   if (name === "run") refreshRun();
-  if (name === "results") loadReport();
   if (name === "generate" && S.runId !== null && !S.views.length) loadViews();
 }
 
 async function boot() {
   window.addEventListener("hashchange", route);
-  document.querySelectorAll("#tab-ask,#tab-generate,#tab-run,#tab-results").forEach((p) => p.append(skeleton(4)));
+  document.querySelectorAll("#tab-ask,#tab-generate,#tab-run").forEach((p) => p.append(skeleton(4)));
   try {
     [S.config, S.examples] = await Promise.all([api("/config"), api("/examples")]);
   } catch (e) {

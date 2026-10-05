@@ -37,7 +37,7 @@ docker compose up --build                                        # http://localh
 The BGE embedding model is baked into the image; the app needs no internet at run time. The web UI is plain HTML and
 JavaScript served by FastAPI (`uds_assistant/web/`, no build step).
 
-## The four tabs
+## The tabs (web UI: Ask, Generate & Review, Run & Export; the Streamlit UI also has Results)
 
 | Tab | What it does |
 |---|---|
