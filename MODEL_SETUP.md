@@ -52,8 +52,9 @@ setx OLLAMA_FLASH_ATTENTION 1; setx OLLAMA_KV_CACHE_TYPE q8_0; setx OLLAMA_MAX_L
 ## 3. Embedding model and the vector store
 
 The first run downloads `BAAI/bge-small-en-v1.5` (needs network once; offline afterwards). The store
-is `outputs/chroma/` (git-ignored): cosine distance, one Chroma collection for the standard / ECU /
-project layers and one for the OEM layer; only new or changed chunks are re-embedded.
+is `outputs/chroma/` (git-ignored): cosine distance, four Chroma collections (standard, OEM, ECU, project,
+one per layer); only new or changed chunks are re-embedded. An older shared-collection store is dropped and
+rebuilt automatically on first start.
 
 ```bash
 python -c "from uds_assistant.rag.embedders import FastEmbedEmbedder; FastEmbedEmbedder()"   # pre-download

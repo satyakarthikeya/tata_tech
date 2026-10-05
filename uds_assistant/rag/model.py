@@ -18,10 +18,7 @@ from uds_assistant.testgen.model import Citation
 Collection = str  # "standard" | "oem" | "ecu" | "project" in this project
 
 LAYERS: tuple[str, ...] = ("standard", "oem", "ecu", "project")
-"""The four knowledge layers, kept in separate collections."""
-
-CORE_LAYERS: tuple[str, ...] = ("standard", "ecu", "project")
-"""Layers that share one Chroma collection (``oem`` has its own)."""
+"""The four knowledge layers, each stored in its own physical Chroma collection."""
 
 LAYER_ALIASES: dict[str, str] = {"ecu_spec": "ecu"}
 """Old layer names still accepted in ``collections=`` filters."""

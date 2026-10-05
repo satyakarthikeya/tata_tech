@@ -49,6 +49,10 @@ requirement -> retrieve evidence -> LLM (Ollama): parse + plan tests (names, tem
 question -> spec lookup + retrieval over the 4 collections -> verified phrasing -> cited answer
 ```
 
+Retrieval layers: the four layers are four physical ChromaDB collections (`standard`, `oem`, `ecu`,
+`project`; `rag/chroma.py`). **Test generation does not search OEM** (it reads standard, ECU and project
+only); **Q&A searches all four.** Reason: OEM policy text must not silently change protocol-derived expected bytes.
+
 Code layout: `protocol/` (SIDs, codec), `spec/`, `rules/` (the oracle), `simulator/` (independent
 ECU + bugs), `testgen/` (templates, conformance sweep), `rag/`, `llm/`, `agent/` (pipeline),
 `qa/`, `runner/`, `export/`, `store/` (SQLite audit), `api/`, `ui/`, `eval/`. Tour:

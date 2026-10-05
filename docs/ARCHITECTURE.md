@@ -48,10 +48,13 @@ ChromaDB with `BAAI/bge-small-en-v1.5` embeddings (fastembed) is the only retrie
 four separate collections, as the case study's risk control asks: **standard** (UDS reference notes in our own
 words), **OEM** (a short synthetic guideline), **ECU** (chunks of the synthetic ECU spec) and **project**
 (requirements and the behaviour contract). The store is `outputs/chroma/` (git-ignored); only new or changed
-chunks are re-embedded.
+chunks are re-embedded. The four layers are four **physical** Chroma collections (`standard`, `oem`, `ecu`,
+`project`, one per layer in `rag/chroma.py`, same chunking and embeddings for all); a search names the layers it
+wants and only those collections are queried.
 
-- The generator searches only standard, ECU and project (`DECISIONS.md` E33-NO-OEM-IN-GEN).
-- Q&A searches all four layers, top-k per layer (`rag/layers.py`), because scores of separate collections
+- Test generation does **not** search OEM: it reads standard, ECU and project only (`DECISIONS.md`
+  E33-NO-OEM-IN-GEN). Reason: OEM policy text must not silently change protocol-derived expected bytes.
+- Q&A searches **all four** layers, top-k per layer (`rag/layers.py`), because scores of separate collections
   are not comparable.
 - Scores are cosine similarities. Every citation is checked against a real chunk (`rag/citations.py`).
 
