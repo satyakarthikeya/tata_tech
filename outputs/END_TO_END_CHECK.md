@@ -1,34 +1,53 @@
 # End-to-end check (branch `simple`)
 
-Run on 2026-10-04 on a Windows laptop (RTX 3050 4 GB), Python 3.13.6, Ollama with `qwen2.5:3b-instruct-q4_K_M`,
-code at commit `9e2df41` plus later edits to `Dockerfile` and docs only (the eval header says `+dirty` for that reason).
-Nothing was tuned on evaluation data.
+Run on 2026-10-05 on a Windows laptop (RTX 3050 4 GB), Python 3.13.6, Ollama with `qwen2.5:3b-instruct-q4_K_M`.
+This is the check after the gap-fix pass (preconditions and pass criteria, coverage report, four physical Chroma
+collections, review gate, raw-request check, simulator-only safety, docs). The evaluation below ran on a **clean tree
+at commit `8427c50`** (the report header shows `8427c50`, no `+dirty`). The numbers in `outputs/eval_report.md` and
+`docs/RESULTS.md` come from that run; nothing was tuned on evaluation data.
 
 | Check | Result |
 |---|---|
-| `python -c "import uds_assistant"` | OK |
-| `python scripts/demo.py` (REQ-005, bug `accepts_any_key`) | OK in 24 s: 4 tests generated, 4/4 pass on the clean simulator, with the bug 3/4 pass, "Bug caught by 1 test(s)" (`req_005__tpl_security_lockout_01`, first failing step: expected `7F 27 35`, actual `67 02`), pytest and CAPL files exported. The default bug `write_ignores_value_range` is *not* caught by REQ-005's tests; the demo says so and the default was changed to `accepts_any_key` for the demo story |
-| `python -m uds_assistant.eval.run_eval` (full, with Ollama) | OK, 733 s, report in `outputs/eval_report.md` / `.json` (copy in `docs/RESULTS.md`): 15 seed requirements, 83 tests; 9/15 blind v3 bugs caught; Q&A 19/21. An earlier full run (git `377e7b5+dirty`, before a docstring-level cleanup) gave the same headline numbers: 81 tests, 9/15 bugs, Q&A 19/21 |
-| API (`python -m uds_assistant.api`) | `/health` returned `ollama_reachable: true`; `/ask` ("length of DID 0xF190") answered with a citation; `/generate` returned run_id 1 with 8 tests; `/run` with `accepts_any_key` returned 7/8 passed; `/export` returned the pytest file (7962 chars) and the CAPL file (10901 chars). With `OLLAMA_HOST` pointing nowhere, `/ask` and `/generate` return HTTP 503 "Ollama is not reachable ... Start Ollama and pull qwen2.5:3b-instruct-q4_K_M" and `/health` reports the hint |
-| Streamlit headless | `streamlit run` started and served (15 s) with no errors in the log. Because no browser connects in a headless boot, the script itself was also executed with Streamlit's `AppTest`: four tabs, green Ollama status, Ask ("What does NRC 0x33 mean?") answered, Generate (8 tests) and Run with a bug worked, the Results tab rendered 8 cards from the report, zero exceptions |
-| Exported pytest file (`outputs/exports/generated_tests_test.py`) | **83 passed** in 1.1 s |
-| `ruff check .` | All checks passed |
-| Grep for `mock`, `bm25`, `LLM_MODE`, `RETRIEVER` | Nothing left in code. The only mentions are in `DECISIONS.md`, `MODEL_SETUP.md` and `PROJECT.md`, which say they were removed (the old one lived in `Dockerfile` and was fixed) |
+| `ruff check .` | All checks passed (run before every commit) |
+| `python -m uds_assistant.eval.run_eval` (full, with Ollama, clean tree) | OK, 738 s. 15 seed requirements, 79 tests, 100% valid requests, 79/79 clean pass, 384/384 citations valid, 15/15 requirements covered; blind v3 bugs 9/15 caught (generated tests 2/15, conformance sweep 9/15, same 6 missed as before); target F1 62%, category recall 72%; precondition recall 90% from steps and **79% from the real `preconditions` field** (new row); Q&A 19/21 answer accuracy, 19/21 citation correctness, 3/4 correct "not found" |
+| Test bytes unchanged by the fixes | Pre-change snapshot taken from a clean worktree of the starting commit `09cc205` (outside the repo). **Gold 60/60 tests, conformance sweep 1200/1200 tests and 197 template instantiations (every template x every applicable parameter set) are byte-for-byte identical** (request and expected-response hex plus timing fields) after every fix. For LLM-planned tests: every test id present in both runs has identical steps (0 differences in 70, 72 and 78 shared ids across three runs), but **which tests the planner picks varies from run to run even on the unmodified starting code** (two runs of `09cc205` each had ids the other lacked: 7 and 9), so the generated *set* cannot be claimed identical |
+| Chroma: four physical collections | Re-ingested into `standard` (15 chunks), `oem` (7), `ecu` (25), `project` (40); each layer returns citations for "What does NRC 0x33 securityAccessDenied mean?". Retrieval top-5 ids and scores are **identical** to the old shared-collection design on 240 query x layer combinations (old code in a clean worktree vs new). One transient "Nothing found on disk" Chroma error was seen once on a fresh scratch index and did not reproduce in 6 further fresh builds; cause not identified |
+| `python scripts/demo.py` | Exits 0 in about 26 s (the demo passes `include_unreviewed=True` explicitly). REQ-005 with bug `accepts_any_key`: 4 tests, 4/4 clean pass, **the bug is not caught in this environment** (the planner picked `session_relock` instead of `security_lockout`; a second run of the unmodified starting code made the same pick, the previous check run picked the other one). `--req REQ-010`: 8/8 clean, 7/8 with the bug, caught by `req_010__tpl_security_lockout_01`. Exported `demo_tests_test.py`: 4 passed |
+| Exported pytest `outputs/exports/generated_tests_test.py` | In-process: **79 passed**. `UDS_EXPORT_TRANSPORT=can` (python-can virtual bus + udsoncan): 68 passed, 11 skipped (time-advance tests). With `UDS_CAN_INTERFACE=socketcan` the file refuses to run with "Refusing to run: CAN interface is 'socketcan'..." and runs again with `UDS_ALLOW_LAB_BENCH=1` (checked on a small export; no real interface exists here) |
+| CAPL export | Generated: banner lines at the top, no `TODO` left (the 6 former TODO lines are now "not generated by this template" notes), "UNVERIFIED TEMPLATE" label kept. Text inspected only; **not compiled or run in CANoe** |
+| Streamlit `AppTest` (all four tabs, real pipeline and Ollama) | 23/23 checks passed, zero exceptions: Ask answered a question; the raw-request box decoded `2E 01 00 11` in extended session to `7F 2E 33` with the reason and citations; Generate produced 7 tests and showed preconditions ("ECU in extended session (0x03)", "Security level 0x01 unlocked") and pass criteria; run scope defaults to "Approved tests only", the demo override is unchecked, and run/export show "No approved tests..." before approval; "Bulk approve all validated tests" approved 7 and the run then worked; the coverage table showed (32 of 46 items uncovered for that 7-test run, highlighted) with a Markdown download; the override shows an orange warning; Results rendered 8 cards. Also checked: the red sidebar warning appears for a non-local `OLLAMA_HOST` |
+| Streamlit server | `python -m streamlit run` served HTTP 200 and `/_stcore/health` ok, no errors in the log |
+| API (real server, `python -m uds_assistant.api`) | `/health` ok; `POST /validate` for `2E 01 00 11` in session 3 returned structurally valid, `7F 2E 33`, the step 6c reason and 7 citations; `POST /export` with no approved tests returned HTTP 409 with the "No approved tests" message. `/run`, `/export` approved-only default, `include_unreviewed` and `POST /coverage` were exercised through FastAPI `TestClient` (409 without approval, 200 with the override or an approved test, coverage report returned) |
 
-## Bugs found and fixed while checking
+## Metrics: old report versus this run
 
-- A stale local audit database broke runs after I renamed a column; the rename was reverted (the schema keeps `llm_mode`). If you ran the old version, an existing `outputs/ui_audit.sqlite` still works.
-- The demo's first default bug was not caught by its requirement; changed (see above).
-- The UI's run scope defaulted to "selected test", which hid the bug being caught; it now defaults to "all tests".
+The old report (`09cc205`, header `9e2df41+dirty`) came from earlier code, so differences are partly LLM planning
+variance (see above) and not attributable to a single fix.
+
+| Metric | Old | New |
+|---|---|---|
+| Generated tests / clean pass | 83 / 83 | 79 / 79 |
+| Valid requests (send steps) | 257/257 | 237/237 |
+| Citations valid | 406/406 | 384/384 |
+| Tests by type (positive / negative / session / security / timing) | 27 / 33 / 5 / 9 / 9 | 26 / 31 / 5 / 8 / 9 |
+| Blind bugs caught (both / generated alone / sweep alone) | 9/15, 2/15, 9/15 | 9/15, 2/15, 9/15 |
+| Target F1, category recall, precondition recall (steps) | unchanged | unchanged |
+| Precondition recall from the real field | n/a | 79% (new) |
+| Q&A accuracy / citations / correct not-found | 19/21, 19/21, 3/4 | 19/21, 19/21, 3/4 |
+
+No rated metric got worse except the test counts (83 to 79, a planning difference, see above); the four-collection
+change did not move retrieval or any eval metric.
 
 ## Not done or not verified
 
-- Docker was not built (no network assumption); `docker-compose.yml` is untested.
+- Docker was not built; `docker-compose.yml` is untested.
 - The CAPL export was never compiled or run in CANoe.
-- The Streamlit UI was not clicked through in a real browser (use `docs/UI_CHECKLIST.md`).
+- The Streamlit UI was not clicked through in a real browser (headless `AppTest` and a server boot only; use `docs/UI_CHECKLIST.md`).
+- No real CAN interface or lab bench was used; the virtual-CAN guard was exercised only by setting the variable.
+- The seven capabilities and six expected outputs in `docs/CASE_STUDY_COMPLIANCE.md` are my reconstruction (the case-study PDF is not in the repository) and must be checked against the PDF.
 - The manual-time row of the test-design-time metric is "owner to fill".
 - The pytest suite was removed from this branch on purpose (it is in tag `v1-full-archive`); verification here is this check plus `run_eval`.
-- LLM output is not bit-deterministic, so a re-run can move scores by a few points (the two runs above agree on every headline number except test counts).
+- LLM planning is not bit-deterministic across runs, so test counts and which tests are chosen can move; the bytes of any given test do not.
 
 ## Switching branches
 
