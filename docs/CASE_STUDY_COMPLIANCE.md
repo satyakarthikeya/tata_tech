@@ -1,15 +1,48 @@
 # Case Study 5 compliance matrix
 
-Every case-study item, its status in this repository, and where the evidence is. Numbers are not copied here:
-they live in [RESULTS.md](RESULTS.md) (the evaluation of the run it names), so this file cannot drift from them.
+Every case-study capability and expected output **by name**, mapped to the exact file, function or UI element, with a
+strict status and one line of evidence. Numbers are not copied here: they live in [RESULTS.md](RESULTS.md) (the
+evaluation of the run it names), so this file cannot drift from them.
 
-**Source of the item list.** The case-study PDF is not in the repository; the items are this project's own reading of
-it (the pipeline and the success metrics in particular), so check them against the PDF.
+**Source of the lists. Read this first.** The case-study PDF is not in the repository. The seven capabilities and six
+expected outputs below are this project's own reconstruction of the brief (capability 3, validating a user-supplied
+request, is the owner's wording); **check the names against the PDF**. The status column describes what the repo does
+whatever the PDF words differently.
 
-**Status.** *done* = built and run, with the stated evidence (it may carry a caveat). *partial* = built, but measured
-by a proxy, only on synthetic data, unverified outside the repository, or with a known gap. *out of scope* = not built.
+**Status.** *met* = built and run, with the evidence stated (it may carry a caveat). *partial* = built but measured only
+by a proxy, only on synthetic data, unverified outside the repository, or with a known gap. *not done* = not built.
 
-## 1. Pipeline
+## A. The seven capabilities
+
+| # | Capability | Where (file / function / UI element) | Status | One line of evidence |
+|---|---|---|---|---|
+| 1 | Understand a plain-English diagnostic requirement | `agent/nodes.py: parse`, `agent/grounding.py`; Generate & Review tab | partial | Natural v3 blind set (RESULTS section 6): target precision is the weak point of the 3B model; preconditions are now also scored from the real field. |
+| 2 | Retrieve knowledge from the standard, OEM, ECU and project sources with citations | `rag/chroma.py` (four physical collections), `rag/layers.py`, `rag/citations.py` | partial | Every citation resolves to a real chunk (RESULTS section 2); the OEM guideline and ECU spec are synthetic, PDF / ODX / CDD ingestion is not done. |
+| 3 | Validate a user-supplied request: decode it and predict the ECU response | `qa/check_request.py: check_request`, `POST /validate`, "Check a raw request" box in the Ask tab | met | Decodes service / subfunction / DID / routine, runs the rules engine, returns valid-or-not, expected bytes or NRC with the engine's reason and citations; exercised through the API and Streamlit AppTest. Synthetic BCM only; the box does not take an ECU response to compare against. |
+| 4 | Generate positive, negative, session, security and timing tests | `testgen/templates*.py` (27 templates), `testgen/conformance.py`, `agent/pipeline.py: run_pipeline` | met | Bytes come only from templates and the rules engine; RESULTS sections 2 to 5. |
+| 5 | Predict expected results deterministically and validate every test | `rules/engine.py: evaluate`, `agent/nodes.py: validate`, `simulator/` (independent), `eval/agreement.py` | partial | Triangulated (simulator vs rules engine, gold tests, udsoncan on a virtual bus), but one author wrote the engine, simulator and gold set from one contract. |
+| 6 | Answer diagnostic questions with citations and refuse when unsupported | `qa/answer.py: answer_question`, `POST /ask`, Ask tab | met | 25 blind questions with answer accuracy, citation correctness and correct "not found" (RESULTS section 7). |
+| 7 | Run on a simulator with injected bugs, export, and measure coverage and defect detection | `runner/suite.py`, `export/pytest_export.py`, `export/capl_export.py`, `eval/coverage.py: coverage_report`, Run & Export tab | partial | Simulator only (no real ECU, HIL or CANoe); defect detection on a blind 15-bug set; coverage is spec-item coverage, not code coverage. |
+
+## B. The six expected outputs
+
+| # | Expected output | Where | Status | One line of evidence |
+|---|---|---|---|---|
+| 1 | Structured test cases: preconditions, steps, expected responses, pass criteria, citations | `testgen/model.py: TestCase` (`preconditions`, `pass_criteria`), `testgen/criteria.py`, Generate & Review tab | met | Preconditions and pass criteria are derived deterministically by replaying the steps through the rules engine, for generated tests, the sweep and the gold set; shown per test in the UI, in the pytest docstring and the CAPL comments. They describe the test: timing is enforced only where a step sets `max_response_time_ms`. |
+| 2 | Executable Python / pytest scripts | `export/pytest_export.py: render_pytest`, Run & Export tab, `outputs/exports/generated_tests_test.py` | met | The exported file was run (pass count in `outputs/END_TO_END_CHECK.md`); it refuses to run unless the CAN interface is `virtual` or `UDS_ALLOW_LAB_BENCH=1`. |
+| 3 | CAPL test scripts | `export/capl_export.py: render_capl`, `outputs/exports/generated_tests.can` | partial | An **unverified template**, never compiled or run in CANoe; simulator-only set-up steps are "not generated by this template" notes for the bench engineer. |
+| 4 | Coverage report | `eval/coverage.py: coverage_report`, Run & Export tab table and Markdown download, `POST /coverage`, `outputs/exports/coverage_report.md`, coverage section of `outputs/eval_report.md` | met | Per service, DID, routine, NRC, session and security level: tests touching it, a positive / negative split, and the items with zero tests. Spec items only; the NRC list is the set the rules engine can emit. |
+| 5 | Cited explanations and answers | `explain` node (`agent/nodes.py`), `qa/answer.py`, citations on every test | met | Citations are checked against real chunks and quotes against chunk text; existence is checked, not that the text justifies the test. |
+| 6 | Evaluation report and audit trail with expert review | `eval/run_eval.py`, `outputs/eval_report.md`, `store/audit.py`, `testgen/review_gate.py`, `ui/state.py` | partial | Eight-section report plus a SQLite trail of runs and review decisions. The review is an app-level gate (approved tests only for run and export by default; bulk approve and a demo-only override exist); the manual-time comparison is **not done** (left for the owner, [TEST_DESIGN_TIME.md](TEST_DESIGN_TIME.md)). |
+
+## C. Not done, stated plainly
+
+- Real ECU, HIL rig, CANoe, multiple ECUs and real OEM specs (PDF / ODX / CDD extraction): not done (out of scope, confidential data).
+- CAPL compiled or run in CANoe: not done. Docker image build: not done (files written only). Real-browser click-through: not done (headless Streamlit `AppTest` only). See `outputs/END_TO_END_CHECK.md`.
+- Manual test-design time baseline: not done (owner to fill). Confidence thresholds validated against correctness: not done.
+- The review gate is not a technical lock: a reviewer can bulk-approve everything, the override exists, and calling `render_pytest` / `run_suite` directly from Python is not gated.
+
+## D. Detail: pipeline
 
 | Step | Status | Evidence and honest note |
 |---|---|---|
@@ -17,13 +50,13 @@ by a proxy, only on synthetic data, unverified outside the repository, or with a
 | Retrieve evidence with citations | done | `rag/layers.py`, `rag/citations.py`; every citation is checked against a real chunk (RESULTS section 2). Existence is checked, not that the text justifies the test. |
 | LLM (Ollama) parses the requirement and plans tests | done | `agent/nodes.py` (`parse`, `plan`), `llm/`; model `qwen2.5:3b-instruct-q4_K_M`. One small model; precision of target identification is the weak point (RESULTS section 6). |
 | Rules engine validates and builds the exact bytes | done | `rules/` (one NRC-order function, each check cited), `testgen/templates*.py`, `agent/nodes.py` (`validate`). The LLM schemas have no byte fields. |
-| Structured test case with preconditions, steps, pass/fail, citations | done | `testgen/model.py`; confidence with a reason on every generated test (`agent/confidence.py`). |
+| Structured test case with preconditions, steps, pass criteria, citations | done | `testgen/model.py`, `testgen/criteria.py` (deterministic preconditions and pass criteria); confidence with a reason on every generated test (`agent/confidence.py`). |
 | Engineer review | partial | Approve / reject / comment in the Generate & Review tab, stored in the SQLite audit trail (`ui/state.py`, `store/audit.py`). The review is a gate in the app: the Run & Export tab and the API (`/run`, `/export`) use **approved tests only** by default and show a clear message when none are approved (`testgen/review_gate.py`). 'Bulk approve all validated tests' needs an explicit click and writes one review-log entry per test. An 'Include unreviewed tests (demo only)' override exists, OFF by default; `scripts/demo.py` and the evaluation pass it explicitly. The gate does not cover the Python API of `render_pytest` / `run_suite` called directly, and a reviewer can approve everything in bulk. |
 | Export to Python (pytest) and CAPL | partial | `export/pytest_export.py`: the exported file was run (pass count in `outputs/END_TO_END_CHECK.md`). `export/capl_export.py` is an **unverified template**, never compiled or run in CANoe. |
 | Run on an ECU simulator and report | done | `simulator/` (independent of `rules/`, 68 injectable bug hooks), `runner/suite.py`, Run & Export tab. Simulator only: no real ECU, HIL rig or CANoe. |
 | Cited diagnostic Q&A | done | `qa/`, `POST /ask`, Ask tab; refuses with "not found" when the sources do not support an answer (RESULTS section 7). |
 
-## 2. Success metrics of the case study (RESULTS sections 2 to 8)
+## E. Detail: success metrics of the case study (RESULTS sections 2 to 8)
 
 | Metric | Status | Evidence and honest note |
 |---|---|---|
@@ -35,7 +68,7 @@ by a proxy, only on synthetic data, unverified outside the repository, or with a
 | Q&A quality | done | Section 7 on 25 blind questions: answer accuracy, citation correctness, correct "not found". |
 | Test design time | partial | Section 8: tool time per requirement is measured; the **manual-time comparison is left for the owner** ([TEST_DESIGN_TIME.md](TEST_DESIGN_TIME.md)). Review time is not included. |
 
-## 3. Objectives, risks and governance
+## F. Detail: objectives, risks and governance
 
 | Item | Status | Evidence and honest note |
 |---|---|---|
@@ -44,8 +77,8 @@ by a proxy, only on synthetic data, unverified outside the repository, or with a
 | Runs locally, no data leaves the machine | done | Ollama and ChromaDB run locally; no cloud API anywhere. Ollama is **required** (no offline stand-in). |
 | LLM hallucination producing wrong test bytes | done | The LLM never produces bytes; byte provenance is checked on every test ([ARCHITECTURE.md](ARCHITECTURE.md)). This shows provenance, not that the oracle is right. |
 | Wrong expected results from a wrong oracle | partial | Triangulation (section 1 of RESULTS); five known AUTOSAR SWS disagreements are documented in the archive tag and in `rules/nrc_order.py` comments. |
-| Mixing standard, OEM, ECU and project knowledge | done | Four separate collections with the layer on every chunk and citation. |
-| Unsafe use of generated tests on real hardware | partial | Banner, approved-only default for run and export (UI and API), no hardware used. The gate is an app-level default with a labelled override, not a technical lock. |
+| Mixing standard, OEM, ECU and project knowledge | done | Four physical Chroma collections with the layer on every chunk and citation; generation does not search OEM, Q&A searches all four. |
+| Unsafe use of generated tests on real hardware | partial | "FOR SIMULATOR OR APPROVED LAB BENCH ONLY" banner on the pytest and CAPL exports, the pytest virtual-CAN guard (`UDS_ALLOW_LAB_BENCH=1` to override), banner, approved-only default for run and export (UI and API), no hardware used. The gate is an app-level default with a labelled override, not a technical lock. |
 | Over-trust in answers | partial | Citations, "not found" refusal and confidence badges; confidence thresholds were not validated against correctness. |
 | Audit trail of runs and decisions | done | `store/audit.py` (SQLite). |
 | Real ECU, CANoe, multiple ECUs, past test cases as input | out of scope | One synthetic Body Control Module; only a virtual CAN bus was used. |

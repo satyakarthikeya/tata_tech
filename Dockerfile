@@ -16,7 +16,7 @@ WORKDIR /app
 # The BGE embedding weights download on first use (needs network then).
 COPY pyproject.toml README.md ./
 COPY uds_assistant ./uds_assistant
-RUN pip install -e ".[ui]"
+RUN pip install -e ".[ui,export]"
 
 COPY data ./data
 COPY docs ./docs

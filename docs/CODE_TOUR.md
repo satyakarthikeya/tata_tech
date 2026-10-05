@@ -27,21 +27,21 @@ question    -> qa/answer.py -> cited answer or not_found
 
 | Package | What it does | Start reading |
 |---|---|---|
-| `protocol/` | SIDs and NRC constants, request builders, encode/decode, the synthetic seed/key algorithm | `constants.py`, `codec.py` |
+| `protocol/` | SIDs and NRC constants, request builders, encode/decode, `describe.py` readable decoding, the synthetic seed/key algorithm | `constants.py`, `codec.py` |
 | `spec/` | Pydantic schema and loader for the ECU spec (`data/bcm_spec.yaml`, synthetic BCM) | `schema.py` |
 | `rules/` | The oracle. `nrc_order.py` is the single place where negative outcomes are decided, each check cites a `DECISIONS.md` tag or an AUTOSAR SWS id | `engine.py`, `nrc_order.py` |
 | `simulator/` | Independent ECU (never imports `rules/`), 68 injectable bug hooks, in-process and virtual-CAN transports | `ecu.py`, `services.py`, `bugs.py` |
-| `testgen/` | `TestCase` model; 27 approved templates (`templates*.py`); requirement-independent conformance sweep (`conformance.py`) | `model.py`, `templates.py` |
+| `testgen/` | `TestCase` model; 27 approved templates (`templates*.py`); requirement-independent conformance sweep (`conformance.py`); `criteria.py` deterministic preconditions and pass criteria; `review_gate.py` approved-only selection | `model.py`, `criteria.py` |
 | `rag/` | `ingest.py` builds chunks; `chroma.py` + `embedders.py` is the ChromaDB/BGE retriever; `layers.py` searches the four layers; `citations.py` validates citations | `ingest.py`, `chroma.py` |
 | `llm/` | `client.py` Ollama client with retries and schema validation; `base.py` the output schemas (no byte fields); `prompts.py` all prompt text; `factory.py` raises if Ollama is down | `base.py`, `prompts.py` |
 | `agent/` | `pipeline.py` runner (LangGraph or plain loop); `nodes.py` the six nodes; `options.py` the enumerated choices offered to the LLM; `grounding.py` drops identifiers the text does not support; `confidence.py` / `annotate.py` | `nodes.py` |
-| `qa/` | `lookup.py` deterministic facts; `answer.py` retrieval + verified phrasing; `text.py` helpers | `answer.py` |
+| `qa/` | `lookup.py` deterministic facts; `answer.py` retrieval + verified phrasing; `check_request.py` decode a raw request and predict the response; `text.py` helpers | `answer.py` |
 | `runner/` | Runs tests on the simulator, timing, bug-detection matrix | `suite.py` |
 | `export/` | `pytest_export.py` (raw-byte pytest file), `capl_export.py` (unverified CAPL template) | `pytest_export.py` |
 | `store/` | SQLite audit trail: runs, tests, decisions, results | `audit.py` |
-| `api/` | FastAPI app: `/health /spec /generate /ask /run /export /bugs /runs` and the review endpoint | `app.py` |
+| `api/` | FastAPI app: `/health /spec /generate /ask /validate /run /export /coverage /bugs /runs` and the review endpoint | `app.py` |
 | `ui/` | `streamlit_app.py` wires four tabs; `state.py`, `bugs.py`, `examples.py`, `env.py` hold the logic | `streamlit_app.py` |
-| `eval/` | `run_eval.py` the one evaluation command; `metrics.py`, `understanding.py`, `qa_eval.py`, `agreement.py`, `can_check.py`, `trace.py` | `run_eval.py` |
+| `eval/` | `run_eval.py` the one evaluation command; `metrics.py`, `coverage.py` (the coverage report), `understanding.py`, `qa_eval.py`, `agreement.py`, `can_check.py`, `trace.py` | `run_eval.py` |
 
 `scripts/demo.py` is the terminal demo. `data/` holds the spec, the seed requirements (15), the blind natural v3
 requirements (16), the gold tests (60), the bug catalogs, the blind Q&A questions (25), the OEM guideline and

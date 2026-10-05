@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 ui = ["streamlit"]
+export = ["pytest"]
 
 [tool.ruff]
 line-length = 100

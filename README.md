@@ -10,7 +10,7 @@ never produces a byte. Every byte, NRC and timing value comes from the determini
 
 ## Before you run
 
-1. Python 3.11+ and `python -m pip install -e ".[ui]"`.
+1. Python 3.11+ and `python -m pip install -e ".[ui,export]"` (`ui` = Streamlit, `export` = pytest, needed to run the exported test file).
 2. [Ollama](https://ollama.com) running, with the model pulled (**required, there is no offline fallback**):
    `ollama pull qwen2.5:3b-instruct-q4_K_M`. Without Ollama the API answers HTTP 503 and the UI
    shows "Start Ollama and pull qwen2.5:3b-instruct-q4_K_M". Details: [MODEL_SETUP.md](MODEL_SETUP.md).
@@ -29,9 +29,9 @@ python scripts/demo.py                              # terminal demo: requirement
 
 | Tab | What it does |
 |---|---|
-| **Ask** | question -> cited answer with a confidence badge; "not found" when the sources do not support an answer |
-| **Generate & Review** | requirement -> tests table -> decoded steps, citations, approve / reject / comment (stored in the audit DB) |
-| **Run & Export** | pick a bug (or none) -> run on the simulator -> pass/fail ("Bug caught by N tests") -> download pytest / CAPL |
+| **Ask** | question -> cited answer with a confidence badge; "not found" when the sources do not support an answer. Also a **Check a raw request** box: hex request + session + security state -> decoded, structurally valid or not, expected bytes or NRC with the reason, citations (`POST /validate`) |
+| **Generate & Review** | requirement -> tests table -> preconditions, pass criteria, decoded steps, citations, approve / reject / comment / bulk approve (stored in the audit DB) |
+| **Run & Export** | approved tests only (a demo-only override exists, OFF by default) -> pick a bug (or none) -> run on the simulator -> pass/fail ("Bug caught by N tests") -> coverage table against the spec (uncovered items highlighted, Markdown download, `POST /coverage`) -> download pytest / CAPL |
 | **Results** | the eight evaluation sections as cards from `outputs/eval_report.json` |
 
 The sidebar shows the Ollama status (green / red) and the banner "Synthetic ECU spec — human
@@ -61,6 +61,36 @@ ECU + bugs), `testgen/` (templates, conformance sweep), `rag/`, `llm/`, `agent/`
 Settings (all optional environment variables): `OLLAMA_HOST` (default `http://localhost:11434`),
 `OLLAMA_MODEL`, `OLLAMA_NUM_CTX` (4096), `OLLAMA_KEEP_ALIVE`, `FASTEMBED_CACHE_PATH`.
 Docker (`Dockerfile`, `docker-compose.yml`: app + ollama) is written but was not built here.
+
+## Responsible AI
+
+- **The model never writes bytes.** The LLM parses, picks template ids and phrases prose; its schemas have no
+  byte fields. Every request byte, response byte, NRC and timing value comes from the deterministic rules engine
+  (`rules/`); the `validate` node checks byte provenance, re-checks each kept test against the oracle and checks citations.
+- **Rules engine plus validator.** Each planned test is instantiated from an approved template, then re-validated
+  against the rules engine (a test that does not validate is dropped); the runner replays tests on a separate
+  simulator written independently of the rules engine.
+- **Review gate.** Run and export use human-approved tests only (UI and API). Approving, rejecting and bulk
+  approving are written to the audit trail. The "Include unreviewed tests (demo only)" override is OFF by default;
+  `scripts/demo.py` and the evaluation use it explicitly.
+- **Separate collections.** Standard, OEM, ECU and project knowledge live in four physical ChromaDB collections;
+  every citation carries its layer. Test generation does not search OEM; Q&A searches all four.
+- **Simulator only.** Exported pytest and CAPL carry the banner "FOR SIMULATOR OR APPROVED LAB BENCH ONLY. NEVER RUN
+  AGAINST A PRODUCTION VEHICLE."; the pytest file refuses to run unless the CAN interface is `virtual` (or
+  `UDS_ALLOW_LAB_BENCH=1`). The CAPL file is an unverified template.
+- **Local only.** Ollama and ChromaDB run on your machine; the sidebar turns red if `OLLAMA_HOST` is not localhost,
+  because data would then leave this machine.
+- **Citations and refusal.** Answers and tests carry citations that are checked against real chunks (and quotes
+  against chunk text); when the sources do not support an answer the app says "not found" instead of guessing.
+- **Known limits.** The ECU spec is synthetic and there is no real ECU; one small local model; the oracle and the
+  simulator were written by the same author from the same contract; small blind samples; confidence thresholds are
+  not validated against correctness; a reviewer can approve everything in bulk; CAPL, Docker and a real-browser
+  click-through were not verified (see `outputs/END_TO_END_CHECK.md`).
+
+## Packaging
+
+When zipping the project for hand-over, exclude `.venv`, `.hypothesis`, `outputs/chroma` and `*.sqlite`
+(local environment, caches and audit databases; the Chroma index is rebuilt on first start).
 
 ## Results and limitations
 

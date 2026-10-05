@@ -6,7 +6,21 @@ answers HTTP 503 and the UI shows "Start Ollama and pull qwen2.5:3b-instruct-q4_
 - **LLM:** Ollama with `qwen2.5:3b-instruct-q4_K_M` (about 2 GB). Developed and evaluated on an
   RTX 3050 Laptop GPU with 4 GB.
 - **Retrieval:** ChromaDB with `BAAI/bge-small-en-v1.5` embeddings via `fastembed` (ONNX, CPU, no
-  torch). Both Python packages are installed by `pip install -e ".[ui]"`.
+  torch). Both Python packages are installed by `pip install -e ".[ui,export]"`.
+
+## Configuration at a glance
+
+| Setting | Value |
+|---|---|
+| Provider | Ollama, local (`OLLAMA_HOST`, default `http://localhost:11434`); no cloud API |
+| Model name and quantization | `qwen2.5:3b-instruct-q4_K_M` (about 3B parameters, 4-bit `Q4_K_M` GGUF), override with `OLLAMA_MODEL` |
+| `num_ctx` | 4096 (`OLLAMA_NUM_CTX`) |
+| Temperature | 0 (every call) |
+| Seed | 0 (every call) |
+| Embedding model | `BAAI/bge-small-en-v1.5` via `fastembed` (ONNX, CPU), cached in `FASTEMBED_CACHE_PATH` |
+| Vector store | ChromaDB `PersistentClient` in `outputs/chroma/` (git-ignored), cosine distance |
+| Collections | four physical collections: `standard`, `oem`, `ecu`, `project` (test generation searches standard / ecu / project; Q&A searches all four) |
+| Prompts file | [`uds_assistant/llm/prompts.py`](uds_assistant/llm/prompts.py) (parse, plan, explain); the two Q&A phrasing prompts are in `uds_assistant/qa/answer.py`. All text is reproduced in [docs/PROMPTS.md](docs/PROMPTS.md) |
 
 ## 1. Install Ollama and pull the model
 
