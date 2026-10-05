@@ -103,6 +103,7 @@ def run_evaluation(
         out = Path.cwd() / out
     (out / "exports").mkdir(parents=True, exist_ok=True)
     t_start = time.perf_counter()
+    git = git_label(root)  # taken before this run writes any file, so it names the code that ran
 
     llm = get_llm()
     corpus = build_corpus(root)
@@ -175,7 +176,7 @@ def run_evaluation(
     report: dict[str, Any] = {
         "report_version": REPORT_VERSION,
         "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
-        "git": git_label(root),
+        "git": git,
         "llm": {"backend": llm.name, "model": llm.model, "num_ctx": llm.num_ctx},
         "retriever": "ChromaDB + BAAI/bge-small-en-v1.5 (fastembed)",
         "template_set": TEMPLATE_SET_VERSION,
