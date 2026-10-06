@@ -20,7 +20,7 @@ the same banner and a green Ollama status.
 ## 2. Generate & Review (about 1.5 minutes)
 
 1. Load the REQ-005 example ("writing DID 0x0100 shall require extended session and security level 0x01") and click
-   **Generate tests** (about 25 s: parse, retrieve, plan, instantiate, validate, explain).
+   **Generate tests** (about 25 s in the 2026-10-05 run: parse, retrieve, plan, instantiate, validate, explain).
 2. Walk the table (id, category, confidence, review status). Select the security lockout test: show the decoded
    steps (`27 02 ... -> 7F 27 35 (invalidKey)`), the "written / inferred" target chips, the explanation and the citations.
 3. Click **Approve** on one test and **Reject** on another; say both are stored in the audit database.
@@ -28,7 +28,7 @@ the same banner and a green Ollama status.
 ## 3. Run & Export (about 1.5 minutes)
 
 1. Choose "no bug", **Run**: all tests pass on the clean simulator.
-2. Choose bug `accepts_any_key`, keep "all tests", **Run**: green "Bug caught by 1 test"; open the failing test and show the first
+2. Choose bug `accepts_any_key`, keep "all tests", **Run**: green "Bug caught by N test(s)" (1 test in the 2026-10-05 run; the planner's choice varies); open the failing test and show the first
    failing step (expected `7F 27 35`, actual `67 02`).
 3. Download the pytest file (and mention the CAPL template: **unverified**, never run in CANoe).
 
@@ -56,4 +56,4 @@ CAPL unverified, human review required before real-hardware use.
 
 - Ollama red in the sidebar: start it and pull the model; the tabs say "Start Ollama and pull qwen2.5:3b-instruct-q4_K_M".
 - Slow first request: the model and the BGE embeddings load once; repeat the click.
-- No time for the UI: `python scripts/demo.py` runs the same story in the terminal in about 30 s.
+- No time for the UI: `python scripts/demo.py` runs the same story in the terminal (about 30 s in the 2026-10-05 run).

@@ -157,6 +157,7 @@ def install(app: FastAPI) -> None:
             "remote_warning": None if ollama_is_local(base) else REMOTE_OLLAMA_WARNING,
             "banner": BANNER, "ecu_name": app.state.spec.ecu_name,
             "retriever": "ChromaDB + BAAI/bge-small-en-v1.5",
+            "standard_source": app.state.standard_source,
         }
 
     @app.get("/examples")

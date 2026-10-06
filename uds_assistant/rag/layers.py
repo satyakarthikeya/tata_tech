@@ -22,7 +22,7 @@ from uds_assistant.rag.model import (
 )
 
 LAYER_SOURCES: dict[str, tuple[str, ...]] = {
-    "standard": ("data/sources/uds_reference_notes.md",),
+    "standard": ("data/sources/uds_reference_notes.md",),  # + the local SWS PDF when present
     "oem": ("data/oem_diagnostic_guidelines.md",),
     "ecu": ("data/bcm_spec.yaml",),
     "project": ("docs/behaviour_contract.md", "data/requirements_seed.csv"),

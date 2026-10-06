@@ -17,6 +17,11 @@ class QACitation(BaseModel):
     layer: str
     source: str
     quote: str
+    ref: str | None = None
+    page: int | None = None
+    """Page in the source document (AUTOSAR SWS chunks only)."""
+    section: str | None = None
+    release: str | None = None
 
 
 class AskRequest(BaseModel):

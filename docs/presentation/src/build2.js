@@ -173,7 +173,7 @@ async function icon(name, color = "#FFFFFF") {
     s.addText(l, { x: 7.6, y: y + 0.8, w: 4.9, h: 0.7, fontSize: 16, color: C.text2, margin: 0, valign: "top", isTextBox: true, objectName: "Right label " + (i + 1) });
   });
   foot(s, "Blind sets written without seeing the templates: 15 bugs, 25 questions, 16 requirements. Tool time is about " + Math.round(R.test_design_time.tool_seconds_per_requirement_mean) + " s per requirement; the manual baseline is not yet measured.");
-  s.addNotes("The sweep is a requirement-independent conformance suite of 1200 tests; together with the generated tests it catches 9 of 15 blind bugs, so six remain missed. Question answering: 19 of 21 correct with citations, 3 of 4 unanswerable questions refused. Requirement understanding is the weakest result.");
+  s.addNotes("Figures from the run of 2026-10-05 (re-read them from the current outputs/eval_report.json before presenting): the sweep is a requirement-independent conformance suite of 1200 tests; together with the generated tests it caught 9 of 15 blind bugs, so six remained missed. Question answering: 19 of 21 correct with citations, 3 of 4 unanswerable questions refused. Requirement understanding was the weakest result.");
 
   await pres.writeFile({ fileName: OUT });
   await applyTheme(OUT, THEME);

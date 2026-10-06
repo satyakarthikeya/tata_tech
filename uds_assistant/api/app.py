@@ -32,6 +32,7 @@ from uds_assistant.llm.factory import START_OLLAMA_HINT, OllamaUnavailableError,
 from uds_assistant.qa import AskRequest, AskResponse, answer_question
 from uds_assistant.qa.check_request import RequestCheck, check_request
 from uds_assistant.qa.lookup import FactLookup
+from uds_assistant.rag.autosar import sws_status
 from uds_assistant.rag.factory import get_retriever
 from uds_assistant.rag.ingest import build_corpus
 from uds_assistant.runner import run_suite
@@ -197,6 +198,7 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
     app.state.store = AuditStore(db_path)
     app.state.spec = load_spec(root / "data" / "bcm_spec.yaml")
     app.state.corpus = build_corpus(root)
+    app.state.standard_source = sws_status(root)
     app.state.retriever = None
     app.state.bug_catalog = load_bug_catalog()
     app.state.qa_lookup = FactLookup(app.state.spec, app.state.corpus)

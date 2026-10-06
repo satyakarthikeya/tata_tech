@@ -29,10 +29,10 @@ question    -> qa/answer.py -> cited answer or not_found
 |---|---|---|
 | `protocol/` | SIDs and NRC constants, request builders, encode/decode, `describe.py` readable decoding, the synthetic seed/key algorithm | `constants.py`, `codec.py` |
 | `spec/` | Pydantic schema and loader for the ECU spec (`data/bcm_spec.yaml`, synthetic BCM) | `schema.py` |
-| `rules/` | The oracle. `nrc_order.py` is the single place where negative outcomes are decided, each check cites a `DECISIONS.md` tag or an AUTOSAR SWS id | `engine.py`, `nrc_order.py` |
+| `rules/` | The oracle. `nrc_order.py` is the single place where negative outcomes are decided, each check cites a `DECISIONS.md` tag or an AUTOSAR SWS id; `sws_map.py` holds those ids as data, `verify_sws_map.py` checks them against the local PDF | `engine.py`, `nrc_order.py` |
 | `simulator/` | Independent ECU (never imports `rules/`), 68 injectable bug hooks, in-process and virtual-CAN transports | `ecu.py`, `services.py`, `bugs.py` |
 | `testgen/` | `TestCase` model; 27 approved templates (`templates*.py`); requirement-independent conformance sweep (`conformance.py`); `criteria.py` deterministic preconditions and pass criteria; `review_gate.py` approved-only selection | `model.py`, `criteria.py` |
-| `rag/` | `ingest.py` builds chunks; `chroma.py` + `embedders.py` is the ChromaDB/BGE retriever; `layers.py` searches the four layers; `citations.py` validates citations | `ingest.py`, `chroma.py` |
+| `rag/` | `ingest.py` builds chunks; `chroma.py` + `embedders.py` is the ChromaDB/BGE retriever; `layers.py` searches the four layers; `citations.py` validates citations; `autosar.py` parses the local AUTOSAR SWS PDF into per-requirement chunks | `ingest.py`, `chroma.py` |
 | `llm/` | `client.py` Ollama client with retries and schema validation; `base.py` the output schemas (no byte fields); `prompts.py` all prompt text; `factory.py` raises if Ollama is down | `base.py`, `prompts.py` |
 | `agent/` | `pipeline.py` runner (LangGraph or plain loop); `nodes.py` the six nodes; `options.py` the enumerated choices offered to the LLM; `grounding.py` drops identifiers the text does not support; `confidence.py` / `annotate.py` | `nodes.py` |
 | `qa/` | `lookup.py` deterministic facts; `answer.py` retrieval + verified phrasing; `check_request.py` decode a raw request and predict the response; `text.py` helpers | `answer.py` |

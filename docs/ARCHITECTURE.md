@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-    SRC[("Specs: ECU spec, UDS notes,<br/>OEM guideline, requirements")] --> ING["rag/ ingest -> ChromaDB + BGE embeddings<br/>4 collections: standard / OEM / ECU / project"]
+    SRC[("Specs: ECU spec, UDS notes (+ local AUTOSAR SWS PDF),<br/>OEM guideline, requirements")] --> ING["rag/ ingest -> ChromaDB + BGE embeddings<br/>4 collections: standard / OEM / ECU / project"]
     REQ["Plain-English requirement"] --> PARSE
 
     subgraph AGENT["agent/ pipeline (LangGraph or plain loop)"]

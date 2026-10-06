@@ -77,8 +77,8 @@ python -c "from uds_assistant.rag.embedders import FastEmbedEmbedder; FastEmbedE
 ## 4. Check everything
 
 ```bash
-python scripts/demo.py                       # one requirement, end to end (about 30 s)
-python -m uds_assistant.eval.run_eval        # full evaluation, about 30 minutes on a laptop GPU
+python scripts/demo.py                       # one requirement, end to end (about 30 s on 2026-10-05)
+python -m uds_assistant.eval.run_eval        # full evaluation (its runtime is in the header of outputs/eval_report.md)
 ```
 
 ## Troubleshooting

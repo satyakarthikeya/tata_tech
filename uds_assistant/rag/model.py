@@ -42,6 +42,14 @@ class Chunk(BaseModel):
     text: str
     identifiers: list[str] = Field(default_factory=list)
     """Normalized identifiers mentioned by this chunk, e.g. ``["0xF190", "0x22"]``."""
+    page: int | None = None
+    """1-based page in the source document (AUTOSAR SWS chunks only)."""
+    section: str | None = None
+    """Numbered section heading above the chunk in the source (AUTOSAR SWS chunks only)."""
+    release: str | None = None
+    """Document release, e.g. ``"R24-11"`` (AUTOSAR SWS chunks only)."""
+    upstream: list[str] = Field(default_factory=list)
+    """Upstream requirement ids traced by this chunk, e.g. ``["SRS_Diag_04058"]``."""
 
     @property
     def layer(self) -> str:
@@ -53,6 +61,15 @@ class LayeredCitation(Citation):
     """A :class:`Citation` that also says which knowledge layer it came from."""
 
     layer: str
+    page: int | None = None
+    section: str | None = None
+    release: str | None = None
+
+
+def citation_location(chunk: Chunk) -> dict[str, object]:
+    """The optional page / section / release fields of ``chunk`` (only those that are set)."""
+    loc = {"page": chunk.page, "section": chunk.section, "release": chunk.release}
+    return {k: v for k, v in loc.items() if v is not None}
 
 
 class Hit(BaseModel):
@@ -72,7 +89,9 @@ class Hit(BaseModel):
     def to_layered_citation(self, quote: str | None = None) -> LayeredCitation:
         """Like :meth:`to_citation`, but the result carries the chunk's ``layer``."""
         base = self.to_citation(quote)
-        return LayeredCitation(**base.model_dump(), layer=self.chunk.layer)
+        return LayeredCitation(
+            **base.model_dump(), layer=self.chunk.layer, **citation_location(self.chunk)
+        )
 
 
 class Retriever(Protocol):

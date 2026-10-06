@@ -15,12 +15,16 @@ never produces a byte. Every byte, NRC and timing value comes from the determini
    `ollama pull qwen2.5:3b-instruct-q4_K_M`. Without Ollama the API answers HTTP 503 and the UI
    shows "Start Ollama and pull qwen2.5:3b-instruct-q4_K_M". Details: [MODEL_SETUP.md](MODEL_SETUP.md).
 3. The first run downloads the BGE embedding model (`BAAI/bge-small-en-v1.5`, via fastembed).
+4. Optional: a local copy of the AUTOSAR CP R24-11 Dcm SWS PDF (not redistributable, git-ignored) in
+   `data/sources/` (any file name matching `*DiagnosticCommunicationManager*.pdf`), or set `UDS_AUTOSAR_PDF`.
+   With it, the `standard` layer gets one chunk per SWS requirement (id, page, section, release); without
+   it, the layer falls back to the own-words notes. See "AUTOSAR SWS" below.
 
 ## Test
 
 ```bash
 python -m pip install -e ".[ui,export,dev]"
-python -m pytest            # the import / comparison tests: no Ollama, no model download, about 30 s
+python -m pytest            # the import / comparison tests: no Ollama, no model download
 ```
 
 The suite in `tests/` covers the import feature (format, rules-engine validation, review gate, audit trail,
@@ -47,6 +51,21 @@ docker compose up --build                                        # http://localh
 The BGE embedding model is baked into the image; the app needs no internet at run time. The web UI is plain HTML and
 JavaScript served by FastAPI (`uds_assistant/web/`, no build step).
 
+## AUTOSAR SWS (optional, local only)
+
+The rules engine cites AUTOSAR Dcm SWS ids in its code comments; `uds_assistant/rules/sws_map.py` holds the same
+ids as data (own-words summary, keywords, `verified`), and the request check shows them next to each decision.
+Every entry stays `verified=False` until checked against your local PDF:
+
+```bash
+python -m uds_assistant.rag.ingest --check                       # parse the PDF, build the index, PASS/FAIL list
+python -m uds_assistant.rules.verify_sws_map                     # each cited id exists and its text has the keywords
+python -m uds_assistant.rules.verify_sws_map --mark-verified     # then write verified=True for the ids that passed
+```
+
+The parsed PDF is cached in `data/sources/.cache/` (git-ignored). SWS text is not redistributable: do not commit
+outputs that quote it (check `git diff outputs/` after a run with the PDF present).
+
 ## The tabs (web UI: Ask, Generate & Review, Run & Export; the Streamlit UI also has Results)
 
 | Tab | What it does |
@@ -55,7 +74,7 @@ JavaScript served by FastAPI (`uds_assistant/web/`, no build step).
 | **Generate & Review** | requirement -> tests table -> preconditions, pass criteria, decoded steps, citations, approve / reject / comment / bulk approve (stored in the audit DB) |
 | **Import & Compare** | upload a YAML file of existing UDS tests (`data/imports/` has synthetic examples) -> each test checked against the rules engine -> accepted / rules-engine mismatch / invalid table with reasons -> review the accepted ones on Generate & Review -> baseline coverage vs generated vs combined, newly covered items, Markdown download (`POST /import`, `POST /import/{id}/compare`). Format: [docs/IMPORT_FORMAT.md](docs/IMPORT_FORMAT.md). Web UI only (not in the Streamlit app) |
 | **Run & Export** | approved tests only (a demo-only override exists, OFF by default) -> pick a bug (or none) -> run on the simulator -> pass/fail ("Bug caught by N tests") -> coverage table against the spec (uncovered items highlighted, Markdown download, `POST /coverage`) -> download pytest / CAPL |
-| **Results** | the eight evaluation sections as cards from `outputs/eval_report.json` |
+| **Results** | the eight evaluation sections as cards from `outputs/eval_report.json` (sections 9 and 10 are in `outputs/eval_report.md`) |
 
 The sidebar shows the Ollama status (green / red) and the banner "Synthetic ECU spec — human
 review required before real-hardware use."

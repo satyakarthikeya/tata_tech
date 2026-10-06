@@ -38,7 +38,7 @@ from uds_assistant.qa.text import (
     tokens,
 )
 from uds_assistant.rag.layers import search_layers
-from uds_assistant.rag.model import LAYERS, Chunk, Retriever
+from uds_assistant.rag.model import LAYERS, Chunk, Retriever, citation_location
 from uds_assistant.spec.schema import EcuSpec
 
 NOT_FOUND_ANSWER = "Not found in the approved sources."
@@ -92,7 +92,8 @@ class _Sentence:
 
 
 def _citation(chunk: Chunk, quote: str) -> QACitation:
-    return QACitation(chunk_id=chunk.id, layer=chunk.layer, source=chunk.source_path, quote=quote)
+    return QACitation(chunk_id=chunk.id, layer=chunk.layer, source=chunk.source_path, quote=quote,
+                      ref=chunk.ref, **citation_location(chunk))
 
 
 def _not_found(reason: str, llm_name: str) -> AskResponse:
