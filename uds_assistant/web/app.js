@@ -104,8 +104,21 @@ function layerChip(layer) { return el("span", { class: "layer " + (layer || "") 
 function citationCards(cites) {
   if (!cites || !cites.length) return el("div", { class: "kv" }, "No citations.");
   return el("div", {}, cites.map((c) => el("details", { class: "cite" },
-    el("summary", {}, c.layer ? layerChip(c.layer) : null, el("span", { class: "src" }, c.source + (c.ref ? "  #" + c.ref : ""))),
+    el("summary", {}, c.layer ? layerChip(c.layer) : null, el("span", { class: "src" }, c.source + (c.ref ? "  #" + c.ref : "") + citeWhere(c))),
     el("blockquote", {}, c.quote || ""))));
+}
+function citeWhere(c) {
+  const bits = [];
+  if (c.release) bits.push(c.release);
+  if (c.page) bits.push("p. " + c.page);
+  if (c.section) bits.push(c.section);
+  return bits.length ? "  (" + bits.join(", ") + ")" : "";
+}
+function swsRefs(refs) {
+  return el("div", {}, refs.map((r) => el("div", { class: "kv" },
+    badge(r.sws_id, r.verified ? "green" : "amber"), " ", r.summary,
+    r.page ? el("span", { class: "kv" }, "  (p. " + r.page + (r.section ? ", " + r.section : "") + ")") : null,
+    r.verified ? null : el("span", { class: "kv" }, "  not yet verified against the local SWS PDF"))));
 }
 
 /* ---------- global state ---------- */
@@ -131,6 +144,7 @@ function renderHeader() {
     el("span", { class: "chip" }, "Model ", el("b", {}, c.model)),
     el("span", { class: "chip" }, "num_ctx ", el("b", {}, c.num_ctx)),
     el("span", { class: "chip" }, "Retriever ", el("b", {}, c.retriever)),
+    c.standard_source ? el("span", { class: "chip", title: c.standard_source.detail }, "Standard ", el("b", {}, c.standard_source.mode)) : null,
     el("span", { class: "chip" }, "ECU ", el("b", {}, c.ecu_name)));
   const rb = $("#remote-bar");
   rb.classList.toggle("hidden", !c.remote_warning);
@@ -241,6 +255,7 @@ function renderValidate(r) {
     el("div", { class: "kv", style: "margin-top:6px" }, r.comparison_detail)));
   if (r.reason) out.append(el("div", { class: "sect" }, sectionLabel("Reason"), el("div", {}, r.reason)));
   if (r.trace && r.trace.length) out.append(el("details", { class: "plain sect" }, el("summary", {}, "Rules-engine trace (" + r.trace.length + " steps)"), el("pre", { class: "trace" }, r.trace.join("\n"))));
+  if (r.sws_refs && r.sws_refs.length) out.append(el("div", { class: "sect" }, sectionLabel("AUTOSAR Dcm SWS requirements behind this decision"), swsRefs(r.sws_refs)));
   if (r.citations && r.citations.length) out.append(el("div", { class: "sect" }, sectionLabel("Citations"), citationCards(r.citations)));
 }
 

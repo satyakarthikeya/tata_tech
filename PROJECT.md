@@ -55,7 +55,7 @@ Because of this, the system stays correct with a small 3B local model.
 | 5 | **Test model and templates** (`testgen/`) | `TestCase` schema, 27 approved parameterized templates, requirement-independent conformance sweep |
 | 6 | **Gold set** (`data/gold/`) | 60 hand-authored tests that must pass on the bug-free simulator |
 | 7 | **Bug catalogs** (`data/bugs/`) | 26 in-sample faults (`bug_catalog.yaml`) and the 15-fault blind v3 set (`heldout_v3_catalog.yaml`) |
-| 8 | **Retrieval** (`rag/`) | ChromaDB + `BAAI/bge-small-en-v1.5` (fastembed); four collections (standard / OEM / ECU / project); citations |
+| 8 | **Retrieval** (`rag/`) | ChromaDB + `BAAI/bge-small-en-v1.5` (fastembed); four collections (standard / OEM / ECU / project); citations. The standard layer adds one chunk per AUTOSAR SWS requirement (id, page, section, release) when a local PDF is present (`rag/autosar.py`), else uses the own-words notes |
 | 9 | **LLM layer** (`llm/`) | Ollama, `qwen2.5:3b-instruct-q4_K_M`; all prompts in `llm/prompts.py`; required, no fallback |
 | 10 | **Agent** (`agent/`) | LangGraph pipeline (plain-Python fallback engine with the same nodes), grounding, confidence |
 | 11 | **Q&A** (`qa/`) | Cited answers: deterministic spec lookup + retrieval + verified LLM phrasing; `not_found` when unsupported |
@@ -97,7 +97,7 @@ Because of this, the system stays correct with a small 3B local model.
 
 All data is small and self-authored. Correctness comes from **triangulation**, not volume:
 
-1. Rules cite the AUTOSAR Dcm SWS (R24-11; the PDF is git-ignored and not redistributable) or are logged as design decisions.
+1. Rules cite the AUTOSAR Dcm SWS (R24-11; the PDF is git-ignored and not redistributable) or are logged as design decisions. The cited ids are also data in `rules/sws_map.py` (own-words summary, keywords, `verified`); each stays `verified=False` until `python -m uds_assistant.rules.verify_sws_map` finds it, with its keywords, in a local copy of the PDF.
 2. Every encoded request round-trips identically through `udsoncan`.
 3. Every gold test passes on the bug-free simulator.
 4. The simulator and the rules engine are written independently and must agree on randomized requests.
@@ -106,7 +106,7 @@ The ECU spec is **synthetic, in a realistic OEM style**, and this is stated in e
 
 ## 7. Evaluation
 
-`python -m uds_assistant.eval.run_eval` writes `outputs/eval_report.md` and `.json` (copied to `docs/RESULTS.md`) with the eight sections of the case study's success metrics: correctness (sanity), generation accuracy, coverage, reuse rate, defect detection (blind v3 bug set: generated tests + conformance sweep), requirement understanding (natural v3), Q&A quality, and test design time. The blind sets were written without seeing templates or code and are not tuned on. Every number is measured in the run that wrote the report.
+`python -m uds_assistant.eval.run_eval` writes `outputs/eval_report.md` and `.json` (copied to `docs/RESULTS.md`) with the eight sections of the case study's success metrics: correctness (sanity), generation accuracy, coverage, reuse rate, defect detection (blind v3 bug set: generated tests + conformance sweep), requirement understanding (natural v3), Q&A quality, and test design time; plus section 9 (imported-suite baseline) and section 10 (standard sources: SWS PDF or notes, SWS ids verified, and how many rules-engine NRC decisions are backed by an SWS id, `eval/sws_eval.py`). The blind sets were written without seeing templates or code and are not tuned on. Every number is measured in the run that wrote the report.
 
 ## 8. Limitations
 

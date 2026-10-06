@@ -22,6 +22,24 @@ def _text_hash(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
+def _metadata(c: Chunk) -> dict[str, str | int]:
+    """Chroma metadata for one chunk (Chroma rejects ``None``, so unset fields are left out)."""
+    meta: dict[str, str | int] = {
+        "collection": c.collection,
+        "layer": c.layer,
+        "text_hash": _text_hash(c.text),
+        "source": c.source_path,
+        "ref": c.ref,
+    }
+    for key in ("page", "section", "release"):
+        value = getattr(c, key)
+        if value is not None:
+            meta[key] = value
+    if c.upstream:
+        meta["upstream"] = ",".join(c.upstream)
+    return meta
+
+
 class ChromaRetriever:
     """Embeddings-backed retriever using ChromaDB with a persistent local store.
 
@@ -88,14 +106,7 @@ class ChromaRetriever:
             collection.upsert(
                 ids=[c.id for c in todo],
                 embeddings=self._embedder.embed([c.text for c in todo]),
-                metadatas=[
-                    {
-                        "collection": c.collection,
-                        "layer": c.layer,
-                        "text_hash": _text_hash(c.text),
-                    }
-                    for c in todo
-                ],
+                metadatas=[_metadata(c) for c in todo],
                 documents=[c.text for c in todo],
             )
         self.embedded_count += len(todo)

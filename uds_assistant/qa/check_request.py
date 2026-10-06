@@ -21,10 +21,11 @@ from uds_assistant.protocol.describe import (
     nrc_name,
     spaced_hex,
 )
-from uds_assistant.rag.model import Chunk, LayeredCitation, Retriever
+from uds_assistant.rag.model import Chunk, LayeredCitation, Retriever, citation_location
 from uds_assistant.rules.engine import evaluate
 from uds_assistant.rules.request import parse_request
 from uds_assistant.rules.state import initial_state, with_environment
+from uds_assistant.rules.sws_map import refs_for_decision
 from uds_assistant.spec.schema import EcuSpec
 
 #: NRCs that mean the request itself is malformed or unknown (not merely refused by state).
@@ -32,6 +33,20 @@ STRUCTURAL_NRCS = frozenset(
     {int(Nrc.SERVICE_NOT_SUPPORTED), int(Nrc.SUB_FUNCTION_NOT_SUPPORTED),
      int(Nrc.INCORRECT_MESSAGE_LENGTH_OR_INVALID_FORMAT)}
 )
+
+
+class SwsRefView(BaseModel):
+    """An AUTOSAR SWS requirement behind the decision (from :mod:`uds_assistant.rules.sws_map`)."""
+
+    sws_id: str
+    summary: str
+    """Own-words paraphrase, not SWS text."""
+    verified: bool
+    """True only once ``verify_sws_map`` checked the id against the local PDF."""
+    in_corpus: bool = False
+    """True when the local SWS PDF is indexed and this requirement is one of its chunks."""
+    page: int | None = None
+    section: str | None = None
 
 
 class RequestCheck(BaseModel):
@@ -51,6 +66,8 @@ class RequestCheck(BaseModel):
     reason: str = ""
     trace: list[str] = Field(default_factory=list)
     citations: list[LayeredCitation] = Field(default_factory=list)
+    sws_refs: list[SwsRefView] = Field(default_factory=list)
+    """AUTOSAR SWS ids the rules engine cites for this decision (see ``rules/sws_map.py``)."""
     comparison: str | None = None
     """``match`` / ``mismatch`` when an actual ECU response was supplied, else ``None``."""
     comparison_detail: str = ""
@@ -71,7 +88,8 @@ def parse_hex(text: str) -> bytes:
 
 def _citation(chunk: Chunk, quote: str | None = None) -> LayeredCitation:
     return LayeredCitation(
-        source=chunk.source_path, ref=chunk.ref, quote=quote or chunk.text[:200], layer=chunk.layer
+        source=chunk.source_path, ref=chunk.ref, quote=quote or chunk.text[:200], layer=chunk.layer,
+        **citation_location(chunk),
     )
 
 
@@ -190,6 +208,18 @@ def check_request(
     for cid in _deterministic_chunk_ids(spec, raw, session, nrc):
         if cid in by_id:
             cites.append(_citation(by_id[cid]))
+    sws_refs: list[SwsRefView] = []
+    pending = result.decision.pending_nrc
+    decided = nrc if nrc is not None else (int(pending) if pending is not None else None)
+    for req in refs_for_decision(parsed.sid, decided, result.trace,
+                                 suppressed=outcome == "no_response"):
+        chunk = by_id.get(f"standard:{req.sws_id}")
+        sws_refs.append(SwsRefView(
+            sws_id=req.sws_id, summary=req.summary, verified=req.verified,
+            in_corpus=chunk is not None, page=chunk.page if chunk else None,
+            section=chunk.section if chunk else None))
+        if chunk is not None:
+            cites.append(_citation(chunk))
     if retriever is not None:
         query = f"{decoded} {nrc_name(nrc) if nrc is not None else ''}".strip()
         seen = {c.ref for c in cites}
@@ -212,5 +242,6 @@ def check_request(
         reason=reason,
         trace=result.trace,
         citations=cites,
+        sws_refs=sws_refs,
     )
 

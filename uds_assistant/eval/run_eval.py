@@ -9,7 +9,9 @@ to ``docs/RESULTS.md``.
 
 Sections: 1 correctness (sanity), 2 generation accuracy, 3 coverage, 4 reuse rate,
 5 defect detection (blind v3 bug set), 6 requirement understanding (natural v3), 7 Q&A quality,
-8 test design time. Every number is measured in this run; nothing is estimated.
+8 test design time; plus 9 imported-suite baseline and 10 standard sources (AUTOSAR SWS PDF or
+the own-words notes, and how many rules-engine NRC decisions are backed by an SWS id; see
+``eval/sws_eval.py``). Every number is measured in this run; nothing is estimated.
 """
 
 from __future__ import annotations
@@ -32,9 +34,11 @@ from uds_assistant.eval.can_check import run_udsoncan_sequence
 from uds_assistant.eval.coverage import coverage_markdown, coverage_report
 from uds_assistant.eval.coverage_compare import compare_coverage, comparison_markdown
 from uds_assistant.eval.qa_eval import load_questions, run_qa
+from uds_assistant.eval.sws_eval import section_rows, standard_sources_section
 from uds_assistant.export import render_capl, render_pytest
 from uds_assistant.importer import import_tests, parse_import
 from uds_assistant.llm.factory import OllamaUnavailableError, get_llm
+from uds_assistant.rag.autosar import sws_status
 from uds_assistant.rag.factory import get_retriever
 from uds_assistant.rag.ingest import build_corpus
 from uds_assistant.runner import run_bug_matrix, run_suite
@@ -177,6 +181,7 @@ def run_evaluation(
         encoding="utf-8")
 
     imp = import_baseline(root, spec, generated)
+    standard = standard_sources_section(sws_status(root), corpus, spec, sweep, generated)
     (out / "exports" / "import_coverage_comparison.md").write_text(
         comparison_markdown(imp["comparison"],
                             "# Imported-test baseline coverage (fixture suite vs this run's generated tests)"),
@@ -213,6 +218,7 @@ def run_evaluation(
         },
         "spec_coverage": {"generated": _cov_summary(gen_cov), "sweep": _cov_summary(sweep_cov)},
         "import_baseline": imp,
+        "standard_sources": standard,
         "reuse": {"tests": reuse["tests"], "from_templates": reuse["template_instantiations"],
                   "rate": reuse["rate"], "templates_registered": reuse["templates_registered"]},
         "defect_detection": {
@@ -353,6 +359,7 @@ def render_markdown(r: dict[str, Any]) -> str:
             ("9", "Imported tests marked imported, none auto-approved",
              "yes" if ib["all_origin_imported"] and ib["none_auto_approved"] else "NO"),
         ]
+    rows += section_rows(r.get("standard_sources"))
     head = (
         f"Run: {r['timestamp']} | git `{r['git']}` | model `{llm['model']}` "
         f"(num_ctx {llm['num_ctx']}) | retriever: {r['retriever']} | "
@@ -366,7 +373,9 @@ def render_markdown(r: dict[str, Any]) -> str:
         + f"{un['requirements']} blind requirements; preconditions are derived from the generated",
         "steps and, separately, read from each test's `preconditions` field. (7) Blind questions",
         "in `data/qa_eval.csv`. (8) Tool time includes the local 3B",
-        "model on this machine.",
+        "model on this machine. (10) An NRC decision is SWS-backed when `rules/sws_map.py` maps",
+        "its rules-engine step to an AUTOSAR Dcm SWS id; ids count as verified only after",
+        "`python -m uds_assistant.rules.verify_sws_map --mark-verified` against the local PDF.",
     ])
     banner = (
         "Synthetic ECU spec. Every number is measured in this run. "

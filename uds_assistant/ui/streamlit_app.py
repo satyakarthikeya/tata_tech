@@ -32,6 +32,7 @@ from uds_assistant.protocol.describe import decode_responses, decode_step, space
 from uds_assistant.qa import answer_question
 from uds_assistant.qa.check_request import check_request
 from uds_assistant.qa.lookup import FactLookup
+from uds_assistant.rag.autosar import sws_status
 from uds_assistant.rag.factory import get_retriever
 from uds_assistant.rag.ingest import build_corpus
 from uds_assistant.runner import run_suite
@@ -111,6 +112,8 @@ def _sidebar() -> dict[str, object]:
     if not env.ollama_is_local():
         sb.markdown(f":red[**{env.REMOTE_OLLAMA_WARNING}**]")
     sb.warning(GOVERNANCE_BANNER)
+    std = sws_status(REPO_ROOT)
+    sb.caption(f"Standard layer: {std['mode']} ({std['detail']})")
     db_path = env.audit_db_path()
     sb.caption(f"Audit trail: {db_path.name}")
     return {
@@ -189,11 +192,25 @@ def _check_box(ctx: dict[str, object]) -> None:
         st.markdown(f"**Reason:** {res.reason}")
         with st.expander("Rules-engine trace"):
             st.code(NL.join(res.trace), language="text")
+        if res.sws_refs:
+            st.markdown("**AUTOSAR Dcm SWS requirements behind this decision**")
+            for r in res.sws_refs:
+                where = f" (p. {r.page}, {r.section})" if r.page else ""
+                flag = "" if r.verified else " · _not yet verified against the local SWS PDF_"
+                st.markdown(f"`{r.sws_id}` {r.summary}{where}{flag}")
         if res.citations:
             st.markdown("**Citations**")
             for c in res.citations:
-                st.markdown(f"**{c.layer}** · `{c.source}` · `{c.ref}`")
+                st.markdown(f"**{c.layer}** · `{c.source}` · `{c.ref}`{_where(c)}")
                 st.markdown(f"> {c.quote}")
+
+
+def _where(c: object) -> str:
+    """`` (R24-11, p. 42, 7.4.2.1 ...)`` for AUTOSAR SWS citations, else empty."""
+    bits = [str(v) for v in (getattr(c, "release", None),
+                             f"p. {c.page}" if getattr(c, "page", None) else None,
+                             getattr(c, "section", None)) if v]
+    return f" ({', '.join(bits)})" if bits else ""
 
 
 def _ask_tab(ctx: dict[str, object]) -> None:
@@ -234,7 +251,8 @@ def _ask_question(ctx: dict[str, object]) -> None:
     if resp.citations:
         with st.expander(f"Citations ({len(resp.citations)})"):
             for c in resp.citations:
-                st.markdown(f"**{c.layer}** · `{c.source}`")
+                st.markdown(f"**{c.layer}** · `{c.source}`" + (f" · `{c.ref}`" if c.ref else "")
+                            + _where(c))
                 st.markdown(f"> {c.quote}")
 
 
