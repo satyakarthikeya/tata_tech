@@ -30,14 +30,17 @@ from uds_assistant.eval import understanding as u
 from uds_assistant.eval.agreement import DEFAULT_REQUESTS, simulator_rules_agreement
 from uds_assistant.eval.can_check import run_udsoncan_sequence
 from uds_assistant.eval.coverage import coverage_markdown, coverage_report
+from uds_assistant.eval.coverage_compare import compare_coverage, comparison_markdown
 from uds_assistant.eval.qa_eval import load_questions, run_qa
 from uds_assistant.export import render_capl, render_pytest
+from uds_assistant.importer import import_tests, parse_import
 from uds_assistant.llm.factory import OllamaUnavailableError, get_llm
 from uds_assistant.rag.factory import get_retriever
 from uds_assistant.rag.ingest import build_corpus
 from uds_assistant.runner import run_bug_matrix, run_suite
 from uds_assistant.simulator import HELDOUT_V3_BUG_CATALOG_PATH, load_bug_catalog
 from uds_assistant.spec.schema import load_spec
+from uds_assistant.store.audit import AuditStore
 from uds_assistant.testgen.conformance import build_conformance_suite
 from uds_assistant.testgen.model import TestCase, load_tests
 from uds_assistant.testgen.review_gate import select_for_run
@@ -173,6 +176,12 @@ def run_evaluation(
         coverage_markdown(gen_cov, "# Coverage report (generated tests, seed requirements)"),
         encoding="utf-8")
 
+    imp = import_baseline(root, spec, generated)
+    (out / "exports" / "import_coverage_comparison.md").write_text(
+        comparison_markdown(imp["comparison"],
+                            "# Imported-test baseline coverage (fixture suite vs this run's generated tests)"),
+        encoding="utf-8")
+
     report: dict[str, Any] = {
         "report_version": REPORT_VERSION,
         "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
@@ -203,6 +212,7 @@ def run_evaluation(
             "requirements_with_tests": cov["requirements_with_tests"],
         },
         "spec_coverage": {"generated": _cov_summary(gen_cov), "sweep": _cov_summary(sweep_cov)},
+        "import_baseline": imp,
         "reuse": {"tests": reuse["tests"], "from_templates": reuse["template_instantiations"],
                   "rate": reuse["rate"], "templates_registered": reuse["templates_registered"]},
         "defect_detection": {
@@ -243,6 +253,33 @@ def run_evaluation(
     if out == (root / "outputs").resolve():
         (root / "docs" / "RESULTS.md").write_text(md, encoding="utf-8")
     return report
+
+
+def import_baseline(root: Path, spec: Any, generated: list[TestCase]) -> dict[str, Any]:
+    """Section 9: the synthetic fixture suites through the importer, baseline vs generated coverage.
+
+    Deterministic (no model): ``legacy_bcm_regression.yaml`` must import cleanly, and
+    ``legacy_bcm_with_errors.yaml`` must produce every rejection kind. The comparison is the
+    imported fixture against this run's generated tests.
+    """
+    out: dict[str, Any] = {"fixtures": "data/imports (synthetic, written for this project)"}
+    with AuditStore(":memory:") as store:
+        results = {}
+        for name in ("legacy_bcm_regression", "legacy_bcm_with_errors"):
+            path = root / "data" / "imports" / f"{name}.yaml"
+            res = import_tests(parse_import(path.read_text(encoding="utf-8"), path.name), spec, store)
+            results[name] = res
+        clean, errors = results["legacy_bcm_regression"], results["legacy_bcm_with_errors"]
+        imported = store.get_tests(clean.run_id)
+        out["regression"] = {"total": clean.total, "accepted": clean.accepted,
+                             "oracle_mismatch": clean.oracle_mismatch, "invalid": clean.invalid}
+        out["with_errors"] = {"total": errors.total, "accepted": errors.accepted,
+                              "oracle_mismatch": errors.oracle_mismatch, "invalid": errors.invalid}
+        out["all_origin_imported"] = all(t.origin == "imported" for t in imported)
+        out["none_auto_approved"] = all(t.review_status != "human_reviewed" for t in imported)
+    cmp = compare_coverage(imported, generated, spec)
+    out["comparison"] = cmp
+    return out
 
 
 def _cov_summary(cov: dict[str, Any]) -> dict[str, Any]:
@@ -305,6 +342,17 @@ def render_markdown(r: dict[str, Any]) -> str:
         ("8", "Tool time per requirement (mean / median / max)", tool),
         ("8", "Manual time per requirement", td["manual_minutes_per_requirement"]),
     ]
+    ib = r.get("import_baseline")
+    if ib:
+        rg, we = ib["regression"], ib["with_errors"]
+        rows += [
+            ("9", "Imported fixture suite accepted by the rules engine",
+             f"{rg['accepted']}/{rg['total']} (oracle mismatch {rg['oracle_mismatch']}, invalid {rg['invalid']})"),
+            ("9", "Error fixture: accepted / oracle mismatch / invalid",
+             f"{we['accepted']} / {we['oracle_mismatch']} / {we['invalid']} of {we['total']}"),
+            ("9", "Imported tests marked imported, none auto-approved",
+             "yes" if ib["all_origin_imported"] and ib["none_auto_approved"] else "NO"),
+        ]
     head = (
         f"Run: {r['timestamp']} | git `{r['git']}` | model `{llm['model']}` "
         f"(num_ctx {llm['num_ctx']}) | retriever: {r['retriever']} | "
@@ -352,10 +400,42 @@ def render_markdown(r: dict[str, Any]) -> str:
         "- Zero tests in the generated set: " + ("; ".join(zero) or "none") + ".",
         "- Full per-item table with positive/negative split: `outputs/exports/coverage_report.md`.",
         "",
+        *_import_lines(r.get("import_baseline")),
         notes,
         "",
     ]
     return "\n".join(lines)
+
+
+def _import_lines(ib: dict[str, Any] | None) -> list[str]:
+    """Section 9 of the Markdown report (empty for reports written before the import feature)."""
+    if not ib:
+        return []
+    cmp = ib["comparison"]
+    n = cmp["tests"]
+    lines = [
+        "## Imported-suite baseline (section 9, synthetic fixtures)",
+        "",
+        (
+            f"`data/imports/legacy_bcm_regression.yaml` ({n['imported']} imported tests) against this "
+            f"run's {n['generated']} generated tests; items touched / items in the spec. Static "
+            "coverage; the fixture is synthetic and was written for this project, not a real team's "
+            "suite."
+        ),
+        "",
+        "| Kind | Imported (baseline) | Generated | Combined | Newly covered by generated |",
+        "|---|---|---|---|---|",
+    ]
+    titles = {"service": "Services", "did": "DIDs", "routine": "Routines", "nrc": "NRCs",
+              "session": "Sessions", "security_level": "Security levels", "timing": "Timing cases"}
+    for kind, title in titles.items():
+        s = cmp["summary"][kind]
+        lines.append(f"| {title} | {s['imported']}/{s['items']} | {s['generated']}/{s['items']} | "
+                     f"{s['combined']}/{s['items']} | {len(cmp['newly_covered'][kind])} |")
+    gaps = [f"{titles[k].lower()}: {', '.join(v)}" for k, v in cmp["still_uncovered"].items() if v]
+    lines += ["", "- Still uncovered by the combined suite: " + ("; ".join(gaps) or "none") + ".",
+              "- Full report with the newly covered items: `outputs/exports/import_coverage_comparison.md`.", ""]
+    return lines
 
 
 def main(argv: list[str] | None = None) -> int:

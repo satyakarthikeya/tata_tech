@@ -300,6 +300,8 @@ function renderGenerate() {
     meta.append(el("div", { class: "note info" }, S.gen.governance_banner || "", " (run ", el("b", {}, "#" + S.runId), ", requirement ", el("b", {}, S.gen.requirement_id), ")"));
     (S.gen.notes || []).forEach((n) => meta.append(note("info", n)));
     if (S.gen.dropped_count > 0) meta.append(note("warn", el("b", {}, S.gen.dropped_count + " candidate test(s) dropped"), " because they failed validation."));
+  } else if (S.views.length && S.views.every((v) => v.test.origin === "imported")) {
+    meta.append(el("div", { class: "note info" }, "Imported tests of run ", el("b", {}, "#" + S.runId), ". They matched the rules engine but are only 'validated': approve the ones you trust before running or exporting."));
   } else meta.append(el("div", { class: "note info" }, "Showing the tests of run ", el("b", {}, "#" + S.runId), " restored from this browser session."));
   const main = clear(G.main);
   if (!S.views.length) { main.append(el("div", { class: "card empty" }, el("h3", {}, "No tests in this run"), "The generator produced no valid test cases for this requirement.")); return; }
@@ -325,13 +327,15 @@ function reviewTone(label) {
   if (l.includes("valid")) return "blue";
   return "amber";
 }
+const ORIGIN = { imported: ["imported", "blue"], generated: ["AI-generated", ""], gold: ["gold", ""] };
+function originBadge(t) { const [label, tone] = ORIGIN[t.origin] || [t.origin, ""]; return badge(label, tone); }
 function confDot(c) { return el("span", { class: "dot " + confTone(c), title: "confidence: " + (c || "unknown"), style: "margin-top:7px" }); }
 
 function testItem(v) {
   const t = v.test;
   const b = el("button", { class: "titem", role: "option", "aria-selected": String(t.id === S.sel), onclick: () => { S.sel = t.id; renderGenerate(); } },
     el("div", { class: "tt" }, confDot(t.confidence), el("span", {}, t.title)),
-    el("div", { class: "meta" }, el("span", { class: "cat" }, t.category), badge(v.review_label || t.review_status, reviewTone(v.review_label || t.review_status))));
+    el("div", { class: "meta" }, el("span", { class: "cat" }, t.category), originBadge(t), badge(v.review_label || t.review_status, reviewTone(v.review_label || t.review_status))));
   return b;
 }
 
@@ -355,7 +359,7 @@ function renderDetail(host) {
   const card = el("div", { class: "card" });
   card.append(
     el("div", { class: "row", style: "align-items:center; margin-bottom:6px" }, el("span", { class: "cat" }, t.category), badge(v.review_label || t.review_status, reviewTone(v.review_label || t.review_status)),
-      t.confidence ? badge("confidence: " + t.confidence, confTone(t.confidence)) : null, el("span", { class: "kv mono" }, t.id)),
+      originBadge(t), t.confidence ? badge("confidence: " + t.confidence, confTone(t.confidence)) : null, el("span", { class: "kv mono" }, t.id)),
     el("h2", { style: "font-size:18px" }, t.title),
     t.confidence_reason ? el("div", { class: "kv" }, t.confidence_reason) : null,
     el("div", { class: "sect" }, sectionLabel("Preconditions"), t.preconditions.length ? el("ul", { class: "bul" }, t.preconditions.map((p) => el("li", {}, p))) : el("div", { class: "kv" }, "None.")),
@@ -364,6 +368,9 @@ function renderDetail(host) {
   if (prov.length) card.append(el("div", { class: "sect" }, sectionLabel("Targets"), el("div", { class: "tchips" }, prov.map((p) =>
     el("span", { class: "badge " + (p.written ? "green" : "amber"), title: p.written ? "named in the requirement text" : "inferred from the requirement" },
       p.kind + " " + p.id + (p.name ? " " + p.name : ""), " · ", p.written ? "written" : "inferred")))));
+  if (t.provenance) card.append(el("div", { class: "sect" }, sectionLabel("Import provenance"),
+    el("div", { class: "kv" }, "Not AI-generated. Suite ", el("b", {}, t.provenance.suite), ", file ", el("b", {}, t.provenance.source_file), ", id ", el("b", {}, t.provenance.source_id),
+      t.provenance.source_template ? ", your template " : "", t.provenance.source_template ? el("b", {}, t.provenance.source_template) : null, ". SHA-256 ", el("span", { class: "mono" }, t.provenance.source_sha256.slice(0, 16) + "..."))));
   if (t.explanation) card.append(el("div", { class: "sect" }, sectionLabel("Explanation"), el("div", {}, t.explanation)));
   card.append(el("div", { class: "sect" }, sectionLabel("Citations (" + t.citations.length + ")"), citationCards(t.citations)));
   card.append(el("div", { class: "sect" }, sectionLabel("Review"), reviewPanel(v)));
@@ -551,20 +558,127 @@ function bars(obj) {
     el("div", { class: "track" }, el("div", { class: "fill", style: "width:" + (n / max * 100) + "%" })), el("span", { class: "mono" }, n))));
 }
 
+/* ---------- IMPORT & COMPARE tab ---------- */
+const I = {};
+const CMP_KINDS = [["service", "Services"], ["did", "DIDs"], ["routine", "Routines"], ["nrc", "NRCs"], ["session", "Sessions"], ["security_level", "Security levels"], ["timing", "Timing cases"]];
+const STATUS_TONE = { accepted: "green", oracle_mismatch: "amber", invalid: "red" };
+const STATUS_TEXT = { accepted: "accepted", oracle_mismatch: "rules-engine mismatch", invalid: "invalid" };
+
+function buildImport() {
+  const root = clear($("#tab-import"));
+  I.file = el("input", { type: "file", id: "i-file", accept: ".yaml,.yml,text/yaml,text/plain" });
+  I.text = null; I.name = "upload.yaml";
+  I.fileInfo = el("div", { class: "kv" }, "No file chosen.");
+  I.file.addEventListener("change", async () => {
+    const f = I.file.files[0]; if (!f) return;
+    if (f.size > 512 * 1024) { toast("The file is larger than 512 KB.", "error"); I.file.value = ""; return; }
+    I.text = await f.text(); I.name = f.name; I.fileInfo.textContent = f.name + " (" + f.size + " bytes)";
+  });
+  I.example = el("button", { class: "btn", onclick: () => busy(I.example, async () => {
+    const f = await api("/import/format");
+    I.text = f.example; I.name = f.example_filename; I.file.value = ""; I.fileInfo.textContent = "Example loaded: " + f.example_filename;
+  }) }, "Use the example suite");
+  I.btn = el("button", { class: "btn primary", onclick: () => busy(I.btn, doImport) }, "Import and validate");
+  I.fmt = el("details", { class: "cite" }, el("summary", {}, "Import format (YAML, version 1)"), el("pre", { class: "trace", id: "i-fmt" }, "Loading..."));
+  I.result = el("div", { "aria-live": "polite" });
+  I.cmp = el("div");
+  I.sel = el("select", { id: "i-run" });
+  I.gsel = el("select", { id: "i-gen" });
+  I.cmpBtn = el("button", { class: "btn primary", onclick: () => busy(I.cmpBtn, doCompare) }, "Compare coverage");
+  root.append(
+    el("div", { class: "card" }, el("h2", {}, "Import an existing UDS test suite"),
+      el("p", { class: "hint" }, "Upload a YAML file of tests you already have. Each test is checked against the rules engine for the synthetic spec; nothing is rewritten and no model is used. Imported tests are never auto-approved: review them on Generate & Review before running or exporting."),
+      el("div", { class: "row" }, field("YAML file", I.file, "i-file", "grow"), I.example, I.btn), I.fileInfo, I.fmt),
+    I.result,
+    el("div", { class: "card" }, el("h2", {}, "Baseline coverage and comparison"),
+      el("p", { class: "hint" }, "Static coverage of the accepted imported tests against the spec, compared with the assistant's generated tests and with both together. Nothing is executed. Review status does not matter here."),
+      el("div", { class: "row" }, field("Imported suite", I.sel, "i-run", "grow"), field("Compare with", I.gsel, "i-gen", "grow"), I.cmpBtn)),
+    I.cmp);
+  api("/import/format").then((f) => { $("#i-fmt").textContent = f.documentation || f.example; }).catch(() => { $("#i-fmt").textContent = "Could not load the format description."; });
+}
+
+async function refreshImport() {
+  try {
+    const [imps, runs] = await Promise.all([api("/imports"), api("/runs")]);
+    const keep = I.sel.value, keepG = I.gsel.value;
+    I.sel.replaceChildren(...(imps.length ? imps.map((r) => el("option", { value: r.run_id }, "#" + r.run_id + " " + r.suite + " (" + r.accepted + " accepted of " + r.total + ")")) : [el("option", { value: "" }, "Import a file first")]));
+    const gens = runs.filter((r) => r.llm_mode !== "import");
+    I.gsel.replaceChildren(el("option", { value: "" }, "All generated runs (" + gens.length + ")"), ...gens.map((r) => el("option", { value: r.id }, "Generated run #" + r.id + " " + r.requirement_id)));
+    if (keep && [...I.sel.options].some((o) => o.value === keep)) I.sel.value = keep;
+    else if (S.runId !== null && [...I.sel.options].some((o) => o.value === String(S.runId))) I.sel.value = String(S.runId);
+    if (keepG) I.gsel.value = keepG;
+  } catch (e) { failToast(e); }
+}
+
+async function doImport() {
+  if (!I.text) { toast("Choose a YAML file or load the example first.", "error"); return; }
+  clear(I.result).append(el("div", { class: "card" }, loadingBox("Validating against the rules engine..."), skeleton(3)));
+  try {
+    const r = await api("/import", { filename: I.name, content: I.text });
+    setRunId(r.run_id); S.gen = null; S.lastRun = null; S.coverage = null; S.views = [];
+    renderImportResult(r);
+    await refreshImport();
+    toast("Imported " + r.accepted + " of " + r.total + " test(s).", r.accepted ? "success" : "info");
+  } catch (e) { clear(I.result); throw e; }
+}
+
+function renderImportResult(r) {
+  const card = el("div", { class: "card" });
+  card.append(el("h2", {}, "Import result: " + r.suite),
+    el("div", { class: "note info" }, r.governance_banner, " (run ", el("b", {}, "#" + r.run_id), ", file ", el("b", {}, r.source_file), ", SHA-256 ", el("span", { class: "mono" }, r.sha256.slice(0, 16) + "..."), ")"),
+    el("div", { class: "metrics" }, m(r.total, "tests in file", ""), m(r.accepted, "accepted (validated, awaiting review)", r.accepted ? "good" : "mid"),
+      m(r.oracle_mismatch, "rules-engine mismatch", r.oracle_mismatch ? "mid" : "good"), m(r.invalid, "invalid", r.invalid ? "mid" : "good")),
+    el("div", { class: "tbl-wrap" }, el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Id"), el("th", {}, "Title"), el("th", {}, "Category"), el("th", {}, "Outcome"), el("th", {}, "Why"))),
+      el("tbody", {}, r.outcomes.map((o) => el("tr", {}, el("td", { class: "mono" }, o.source_id), el("td", {}, o.title), el("td", {}, o.category || "-"),
+        el("td", {}, badge(STATUS_TEXT[o.status], STATUS_TONE[o.status])), el("td", { class: "mono" }, o.errors.join(" | ") || "matches the rules engine")))))),
+    el("div", { class: "row", style: "margin-top:12px" },
+      r.accepted ? el("a", { class: "btn primary", href: "#generate", style: "text-decoration:none; display:inline-flex", onclick: () => { loadViews(true).catch(failToast); } }, "Review the " + r.accepted + " accepted test(s)") : null));
+  clear(I.result).append(card);
+}
+
+async function doCompare() {
+  if (!I.sel.value) { toast("Import a file first.", "error"); return; }
+  clear(I.cmp).append(el("div", { class: "card" }, loadingBox("Computing coverage..."), skeleton(3)));
+  try {
+    const r = await api("/import/" + I.sel.value + "/compare", { generated_run_id: I.gsel.value ? Number(I.gsel.value) : null });
+    renderCompare(r);
+  } catch (e) { clear(I.cmp); throw e; }
+}
+
+function renderCompare(r) {
+  const c = r.comparison, card = el("div", { class: "card" });
+  const dl = el("button", { class: "btn", onclick: () => download("import_coverage_" + r.import_run_id + ".md", r.markdown, "text/markdown") }, "Download comparison report (Markdown)");
+  const lists = (title, obj, empty) => {
+    const rows = CMP_KINDS.filter(([k]) => obj[k].length);
+    return el("div", { class: "sect" }, el("h3", {}, title),
+      rows.length ? el("ul", { class: "bul" }, rows.map(([k, lab]) => el("li", {}, el("b", {}, lab + " (" + obj[k].length + "): "), obj[k].join("; ")))) : el("div", { class: "kv" }, empty));
+  };
+  card.append(el("h2", {}, "Imported baseline vs " + r.generated_source),
+    el("p", { class: "hint" }, c.tests.imported + " imported tests, " + c.tests.generated + " generated tests, " + c.tests.combined + " combined. Items touched / items in the spec."),
+    el("div", { class: "tbl-wrap" }, el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Kind"), el("th", { class: "num" }, "Imported (baseline)"), el("th", { class: "num" }, "Generated"), el("th", { class: "num" }, "Combined"), el("th", { class: "num" }, "Newly covered"))),
+      el("tbody", {}, CMP_KINDS.map(([k, lab]) => { const s = c.summary[k]; return el("tr", {}, el("td", {}, lab), el("td", { class: "num" }, s.imported + "/" + s.items), el("td", { class: "num" }, s.generated + "/" + s.items), el("td", { class: "num" }, s.combined + "/" + s.items), el("td", { class: "num" }, c.newly_covered[k].length)); })))),
+    lists("Newly covered (no imported test, at least one generated test)", c.newly_covered, "Nothing: the imported suite already covers everything the generated tests cover."),
+    lists("Covered only by imported tests", c.imported_only, "None."),
+    lists("Still uncovered by the combined suite", c.still_uncovered, "None."),
+    el("div", { class: "sect" }, dl));
+  clear(I.cmp).append(card);
+}
+
 /* ---------- routing & boot ---------- */
-const TABS = ["ask", "generate", "run"];
+const TABS = ["ask", "generate", "import", "run"];
 function route() {
   const name = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "ask";
   document.querySelectorAll("[data-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== name));
   document.querySelectorAll("nav.tabs a").forEach((a) => { if (a.dataset.tab === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   if (!S.examples) return;
   if (name === "run") refreshRun();
+  if (name === "import") refreshImport();
   if (name === "generate" && S.runId !== null && !S.views.length) loadViews();
 }
 
 async function boot() {
   window.addEventListener("hashchange", route);
-  document.querySelectorAll("#tab-ask,#tab-generate,#tab-run").forEach((p) => p.append(skeleton(4)));
+  document.querySelectorAll("#tab-ask,#tab-generate,#tab-import,#tab-run").forEach((p) => p.append(skeleton(4)));
   try {
     [S.config, S.examples] = await Promise.all([api("/config"), api("/examples")]);
   } catch (e) {
@@ -572,7 +686,7 @@ async function boot() {
     document.querySelectorAll("[data-panel]").forEach((p) => clear(p).append(note("err", e.message)));
     failToast(e); return;
   }
-  renderHeader(); buildAsk(); buildGenerate();
+  renderHeader(); buildAsk(); buildGenerate(); buildImport();
   route();
   setInterval(async () => { try { S.config = await api("/config"); renderHeader(); } catch { /* server may be restarting */ } }, 30000);
 }

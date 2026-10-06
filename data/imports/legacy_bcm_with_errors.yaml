@@ -1,0 +1,53 @@
+# SYNTHETIC fixture: shows every way an entry can be rejected. Used by the automated tests and the demo.
+# Expected import result: 2 accepted, 2 oracle_mismatch, 4 invalid (see docs/IMPORT_FORMAT.md).
+format_version: 1
+suite: legacy_bcm_with_errors
+tests:
+  - id: ERR-001
+    title: Valid test (accepted)
+    steps:
+      - send: "22 F1 86"
+        expect: ["62 F1 86 01"]
+
+  - id: ERR-002
+    title: Expected VIN bytes are wrong (oracle_mismatch)
+    steps:
+      - send: "22 F1 90"
+        expect: ["62 F1 90 00 00 00"]
+
+  - id: ERR-003
+    title: Claims the write works without unlocking (oracle_mismatch)
+    steps:
+      - send: "10 03"
+        expect: ["50 03 00 32 01 F4"]
+      - send: "2E 01 00 11"
+        expect: ["6E 01 00"]
+
+  - id: ERR-004
+    title: Unknown key 'expected' instead of 'expect' (invalid)
+    steps:
+      - send: "22 F1 90"
+        expected: ["62 F1 90"]
+
+  - id: ERR-005
+    title: Bad hex digits (invalid)
+    steps:
+      - send: "22 F1 9Z"
+        expect: ["62 F1 90"]
+
+  - id: ERR-006
+    title: No send step (invalid)
+    steps:
+      - wait_ms: 100
+
+  - id: ERR-001
+    title: Duplicate id (invalid)
+    steps:
+      - send: "22 F1 86"
+        expect: ["62 F1 86 01"]
+
+  - id: ERR-008
+    title: Valid, TesterPresent suppressed (accepted)
+    steps:
+      - send: "3E 80"
+        expect: []

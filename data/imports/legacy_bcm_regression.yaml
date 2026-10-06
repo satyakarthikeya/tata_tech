@@ -1,0 +1,130 @@
+# SYNTHETIC fixture: an "existing" BCM diagnostic regression suite, as a team might have written it by hand.
+# Format: docs/IMPORT_FORMAT.md. The expected bytes were written by the suite author; the importer only
+# accepts a test whose expected bytes equal what the rules engine predicts for data/bcm_spec.yaml.
+format_version: 1
+suite: legacy_bcm_regression
+description: Hand-written smoke and negative tests from an earlier BCM bring-up (synthetic).
+tests:
+  - id: LEG-001
+    title: Read VIN in default session
+    category: positive
+    requirement_ids: [REQ-001]
+    template: TPL_READ_DID
+    steps:
+      - send: "22 F1 90"
+        expect: ["62 F1 90 53 59 4E 54 48 45 54 49 43 42 4D 30 30 30 30 30 31"]
+
+  - id: LEG-002
+    title: Read part number and serial number in one request
+    category: positive
+    template: TPL_READ_DID
+    steps:
+      - send: "22 F1 87 F1 8C"
+        expect: ["62 F1 87 42 43 4D 2D 31 32 33 34 35 2D F1 8C 53 45 30 30 30 30 30 31"]
+
+  - id: LEG-003
+    title: Enter extended session and read the active session DID
+    category: session
+    steps:
+      - send: "10 03"
+        expect: ["50 03 00 32 01 F4"]
+      - send: "22 F1 86"
+        expect: ["62 F1 86 03"]
+
+  - id: LEG-004
+    title: Unknown service gets serviceNotSupported
+    template: TPL_NEG_SERVICE
+    steps:
+      - send: "99"
+        expect: ["7F 99 11"]
+
+  - id: LEG-005
+    title: ReadDataByIdentifier with no DID gets incorrectMessageLength
+    steps:
+      - send: "22"
+        expect: ["7F 22 13"]
+
+  - id: LEG-006
+    title: Unsupported session sub-function is rejected
+    category: negative
+    steps:
+      - send: "10 09"
+        expect: ["7F 10 12"]
+
+  - id: LEG-007
+    title: Unknown DID is out of range
+    steps:
+      - send: "22 FF FF"
+        expect: ["7F 22 31"]
+
+  - id: LEG-008
+    title: Write brightness without unlocking is refused
+    category: negative
+    steps:
+      - send: "10 03"
+        expect: ["50 03 00 32 01 F4"]
+      - send: "2E 01 00 11"
+        expect: ["7F 2E 33"]
+
+  - id: LEG-009
+    title: Unlock level 1, write brightness, read it back
+    category: security
+    template: TPL_SEC_WRITE
+    steps:
+      - send: "10 03"
+        expect: ["50 03 00 32 01 F4"]
+      - send: "27 01"
+        expect: ["67 01 95 06 77 E8"]
+      - send: "27 02 9A 06 8F 73"
+        expect: ["67 02"]
+      - send: "2E 01 00 11"
+        expect: ["6E 01 00"]
+      - send: "22 01 00"
+        expect: ["62 01 00 11"]
+
+  - id: LEG-010
+    title: A wrong key is rejected with invalidKey
+    category: security
+    steps:
+      - send: "10 03"
+        expect: ["50 03 00 32 01 F4"]
+      - send: "27 01"
+        expect: ["67 01 95 06 77 E8"]
+      - send: "27 02 DE AD BE EF"
+        expect: ["7F 27 35"]
+
+  - id: LEG-011
+    title: TesterPresent, with and without the suppress bit
+    steps:
+      - send: "3E 00"
+        expect: ["7E 00"]
+      - send: "3E 80"
+        expect: []
+
+  - id: LEG-012
+    title: ECU reset from the extended session
+    category: session
+    steps:
+      - send: "10 03"
+        expect: ["50 03 00 32 01 F4"]
+      - send: "11 01"
+        expect: ["51 01"]
+
+  - id: LEG-013
+    title: S3 timeout returns the ECU to the default session
+    category: timing
+    steps:
+      - send: "10 03"
+        expect: ["50 03 00 32 01 F4"]
+      - wait_ms: 6000
+        note: longer than S3 (5000 ms)
+      - send: "22 F1 86"
+        expect: ["62 F1 86 01"]
+
+  - id: LEG-014
+    title: VIN read answers within 50 ms
+    category: timing
+    steps:
+      - send: "22 F1 90"
+        expect: ["62 F1 90 53 59 4E 54 48 45 54 49 43 42 4D 30 30 30 30 30 31"]
+        max_response_time_ms: 50

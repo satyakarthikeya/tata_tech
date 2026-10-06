@@ -10,11 +10,21 @@ never produces a byte. Every byte, NRC and timing value comes from the determini
 
 ## Before you run
 
-1. Python 3.11+ and `python -m pip install -e ".[ui,export]"` (`ui` = Streamlit, `export` = pytest, needed to run the exported test file).
+1. Python 3.11+ and `python -m pip install -e ".[ui,export,dev]"` (`ui` = Streamlit, `export` = pytest, needed to run the exported test file, `dev` = pytest, httpx and ruff for the repository's own tests).
 2. [Ollama](https://ollama.com) running, with the model pulled (**required, there is no offline fallback**):
    `ollama pull qwen2.5:3b-instruct-q4_K_M`. Without Ollama the API answers HTTP 503 and the UI
    shows "Start Ollama and pull qwen2.5:3b-instruct-q4_K_M". Details: [MODEL_SETUP.md](MODEL_SETUP.md).
 3. The first run downloads the BGE embedding model (`BAAI/bge-small-en-v1.5`, via fastembed).
+
+## Test
+
+```bash
+python -m pip install -e ".[ui,export,dev]"
+python -m pytest            # the import / comparison tests: no Ollama, no model download, about 30 s
+```
+
+The suite in `tests/` covers the import feature (format, rules-engine validation, review gate, audit trail,
+API, coverage comparison). The earlier, larger suite is in git tag `v1-full-archive`.
 
 ## Run
 
@@ -43,6 +53,7 @@ JavaScript served by FastAPI (`uds_assistant/web/`, no build step).
 |---|---|
 | **Ask** | question -> cited answer with a confidence badge; "not found" when the sources do not support an answer. Also a **Check a raw request** box: hex request + session + security state (+ optionally an observed ECU response to compare) -> decoded, structurally valid or not, expected bytes or NRC with the reason, match / mismatch, citations (`POST /validate`) |
 | **Generate & Review** | requirement -> tests table -> preconditions, pass criteria, decoded steps, citations, approve / reject / comment / bulk approve (stored in the audit DB) |
+| **Import & Compare** | upload a YAML file of existing UDS tests (`data/imports/` has synthetic examples) -> each test checked against the rules engine -> accepted / rules-engine mismatch / invalid table with reasons -> review the accepted ones on Generate & Review -> baseline coverage vs generated vs combined, newly covered items, Markdown download (`POST /import`, `POST /import/{id}/compare`). Format: [docs/IMPORT_FORMAT.md](docs/IMPORT_FORMAT.md). Web UI only (not in the Streamlit app) |
 | **Run & Export** | approved tests only (a demo-only override exists, OFF by default) -> pick a bug (or none) -> run on the simulator -> pass/fail ("Bug caught by N tests") -> coverage table against the spec (uncovered items highlighted, Markdown download, `POST /coverage`) -> download pytest / CAPL |
 | **Results** | the eight evaluation sections as cards from `outputs/eval_report.json` |
 
@@ -67,12 +78,31 @@ only); **Q&A searches all four.** Reason: OEM policy text must not silently chan
 
 Code layout: `protocol/` (SIDs, codec), `spec/`, `rules/` (the oracle), `simulator/` (independent
 ECU + bugs), `testgen/` (templates, conformance sweep), `rag/`, `llm/`, `agent/` (pipeline),
-`qa/`, `runner/`, `export/`, `store/` (SQLite audit), `api/`, `ui/`, `eval/`. Tour:
+`qa/`, `runner/`, `export/`, `importer/` (existing-test import), `store/` (SQLite audit), `api/`, `ui/`, `eval/`. Tour:
 [docs/CODE_TOUR.md](docs/CODE_TOUR.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Settings (all optional environment variables): `OLLAMA_HOST` (default `http://localhost:11434`),
 `OLLAMA_MODEL`, `OLLAMA_NUM_CTX` (4096), `OLLAMA_KEEP_ALIVE`, `FASTEMBED_CACHE_PATH`.
 Docker: the single-container build and run were tested with the host's Ollama; the all-in-one compose with Ollama in a container is written but was not run to completion (see `outputs/END_TO_END_CHECK.md`).
+
+## Importing existing tests
+
+Teams usually already have tests. `POST /import` (or the **Import & Compare** tab) takes a small YAML file
+([format](docs/IMPORT_FORMAT.md)), parses it strictly, and checks every test's expected bytes against the rules
+engine; the file is never rewritten and no model is involved. Outcomes per test: `accepted`, `oracle_mismatch`
+(your expected bytes disagree with the spec's rules, with both values shown) or `invalid`. Accepted tests are stored
+with `origin: imported`, a provenance record (suite, file, SHA-256, your id and template name) and status
+`validated`, **never approved**: a person approves them on Generate & Review, and only then can run or export use
+them (same gate, same audit trail, same simulator-only export). The comparison report shows the imported suite's
+baseline coverage (services, DIDs, routines, NRCs, sessions, security levels, timing cases), the generated suite's, the
+union, and the items the generated tests newly cover. Fixtures are synthetic (`data/imports/`).
+
+```bash
+curl -s localhost:8000/import -H "Content-Type: application/json" \
+  -d "$(python -c "import json;print(json.dumps({'filename':'legacy.yaml','content':open('data/imports/legacy_bcm_regression.yaml',encoding='utf-8').read()}))")"
+curl -s -X POST localhost:8000/import/1/compare -H "Content-Type: application/json" -d "{}"   # JSON + Markdown
+curl -s localhost:8000/import/1/compare.md -o import_coverage.md                              # download
+```
 
 ## Responsible AI
 
@@ -82,6 +112,9 @@ Docker: the single-container build and run were tested with the host's Ollama; t
 - **Rules engine plus validator.** Each planned test is instantiated from an approved template, then re-validated
   against the rules engine (a test that does not validate is dropped); the runner replays tests on a separate
   simulator written independently of the rules engine.
+- **Imported tests keep their provenance.** `origin: imported` is never rewritten to `generated`; imported tests are
+  validated against the rules engine, enter as `validated` (never approved) and go through the same review gate and
+  audit trail. Tests whose expected bytes disagree with the rules engine are reported, not stored as runnable.
 - **Review gate.** Run and export use human-approved tests only (UI and API). Approving, rejecting and bulk
   approving are written to the audit trail. The "Include unreviewed tests (demo only)" override is OFF by default;
   `scripts/demo.py` and the evaluation use it explicitly.
@@ -112,6 +145,8 @@ mapped to the case-study success metrics in [docs/CASE_STUDY_COMPLIANCE.md](docs
 - The spec is synthetic and there is no real ECU; one small local model; small samples
   (15 blind bugs, 16 blind requirements, 25 blind questions).
 - CAPL export is an unverified template, never compiled or run in CANoe.
+- Imports: only YAML in the documented format, single ECU; the fixtures are synthetic, no real team's suite was
+  imported; "automation template" names are recorded as provenance, not interpreted.
 - The manual-time comparison for test design time is left for the owner to fill.
 - Generated tests need human review before any real-hardware use.
 

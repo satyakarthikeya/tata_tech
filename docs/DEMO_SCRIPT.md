@@ -1,10 +1,10 @@
-# Demo script (5 minutes)
+# Demo script (6 to 7 minutes)
 
 Before you start: Ollama running with `qwen2.5:3b-instruct-q4_K_M` (see [MODEL_SETUP.md](../MODEL_SETUP.md)),
 `outputs/eval_report.json` present (run `python -m uds_assistant.eval.run_eval` once), and the UI open:
 
 ```bash
-streamlit run uds_assistant/ui/streamlit_app.py
+python -m uds_assistant.api        # web UI at http://localhost:8000
 ```
 
 Say up front: **the ECU spec is synthetic, and the LLM never writes a byte; the rules engine does.** The sidebar shows
@@ -32,11 +32,24 @@ the same banner and a green Ollama status.
    failing step (expected `7F 27 35`, actual `67 02`).
 3. Download the pytest file (and mention the CAPL template: **unverified**, never run in CANoe).
 
-## 4. Results (about 1 minute)
+## 4. Import an existing suite and compare (about 1.5 minutes)
 
-Open the **Results** tab: the eight sections as cards (generation accuracy, coverage, reuse rate, defect detection on
-the blind v3 bug set, requirement understanding, Q&A, tool time per requirement, correctness checks). Point at the missed
-bugs and at "manual time: owner to fill". Close with the limitations: synthetic spec, one 3B model, small samples,
+1. Open **Import & Compare**, click **Use the example suite** (`data/imports/legacy_bcm_regression.yaml`, 14 hand-written
+   tests) and **Import and validate**. Show the table: 14 accepted, each "matches the rules engine"; the note says the tests
+   are not AI-generated and are only *validated*. Optionally import `legacy_bcm_with_errors.yaml` (choose the file) to show
+   2 accepted, 2 rules-engine mismatches (the step and both byte strings) and 4 invalid entries with reasons.
+2. Click **Review the accepted tests**: each shows an "imported" badge and an Import provenance line (suite, file, id,
+   SHA-256). Approve one. On **Run & Export**, run it (clean simulator passes); with nothing approved the run is refused.
+3. Back on **Import & Compare**, pick the imported suite and a generated run (the REQ-005 run from step 2) or "All
+   generated runs", click **Compare coverage**. Read the baseline row (for example 0/3 routines), the newly covered list,
+   the items only the imported suite covers (the P2 response-time test) and what is still uncovered. Click **Download
+   comparison report**.
+
+## 5. Results (about 1 minute)
+
+Open [RESULTS.md](RESULTS.md) (the same eight sections plus section 9, the imported-suite baseline): generation accuracy,
+coverage, reuse rate, defect detection on the blind v3 bug set, requirement understanding, Q&A, tool time per
+requirement, correctness checks. Point at the missed bugs and at "manual time: owner to fill". Close with the limitations: synthetic spec, one 3B model, small samples,
 CAPL unverified, human review required before real-hardware use.
 
 ## Fallback if something fails

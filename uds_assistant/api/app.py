@@ -23,7 +23,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from uds_assistant.agent import TargetEvidence, run_pipeline
-from uds_assistant.api import web
+from uds_assistant.api import imports, web
 from uds_assistant.api.web import RunView, run_view
 from uds_assistant.eval.coverage import coverage_markdown, coverage_report
 from uds_assistant.export import render_capl, render_pytest
@@ -350,6 +350,7 @@ def create_app(repo_root: str | Path | None = None, db_path: str | Path | None =
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return next(t for t in store.get_tests(run_id) if t.id == test_id)
 
+    imports.install(app)
     web.install(app)
     return app
 

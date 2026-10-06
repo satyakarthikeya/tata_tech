@@ -107,8 +107,23 @@ TestStep = Annotated[
 
 Category = Literal["positive", "negative", "session", "security", "timing"]
 ReviewStatus = Literal["draft", "validated", "human_reviewed"]
-Origin = Literal["gold", "generated"]
+Origin = Literal["gold", "generated", "imported"]
 ConfidenceLevel = Literal["high", "medium", "low"]
+
+
+class ImportProvenance(BaseModel):
+    """Where an imported test came from (set only when ``origin == "imported"``)."""
+
+    suite: str
+    """Suite name from the import file."""
+    source_file: str
+    """File name as uploaded."""
+    source_sha256: str
+    """SHA-256 of the uploaded bytes, so the audit trail pins the exact input."""
+    source_id: str
+    """The test's id exactly as written in the import file."""
+    source_template: str | None = None
+    """Name of the user's own automation template, if the file declared one (informational)."""
 
 
 class TestCase(BaseModel):
@@ -135,6 +150,8 @@ class TestCase(BaseModel):
     confidence: ConfidenceLevel | None = None
     """Only set on generated tests (see :mod:`uds_assistant.agent.confidence`); None = not rated."""
     confidence_reason: str = ""
+    provenance: ImportProvenance | None = None
+    """Set for imported tests (origin ``imported``); None for gold and generated tests."""
 
 
 def _to_plain(obj: object) -> object:

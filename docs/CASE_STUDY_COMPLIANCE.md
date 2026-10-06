@@ -11,7 +11,8 @@ a proxy, only on synthetic data, unverified outside the repository, or with a kn
 **Overall.** The software chain the case study describes (cited Q&A, request validation, test generation with
 preconditions and pass criteria, positive and negative coverage, pytest export, comparison and reporting, coverage report,
 review gate) is built and measured **on a synthetic ECU**. What it does not do: read real specification documents (PDF,
-ODX), take existing tests or automation templates as input, isolate projects or users, or touch a real ECU, CANoe or a
+ODX), read tests in any format other than the documented YAML (no CAPL, vTESTstudio or Excel; automation-template
+names are kept as provenance, not interpreted), isolate projects or users, or touch a real ECU, CANoe or a
 human stopwatch.
 
 ## A. Section 6, Functional Capabilities (7)
@@ -48,7 +49,7 @@ human stopwatch.
 | 4 | Accept a diagnostic requirement or engineer query | Generate & Review tab, Ask tab, `POST /generate`, `POST /ask` | met | Plain English in, run recorded in the audit DB. |
 | 5 | Retrieve relevant evidence and apply deterministic validation rules | `agent/nodes.py` (`retrieve`, `validate`), `rules/` | met | Retrieval then rules-engine validation; the model never writes bytes. |
 | 6 | Generate a structured test case and optional automation template | `agent/pipeline.py: run_pipeline`, exports | met | End to end on a local 3B model, about 20 s per requirement. |
-| 7 | Require engineer review before controlled execution | `testgen/review_gate.py`, Generate & Review review panel, Run & Export | met | Run and export use approved tests only by default (UI and API); bulk approve and a demo-only override exist and are labelled. An app-level gate, not a technical lock. |
+| 7 | Require engineer review before controlled execution | `testgen/review_gate.py`, Generate & Review review panel, Run & Export | met | Run and export use approved tests only by default (UI and API); bulk approve and a demo-only override exist and are labelled. An app-level gate, not a technical lock. Imported tests use the same gate: they enter as `validated` and `tests/test_import_api.py` checks that `/run` and `/export` answer 409 until a person approves. |
 
 ## D. Section 11, Indicative Success Metrics (5)
 
@@ -56,7 +57,7 @@ human stopwatch.
 |---|---|---|
 | Test design time: average time to create reviewed diagnostic test cases | partial | Tool time per requirement is measured (RESULTS section 8). The **manual baseline and review time are not done**: they need a person with a stopwatch ([TEST_DESIGN_TIME.md](TEST_DESIGN_TIME.md)). |
 | Generation accuracy: accepted request and response structures | partial | RESULTS section 2: well-formed requests and clean-pass rate, both near 100% **by construction** (the oracle builds the bytes). The independent evidence is section 1 (simulator vs rules engine, gold tests, udsoncan on a virtual bus), by one author from one contract. |
-| Coverage improvement: positive, negative, session, security, timing | partial | `python scripts/coverage_baseline.py`: the 60 hand-written gold tests touch 42 of 46 spec items (3 DIDs and NRC 0x14 untouched); the 1200-test conformance sweep touches 46 of 46. The seed-requirement generated tests touch fewer items than the gold set (RESULTS coverage section). The baseline is hand-written by the same author, not an independent team's existing tests. |
+| Coverage improvement: positive, negative, session, security, timing | partial | The import feature measures this against an **existing suite** as the baseline: `POST /import/{id}/compare` and RESULTS section 9 give imported vs generated vs combined coverage and the newly covered services, DIDs, routines, NRCs, sessions, security levels and timing cases. The baseline in RESULTS is a synthetic fixture, not a real team's tests. Earlier proxy: `python scripts/coverage_baseline.py`: the 60 hand-written gold tests touch 42 of 46 spec items (3 DIDs and NRC 0x14 untouched); the 1200-test conformance sweep touches 46 of 46. The seed-requirement generated tests touch fewer items than the gold set (RESULTS coverage section). The baseline is hand-written by the same author, not an independent team's existing tests. |
 | Reuse rate: share of generated tests based on approved templates | partial | RESULTS section 4; 100% by construction, so it shows catalog breadth, not saved effort. |
 | Defect detection: confirmed ECU issues found through generated cases | partial | RESULTS section 5 on a blind 15-bug set written without seeing templates or code. These are **injected simulator bugs**, not confirmed issues in a real ECU; missed bugs are listed. |
 
@@ -82,12 +83,13 @@ human stopwatch.
 | Out of scope: unreviewed automatic acceptance of ECU behavior | respected | Expected values come from the rules engine, never from observing an ECU; review gate. |
 | Input: authorized UDS, OEM, ECU specifications | partial | Synthetic stand-ins (see workflow steps 1 and 2). |
 | Input: requirements | met | Plain-English requirements; 15 seed and 16 blind natural ones. |
-| Input: **existing tests** and **automation templates** | **not done** | The gold tests are our own; the app does not ingest a user's existing test suite or their automation templates. |
+| Input: **existing tests** | partial | `importer/`, `POST /import`, Import & Compare tab, [IMPORT_FORMAT.md](IMPORT_FORMAT.md): a documented YAML format; every test is checked with the `TestCase` schema and the rules engine (`accepted` / `oracle_mismatch` / `invalid`), stored as `origin: imported` with provenance (file, SHA-256, id), status `validated` (never auto-approved), same review gate and audit trail. Evidence: `tests/` (33 tests), RESULTS section 9. Caveat: the fixtures are synthetic and written for this project; no real team's suite was imported; only single-ECU request/response tests. |
+| Input: **automation templates** | partial | A test may name the user's own template (`template:`); it is stored as provenance and shown in the UI but not interpreted, and no CAPL / vTESTstudio / other tool format is read. The tool's own pytest / CAPL export is the only automation template it produces. |
 
 ## G. Not done, stated plainly
 
 - Ingesting real specification documents (PDF, ODX, CDD) and extracting rules from them; the spec is hand-structured YAML.
-- Taking a user's existing tests or automation templates as input.
+- Reading existing tests in other formats (CAPL, vTESTstudio, Excel) or interpreting a user's automation templates; the YAML import covers tests only, and its fixtures are synthetic (no real team's suite was imported).
 - Project isolation, authentication and role-based access (the common architecture lists them; this pilot has no login by design).
 - Graph / traceability store (Neo4j); traceability here is requirement ids and citations in the SQLite audit trail.
 - A real ECU, HIL rig, CANoe, multiple ECUs; CAPL compiled or run in CANoe; reading real ECU responses for comparison.

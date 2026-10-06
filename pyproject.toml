@@ -20,10 +20,14 @@ dependencies = [
 [project.optional-dependencies]
 ui = ["streamlit"]
 export = ["pytest"]
+dev = ["pytest", "httpx", "ruff"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [build-system]
 requires = ["setuptools>=61"]
